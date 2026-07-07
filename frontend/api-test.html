@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>API 联调测试</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <h1>API 联调测试</h1>
+    <!-- 与 main.js 保持一致的 API base 推导逻辑 -->
+    <p class="subtitle">API base: <span id="base"></span></p>
+    <div id="status-bar">
+      <button data-path="/api/health">测试 /api/health</button>
+      <button data-path="/api/digimon">测试 /api/digimon</button>
+      <button data-path="/api/world">测试 /api/world</button>
+    </div>
+    <pre id="output">点击按钮发起请求…</pre>
+  </div>
+  <script>
+    // 复用 main.js 中的三级 fallback 逻辑
+    const API_BASE = (() => {
+      if (typeof window.API_BASE === 'string') return window.API_BASE;
+      if (window.location.origin.includes('workers.dev')) return '';
+      return 'http://localhost:8000';
+    })();
+    document.getElementById('base').textContent = API_BASE || '(同源)';
+    // 点击按钮拉取对应接口并格式化展示 JSON
+    document.querySelectorAll('button[data-path]').forEach(btn => {
+      btn.onclick = async () => {
+        const out = document.getElementById('output');
+        out.textContent = '请求中…';
+        try {
+          const res = await fetch(API_BASE + btn.dataset.path);
+          out.textContent = JSON.stringify(await res.json(), null, 2);
+        } catch (e) { out.textContent = '错误: ' + e.message; }
+      };
+    });
+  </script>
+</body>
+</html>

@@ -1,386 +1,372 @@
 /**
  * DIGIMON WORLD - 前端 Phase 1
  *
- * 1. 加载后端 /api/world 快照,获取数码兽位置
- * 2. 渲染地图(沿用 Phase 0 画法,加 POI 标签)
- * 3. 脚本驱动亚古兽在文件岛随机走动
- * 4. WebSocket /ws/world 实时接收位置变化(自动重连);失败时降级为 HTTP 轮询
- * 5. 鼠标点击数码兽 → 弹出侧栏
+ * 1. 启动时 fetch GET /api/world → 画地图(regions + POIs)
+ * 2. fetch GET /api/digimon → 画 3 只数码兽(emoji + 名字)
+ * 3. 每 3 秒轮询 GET /api/digimon 更新位置
+ * 4. 后端不可达时显示 placeholder + 提示
+ * 5. API_BASE: Cloudflare 部署时通过 window.API_BASE 注入; 本地默认 http://localhost:8000
  *
- * Phase 1 完成标志: 真实亚古兽在文件岛移动 ✓
- * Phase 2+: 替换脚本驱动为 LLM 决策
+ * 纯 canvas, 无第三方框架
  */
 
 (function () {
     'use strict';
 
     console.log('🐉 Digimon World Phase 1 initializing...');
-    console.log('   Frontend talks to FastAPI backend (Phase 1)');
 
     const canvas = document.getElementById('world-map');
     const ctx = canvas.getContext('2d');
-    const W = canvas.width;
-    const H = canvas.height;
+    const W = canvas.width;   // 960
+    const H = canvas.height;  // 600
 
-    const API_BASE = window.location.origin.includes('workers.dev')
-        ? ''                          // 同源 (Cloudflare Pages + Workers 反代场景)
-        : 'http://127.0.0.1:8000';    // 本地开发时连后端 8000
+    // ---- API 配置 ----
+    // 优先级: window.API_BASE (Workers 注入) > 自动检测
+    const API_BASE = (() => {
+        if (typeof window.API_BASE === 'string') return window.API_BASE;
+        if (window.location.origin.includes('workers.dev')) return '';  // 同源反代
+        return 'http://localhost:8000';
+    })();
+
+    // ---- 数码兽 emoji 映射 ----
+    const SPECIES_EMOJI = {
+        agumon: '🦖',
+        gabumon: '🐺',
+        biyomon: '🦅',
+    };
+
+    // ---- 区域样式 ----
+    // 后端两个 region 的 bounds 都是整块 (0,0,960,600) 且重叠,
+    // 所以标签位置在前端按语义手动指定,避免堆在左上角。
+    const REGION_STYLE = {
+        file_island: { label: '#4ae8c4', labelAt: { x: 24, y: 560 } },
+        infinity_mountain: { label: '#b68aff', labelAt: { x: 24, y: 30 } },
+    };
+    const DEFAULT_STYLE = { label: '#aabbcc', labelAt: { x: 24, y: 30 } };
 
     // ---- 状态 ----
     const state = {
-        digimon: [],          // [{name, position, ...}]
-        regions: [],          // [{id, name, bounds, pois}]
+        regions: [],          // [{id, name, description, bounds, pois}]
+        digimon: [],          // [{name, species, stage, attribute, region_id, position:{x,y}, current_plan}]
         selectedName: null,
-        lastFetch: 0,
         connected: false,
+        error: null,          // 后端不可达时的错误信息
     };
 
-    // ---- 画地图 ----
+    let pollTimer = null;
+
+    // ══════════════════════════════════════════════
+    //  绘 制
+    // ══════════════════════════════════════════════
+
     function drawSky() {
-        const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
-        skyGrad.addColorStop(0, '#0a1233');
-        skyGrad.addColorStop(0.6, '#1e2a5a');
-        skyGrad.addColorStop(1, '#3a1a4a');
-        ctx.fillStyle = skyGrad;
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#0a1233');
+        grad.addColorStop(0.6, '#1e2a5a');
+        grad.addColorStop(1, '#3a1a4a');
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, W, H);
     }
 
-    function drawMountains() {
-        ctx.fillStyle = '#1a1f3a';
-        ctx.beginPath();
-        ctx.moveTo(0, H * 0.7);
-        for (let x = 0; x <= W; x += 40) {
-            const y = H * 0.6 + Math.sin(x * 0.015) * 30 + Math.sin(x * 0.03) * 15;
-            ctx.lineTo(x, y);
+    function drawStars() {
+        // 简单伪随机星空
+        for (let i = 0; i < 40; i++) {
+            const x = (i * 73 + 50) % W;
+            const y = ((i * 41) % (H * 0.55)) + 10;
+            const alpha = 0.2 + (i % 5) * 0.12;
+            ctx.fillStyle = `rgba(200, 220, 255, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(x, y, 1, 0, Math.PI * 2);
+            ctx.fill();
         }
-        ctx.lineTo(W, H);
-        ctx.lineTo(0, H);
-        ctx.closePath();
-        ctx.fill();
     }
 
-    function drawInfinityMountain() {
+    /** 根据后端 regions 数据画地图 */
+    function drawRegions() {
+        // 先画通用场景元素(两个 region bounds 相同, 都覆盖全 canvas)
+        // 无限山
         ctx.fillStyle = '#2a1f4a';
         ctx.beginPath();
         ctx.moveTo(W * 0.35, H * 0.55);
-        ctx.lineTo(W * 0.5, H * 0.2);
+        ctx.lineTo(W * 0.5, H * 0.15);
         ctx.lineTo(W * 0.65, H * 0.55);
         ctx.closePath();
         ctx.fill();
-        const peakGrad = ctx.createRadialGradient(W * 0.5, H * 0.2, 5, W * 0.5, H * 0.2, 80);
-        peakGrad.addColorStop(0, 'rgba(124, 58, 237, 0.6)');
+
+        // 山顶光晕
+        const peakGrad = ctx.createRadialGradient(W * 0.5, H * 0.15, 5, W * 0.5, H * 0.15, 80);
+        peakGrad.addColorStop(0, 'rgba(124, 58, 237, 0.5)');
         peakGrad.addColorStop(1, 'rgba(124, 58, 237, 0)');
         ctx.fillStyle = peakGrad;
-        ctx.fillRect(0, 0, W, H);
-    }
-
-    function drawIslands() {
-        ctx.fillStyle = '#0e3a3a';
         ctx.beginPath();
-        ctx.ellipse(W * 0.78, H * 0.78, 100, 50, 0, 0, Math.PI * 2);
+        ctx.arc(W * 0.5, H * 0.15, 80, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#3a3a1a';
-        ctx.beginPath();
-        ctx.ellipse(W * 0.18, H * 0.78, 70, 35, 0, 0, Math.PI * 2);
-        ctx.fill();
-    }
 
-    function drawDataFragments() {
-        for (let i = 0; i < 30; i++) {
-            const x = (i * 73 + 50) % W;
-            const y = ((i * 41) % (H * 0.6)) + 20;
-            ctx.fillStyle = `rgba(0, 212, 255, ${0.2 + (i % 5) * 0.1})`;
-            ctx.fillRect(x, y, 2, 2);
+        // 远山
+        ctx.fillStyle = '#1a1f3a';
+        ctx.beginPath();
+        ctx.moveTo(0, H * 0.6);
+        for (let x = 0; x <= W; x += 40) {
+            const y = H * 0.55 + Math.sin(x * 0.012) * 25 + Math.sin(x * 0.025) * 12;
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(W, H * 0.75);
+        ctx.lineTo(0, H * 0.75);
+        ctx.closePath();
+        ctx.fill();
+
+        // 海面
+        ctx.fillStyle = '#0a2a4a';
+        ctx.fillRect(0, H * 0.75, W, H * 0.25);
+
+        // 岛屿地面
+        ctx.fillStyle = '#1a4a3a';
+        ctx.beginPath();
+        ctx.ellipse(W * 0.5, H * 0.78, W * 0.42, 60, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 沙滩
+        ctx.fillStyle = '#5a4a2a';
+        ctx.beginPath();
+        ctx.ellipse(W * 0.2, H * 0.8, 80, 25, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 区域名称标签
+        for (const region of state.regions) {
+            const style = REGION_STYLE[region.id] || DEFAULT_STYLE;
+            ctx.fillStyle = style.label;
+            ctx.font = 'bold 13px monospace';
+            ctx.textAlign = 'left';
+            ctx.globalAlpha = 0.7;
+            ctx.fillText(region.name, style.labelAt.x, style.labelAt.y);
+            ctx.globalAlpha = 1.0;
         }
     }
 
+    /** 画 POI 标记 */
     function drawPOIs() {
-        if (!state.regions) return;
         for (const region of state.regions) {
-            for (const [pid, poi] of Object.entries(region.pois || {})) {
-                // POI 来自后端:{x, y, label}
-                const x = poi.x;
-                const y = poi.y;
-                // 旗子
+            if (!region.pois) continue;
+            for (const [, poi] of Object.entries(region.pois)) {
+                const { x, y, label } = poi;
+
+                // 标记点
                 ctx.fillStyle = 'rgba(255, 215, 0, 0.85)';
                 ctx.beginPath();
+                ctx.arc(x, y, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 旗子
+                ctx.strokeStyle = 'rgba(255, 215, 0, 0.7)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
                 ctx.moveTo(x, y);
-                ctx.lineTo(x, y - 14);
-                ctx.lineTo(x + 8, y - 11);
-                ctx.lineTo(x, y - 8);
+                ctx.lineTo(x, y - 16);
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
+                ctx.beginPath();
+                ctx.moveTo(x, y - 16);
+                ctx.lineTo(x + 10, y - 13);
+                ctx.lineTo(x, y - 10);
                 ctx.closePath();
                 ctx.fill();
-                // 标签
+
+                // 标签文字
                 ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
                 ctx.font = '11px monospace';
                 ctx.textAlign = 'left';
-                ctx.fillText(poi.label, x + 10, y - 6);
+                ctx.fillText(label, x + 14, y - 8);
             }
         }
     }
 
+    /** 画数码兽 */
     function drawDigimon() {
         for (const d of state.digimon) {
-            const x = d.position.x;
-            const y = d.position.y;
+            const { x, y } = d.position;
             const isSelected = d.name === state.selectedName;
+            const emoji = SPECIES_EMOJI[d.species] || '❓';
 
             // 光晕
-            const aura = ctx.createRadialGradient(x, y, 3, x, y, 22);
-            aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.9)' : 'rgba(0, 212, 255, 0.7)');
-            aura.addColorStop(1, 'rgba(0, 212, 255, 0)');
+            const aura = ctx.createRadialGradient(x, y, 4, x, y, 24);
+            aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.8)' : 'rgba(0, 212, 255, 0.5)');
+            aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
             ctx.fillStyle = aura;
             ctx.beginPath();
-            ctx.arc(x, y, 22, 0, Math.PI * 2);
+            ctx.arc(x, y, 24, 0, Math.PI * 2);
             ctx.fill();
 
-            // 数码兽身体(简单圆形)
-            ctx.fillStyle = isSelected ? '#ffd700' : '#00d4ff';
-            ctx.beginPath();
-            ctx.arc(x, y, 9, 0, Math.PI * 2);
-            ctx.fill();
+            // Emoji
+            ctx.font = '24px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, x, y);
 
-            // 眼睛
-            ctx.fillStyle = '#0a0e27';
-            ctx.beginPath();
-            ctx.arc(x - 3, y - 2, 1.5, 0, Math.PI * 2);
-            ctx.arc(x + 3, y - 2, 1.5, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 名字标签
-            ctx.fillStyle = '#fff';
+            // 名字
+            ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
             ctx.font = '12px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText(d.name, x, y - 14);
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(d.name, x, y - 18);
+
+            // 选中时画圈
+            if (isSelected) {
+                ctx.strokeStyle = '#ffd700';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 20, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
+        // 重置 baseline
+        ctx.textBaseline = 'alphabetic';
     }
 
+    /** 画标题 */
     function drawTitle() {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.font = '14px monospace';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.font = '13px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('— DIGITAL WORLD · FILE ISLAND —', W / 2, H - 16);
+        ctx.fillText('— DIGITAL WORLD · FILE ISLAND —', W / 2, H - 14);
     }
 
-    function render() {
+    /** 后端不可达时的 placeholder */
+    function drawPlaceholder() {
         drawSky();
-        drawMountains();
-        drawInfinityMountain();
-        drawIslands();
-        drawDataFragments();
+        drawStars();
+
+        // 大标题
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.font = 'bold 28px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('🐉 DIGIMON WORLD', W / 2, H / 2 - 40);
+
+        // 提示信息
+        ctx.fillStyle = 'rgba(255, 100, 100, 0.9)';
+        ctx.font = '14px monospace';
+        ctx.fillText('⚠ 无法连接后端', W / 2, H / 2 + 10);
+
+        ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
+        ctx.font = '12px monospace';
+        ctx.fillText(`尝试连接: ${API_BASE || '(同源)'}`, W / 2, H / 2 + 40);
+        ctx.fillText('请确认后端已启动: cd backend && uvicorn ...', W / 2, H / 2 + 62);
+        ctx.fillText('或 python -m digimon_world.api.app', W / 2, H / 2 + 82);
+
+        // 离线 placeholder 数码兽
+        ctx.font = '36px serif';
+        ctx.globalAlpha = 0.3;
+        ctx.fillText('🦖   🐺   🦅', W / 2, H / 2 + 140);
+        ctx.globalAlpha = 1.0;
+    }
+
+    /** 完整渲染 */
+    function render() {
+        if (!state.connected && state.digimon.length === 0) {
+            drawPlaceholder();
+            return;
+        }
+        drawSky();
+        drawStars();
+        drawRegions();
         drawPOIs();
         drawDigimon();
         drawTitle();
     }
 
-    // ---- 状态栏 ----
+    // ══════════════════════════════════════════════
+    //  状态栏
+    // ══════════════════════════════════════════════
+
     function updateStatusBar() {
-        document.getElementById('world-time').textContent =
-            '世界时间: ' + new Date().toLocaleTimeString('zh-CN');
-        document.getElementById('digimon-count').textContent =
-            '数码兽: ' + state.digimon.length;
-        let conn = '🔴 离线';
-        if (wsConnected) conn = '🟢 WS';
-        else if (pollingFallbackTimer) conn = '🟡 轮询';
-        document.getElementById('phase').textContent =
-            'Phase: 1 (地图+移动+WS) · ' + conn;
+        const timeEl = document.getElementById('world-time');
+        const countEl = document.getElementById('digimon-count');
+        const phaseEl = document.getElementById('phase');
+
+        if (timeEl) timeEl.textContent = '世界时间: ' + new Date().toLocaleTimeString('zh-CN');
+        if (countEl) countEl.textContent = '数码兽: ' + state.digimon.length;
+
+        const connStatus = state.connected ? '🟢 在线' : '🔴 离线';
+        if (phaseEl) phaseEl.textContent = `Phase 1 · ${connStatus}`;
     }
 
-    // ---- API 通信 ----
-    // 把 /api/world 快照合并到 state(给 WebSocket 启动前用,以及轮询 fallback)
-    function mergeWorldSnapshot(data) {
-        state.regions = data.regions;
-        state.digimon = data.agents.map((a) => ({
-            name: a.name,
-            species: a.species,
-            stage: a.stage,
-            attribute: a.attribute,
-            region_id: a.region_id,
-            position: a.location,                 // backend 用 "location":[x,y]
-            current_plan: a.current_plan,
-        }));
-        state.lastFetch = Date.now();
-    }
+    // ══════════════════════════════════════════════
+    //  API 通信
+    // ══════════════════════════════════════════════
 
-    // 把 WebSocket 推送的 positions 合并到 state(按 name 索引更新)
-    function mergePositions(positions) {
-        const byName = new Map(state.digimon.map((d) => [d.name, d]));
-        for (const p of positions) {
-            const d = byName.get(p.name);
-            if (d) {
-                d.position = p.position;
-                if (p.region_id) d.region_id = p.region_id;
-            } else {
-                // 新出现(后端 spawn 了新的)→ 加进去
-                state.digimon.push({
-                    name: p.name,
-                    position: p.position,
-                    region_id: p.region_id,
-                });
-            }
-        }
-        state.lastFetch = Date.now();
-    }
-
-    async function fetchSnapshot() {
+    /** 拉取地图数据 (regions + POIs) */
+    async function fetchWorld() {
         try {
-            const r = await fetch(API_BASE + '/api/world', { cache: 'no-store' });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            const data = await r.json();
-            mergeWorldSnapshot(data);
+            const resp = await fetch(API_BASE + '/api/world', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            state.regions = data.regions || [];
             state.connected = true;
+            state.error = null;
+            console.log('[api] /api/world OK, regions:', state.regions.length);
         } catch (err) {
-            console.warn('[fetch] 后端不可达,使用本地模拟:', err.message);
+            console.warn('[api] /api/world 不可达:', err.message);
+            state.error = err.message;
+            // regions 不清空 — 保留上次成功拉取的
+        }
+    }
+
+    /** 拉取数码兽列表 (轻量) */
+    async function fetchDigimon() {
+        try {
+            const resp = await fetch(API_BASE + '/api/digimon', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            state.digimon = data.digimon || [];
+            state.connected = true;
+            state.error = null;
+        } catch (err) {
+            console.warn('[api] /api/digimon 不可达:', err.message);
             state.connected = false;
-            // 后端挂了 → 本地假数据
-            if (state.digimon.length === 0) {
-                state.digimon = [
-                    { name: '亚古兽(离线)', position: { x: 200, y: 400 }, species: 'agumon' },
-                    { name: '加布兽(离线)', position: { x: 700, y: 350 }, species: 'gabumon' },
-                ];
-            }
+            state.error = err.message;
         }
     }
 
-    // ---- WebSocket 客户端 ----
-    // 后端 /ws/world 每秒推一次 {type:"positions", digimon:[{name, position, region_id}]}
-    // 连上后立即推一份 {type:"snapshot", world:{...}}
-    const WS_BASE = (() => {
-        if (!API_BASE) {
-            // 同源:自动从 http:// 升级为 ws://
-            const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            return proto + '//' + window.location.host;
-        }
-        // 跨源(本地开发):后端 http → ws
-        return API_BASE.replace(/^http/, 'ws');
-    })();
+    // ══════════════════════════════════════════════
+    //  交互: 点击选中数码兽
+    // ══════════════════════════════════════════════
 
-    let ws = null;
-    let wsRetryDelay = 500;          // 退避起点
-    let wsRetryTimer = null;
-    let pollingFallbackTimer = null;
-    let wsConnected = false;
-
-    function handleWsMessage(msg) {
-        if (!msg || typeof msg !== 'object') return;
-        switch (msg.type) {
-            case 'snapshot':
-                if (msg.world) mergeWorldSnapshot(msg.world);
-                state.connected = true;
-                wsConnected = true;
-                render();
-                updateStatusBar();
-                break;
-            case 'positions':
-                if (Array.isArray(msg.digimon)) mergePositions(msg.digimon);
-                render();
-                updateStatusBar();
-                break;
-            case 'echo':
-                // Phase 1 暂不解析客户端命令
-                break;
-            default:
-                console.log('[ws] 未知消息类型:', msg.type);
-        }
-    }
-
-    function connectWs() {
-        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-            return;
-        }
-        try {
-            ws = new WebSocket(WS_BASE + '/ws/world');
-        } catch (err) {
-            console.warn('[ws] 构造失败:', err.message);
-            scheduleWsReconnect();
-            return;
-        }
-
-        ws.addEventListener('open', () => {
-            console.log('[ws] 已连接', WS_BASE + '/ws/world');
-            wsConnected = true;
-            wsRetryDelay = 500;       // 重置退避
-            state.connected = true;
-            // 连上后停止 HTTP 轮询 fallback
-            if (pollingFallbackTimer) {
-                clearInterval(pollingFallbackTimer);
-                pollingFallbackTimer = null;
-            }
-            updateStatusBar();
-        });
-
-        ws.addEventListener('message', (ev) => {
-            try {
-                const msg = JSON.parse(ev.data);
-                handleWsMessage(msg);
-            } catch (err) {
-                console.warn('[ws] 解析失败:', err.message);
-            }
-        });
-
-        ws.addEventListener('close', () => {
-            console.log('[ws] 连接关闭');
-            wsConnected = false;
-            scheduleWsReconnect();
-        });
-
-        ws.addEventListener('error', (ev) => {
-            console.warn('[ws] 错误', ev);
-            // 让 close 处理重连
-        });
-    }
-
-    function scheduleWsReconnect() {
-        if (wsRetryTimer) return;
-        // 启动 polling fallback(只在第一次)
-        if (!pollingFallbackTimer) {
-            console.log('[ws] 降级为 HTTP 轮询(每 5s)');
-            pollingFallbackTimer = setInterval(async () => {
-                await fetchSnapshot();
-                render();
-                updateStatusBar();
-            }, 5000);
-        }
-        wsRetryTimer = setTimeout(() => {
-            wsRetryTimer = null;
-            wsRetryDelay = Math.min(wsRetryDelay * 2, 8000);  // 指数退避,封顶 8s
-            connectWs();
-        }, wsRetryDelay);
-    }
-
-    // 鼠标点击:点击数码兽选中
     canvas.addEventListener('click', (ev) => {
         const rect = canvas.getBoundingClientRect();
-        const x = (ev.clientX - rect.left) * (W / rect.width);
-        const y = (ev.clientY - rect.top) * (H / rect.height);
+        const mx = (ev.clientX - rect.left) * (W / rect.width);
+        const my = (ev.clientY - rect.top) * (H / rect.height);
+
         for (const d of state.digimon) {
-            const dx = x - d.position.x;
-            const dy = y - d.position.y;
-            if (dx * dx + dy * dy < 18 * 18) {
+            const dx = mx - d.position.x;
+            const dy = my - d.position.y;
+            if (dx * dx + dy * dy < 22 * 22) {
                 state.selectedName = d.name;
                 showSidebar(d);
+                render();
                 return;
             }
         }
-        // 点空白 → 取消选中
+        // 点空白取消选中
         state.selectedName = null;
         hideSidebar();
+        render();
     });
 
-    // ---- 侧栏 ----
+    // ══════════════════════════════════════════════
+    //  侧栏
+    // ══════════════════════════════════════════════
+
     function showSidebar(d) {
         const sb = document.getElementById('sidebar');
         if (!sb) return;
+        const emoji = SPECIES_EMOJI[d.species] || '❓';
         sb.innerHTML = `
-            <h3>${d.name}</h3>
+            <h3>${emoji} ${d.name}</h3>
             <p class="meta">${d.species || ''} · ${d.stage || ''} · ${d.attribute || ''}</p>
             <p class="meta">区域: ${d.region_id || '未知'}</p>
             <p class="meta">坐标: (${d.position.x}, ${d.position.y})</p>
             <p class="plan">📍 ${d.current_plan || '暂无计划'}</p>
-            <button id="btn-poke" class="poke">戳一下</button>
         `;
         sb.classList.add('open');
-        document.getElementById('btn-poke').addEventListener('click', () => pokeDigimon(d));
     }
 
     function hideSidebar() {
@@ -388,67 +374,47 @@
         if (sb) sb.classList.remove('open');
     }
 
-    async function pokeDigimon(d) {
-        // 朝鼠标方向戳一下 (让数码兽挪动)
-        try {
-            const r = await fetch(API_BASE + `/api/digimon/${encodeURIComponent(d.name)}/move`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dx: Math.floor(Math.random() * 60) - 30, dy: Math.floor(Math.random() * 40) - 20 }),
-            });
-            if (r.ok) {
-                const data = await r.json();
-                d.position = data.position;
-                render();
-            }
-        } catch (err) {
-            console.warn('[poke] 后端不可达:', err.message);
-        }
+    // ══════════════════════════════════════════════
+    //  轮询
+    // ══════════════════════════════════════════════
+
+    function startPolling() {
+        if (pollTimer) return;
+        pollTimer = setInterval(async () => {
+            await fetchDigimon();
+            render();
+            updateStatusBar();
+        }, 3000);
+        console.log('[poll] 每 3s 轮询 /api/digimon');
     }
 
-    // ---- 脚本驱动: 亚古兽自动闲逛(Phase 1 demo) ----
-    let wanderTimer = 0;
-    async function wanderLoop() {
-        wanderTimer += 1;
-        // 没连后端就不打(避免无谓请求 + 浏览器报错)
-        if (!state.connected) return;
-        // 每 3 秒尝试移动亚古兽
-        if (wanderTimer % 3 === 0) {
-            const dx = Math.floor(Math.random() * 41) - 20;  // [-20, 20]
-            const dy = Math.floor(Math.random() * 21) - 10;  // [-10, 10]
-            try {
-                await fetch(API_BASE + '/api/digimon/' + encodeURIComponent('亚古兽') + '/move', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dx, dy }),
-                });
-            } catch (_) { /* 后端不可达就静默 */ }
-        }
-    }
+    // ══════════════════════════════════════════════
+    //  启动
+    // ══════════════════════════════════════════════
 
-    // wander 也走定时器(和 WS 并行:客户端触发后端移动 → 后端再通过 WS 推回来)
-    setInterval(wanderLoop, 1000);
-
-    // ---- 启动 ----
     async function start() {
-        // 1. 拉一次 HTTP 快照 → 立即有内容显示
-        await fetchSnapshot();
+        console.log('[start] API_BASE =', API_BASE || '(同源)');
+
+        // 1. 拉地图
+        await fetchWorld();
+        // 2. 拉数码兽
+        await fetchDigimon();
+        // 3. 首次渲染
         render();
         updateStatusBar();
-        // 2. 建 WebSocket(成功后会覆盖快照;失败则降级为 5s 轮询)
-        connectWs();
-        // 3. 状态栏每秒刷新
+        // 4. 启动轮询
+        startPolling();
+        // 5. 状态栏每秒刷新时间
         setInterval(updateStatusBar, 1000);
     }
 
     start();
 
-    // 暴露 API
+    // 暴露调试接口
     window.DigimonWorld = {
-        version: '0.2.0',
+        version: '1.0.0',
         phase: 1,
-        ready: true,
         getState: () => state,
-        poke: pokeDigimon,
+        refresh: async () => { await fetchDigimon(); render(); },
     };
 })();
