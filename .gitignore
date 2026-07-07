@@ -24,6 +24,4 @@ Thumbs.db
 logs/
 *.log
 tmp/
-data/world_state.db
-data/world_state.db-journal
-__pycache__/
+data/

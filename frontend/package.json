@@ -1,0 +1,9 @@
+{
+  "name": "digimon-world-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frontend placeholder for Cloudflare Pages (Phase 0). No build step. Real UI comes in Phase 1+.",
+  "scripts": {
+    "build": "echo 'No build step needed - static HTML' && exit 0"
+  }
+}

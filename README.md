@@ -24,33 +24,38 @@ digimon-world/
 ├── docs/                    # 设计文档
 │   ├── DESIGN.md            # 总体设计
 │   ├── ROADMAP.md           # 路线图
-│   └── RESEARCH.md          # 调研笔记(Stanford / 数码宝贝 / Agent 进展)
-├── src/digimon_world/       # 后端代码
-│   ├── world/               # 世界模拟: 地图、地区、事件
-│   ├── agents/              # 智能体: 数码兽、NPC、被选召的孩子
-│   ├── memory/              # 记忆流 / 反思 / 检索
-│   ├── battle/              # 战斗系统
-│   ├── evolution/           # 进化机制
-│   └── api/                 # FastAPI 接口(给前端用)
-├── frontend/                # 前端(2D 插画)
+│   ├── RESEARCH.md          # 调研笔记
+│   └── DEPLOY_CLOUDFLARE_PAGES.md
+├── frontend/                # 前端(2D 插画) - Cloudflare Pages 部署这个目录
 │   ├── index.html
 │   ├── style.css
-│   └── main.js
-├── tests/                   # 单元测试 / smoke test
-├── data/                    # 世界状态(运行时生成,不入 git)
-├── pyproject.toml           # Python 项目元数据
+│   ├── main.js
+│   ├── 404.html
+│   ├── package.json         # 告诉 Cloudflare 这是静态站
+│   └── _headers/_redirects  # Cloudflare 配置
+├── backend/                 # Python 后端(Phase 1+)
+│   ├── pyproject.toml
+│   ├── src/digimon_world/   # 核心代码
+│   │   ├── world/
+│   │   ├── agents/          # 数码兽智能体
+│   │   ├── memory/          # 记忆流
+│   │   ├── battle/
+│   │   ├── evolution/
+│   │   └── api/             # FastAPI 接口
+│   └── tests/
 └── .gitignore
 ```
 
 ## 🚀 启动(规划中,本仓库尚未实现)
 
 ```bash
-# 后端
-pip install -e .
+# 后端 (Phase 1+)
+cd backend && pip install -e .
 uvicorn digimon_world.api.app:app --reload
 
 # 前端
 cd frontend && python -m http.server 8080
+# 或者直接用 Cloudflare Pages 部署(见 docs/DEPLOY_CLOUDFLARE_PAGES.md)
 ```
 
 ## 🗺️ 路线图(分阶段)

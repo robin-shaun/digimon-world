@@ -11,7 +11,6 @@ requires-python = ">=3.11"
 license = { text = "MIT (code) / IP of Digimon belongs to Bandai" }
 authors = [
     { name = "肖昆 (Shaun)", email = "robin_shaun@users.gitee.com" },
-    { name = "星航 (Xinghang)", email = "ai-assistant@local" },
 ]
 
 dependencies = [
