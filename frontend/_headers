@@ -1,7 +1,3 @@
-; Cloudflare Pages 安全 headers
-; 格式: <path> \n  <Header-Name>: <value>
-; 参考: https://developers.cloudflare.com/pages/configuration/headers/
-
 /
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
