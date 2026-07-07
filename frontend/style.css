@@ -1,0 +1,78 @@
+/* DIGIMON WORLD - 占位样式
+   Phase 0: 暗色背景 + 简单布局
+   Phase 1+: 改成 2D 插画风(光感、渐变、动态) */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+    color: #e0e6ff;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#app {
+    width: 100%;
+    max-width: 1024px;
+    padding: 24px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+h1 {
+    font-size: 48px;
+    background: linear-gradient(90deg, #00d4ff, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 4px;
+}
+
+.subtitle {
+    color: #8b95c7;
+    font-size: 14px;
+    margin-top: 8px;
+    letter-spacing: 2px;
+}
+
+#world-map {
+    display: block;
+    margin: 0 auto;
+    border: 2px solid #2a3a6a;
+    border-radius: 8px;
+    background: #050816;
+    box-shadow: 0 0 40px rgba(0, 212, 255, 0.15);
+}
+
+#status-bar {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 16px;
+    padding: 12px 20px;
+    background: rgba(42, 58, 106, 0.4);
+    border-radius: 6px;
+    font-size: 13px;
+    color: #8b95c7;
+    font-family: "SF Mono", "Consolas", monospace;
+}
+
+#status-bar span {
+    letter-spacing: 1px;
+}
+
+footer {
+    text-align: center;
+    margin-top: 24px;
+    color: #555f8a;
+    font-size: 12px;
+}

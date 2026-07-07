@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "digimon-world"
+version = "0.1.0"
+description = "An emergent virtual world of Digimon, powered by LLM agents (Stanford Generative Agents style)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT (code) / IP of Digimon belongs to Bandai" }
+authors = [
+    { name = "肖昆 (Shaun)", email = "robin_shaun@users.gitee.com" },
+    { name = "星航 (Xinghang)", email = "ai-assistant@local" },
+]
+
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "httpx>=0.27",         # 调用中转 API
+    "aiosqlite>=0.20",     # 异步 SQLite,用于记忆流
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "black>=24.0",
+    "ruff>=0.3",
+]
+
+[project.urls]
+Repository = "https://gitee.com/robin_shaun/digimon-world"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
