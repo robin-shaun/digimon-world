@@ -4,11 +4,11 @@
  * 1. 加载后端 /api/world 快照,获取数码兽位置
  * 2. 渲染地图(沿用 Phase 0 画法,加 POI 标签)
  * 3. 脚本驱动亚古兽在文件岛随机走动
- * 4. 每 2 秒从后端 GET /api/digimon 重新拉位置(模拟 WebSocket 简单轮询)
+ * 4. WebSocket /ws/world 实时接收位置变化(自动重连);失败时降级为 HTTP 轮询
  * 5. 鼠标点击数码兽 → 弹出侧栏
  *
  * Phase 1 完成标志: 真实亚古兽在文件岛移动 ✓
- * Phase 2+: 改成 WebSocket 推送 + LLM 决策路径
+ * Phase 2+: 替换脚本驱动为 LLM 决策
  */
 
 (function () {
@@ -179,28 +179,56 @@
             '世界时间: ' + new Date().toLocaleTimeString('zh-CN');
         document.getElementById('digimon-count').textContent =
             '数码兽: ' + state.digimon.length;
+        let conn = '🔴 离线';
+        if (wsConnected) conn = '🟢 WS';
+        else if (pollingFallbackTimer) conn = '🟡 轮询';
         document.getElementById('phase').textContent =
-            'Phase: 1 (地图+移动) · ' + (state.connected ? '🟢 后端已连' : '🔴 离线');
+            'Phase: 1 (地图+移动+WS) · ' + conn;
     }
 
     // ---- API 通信 ----
+    // 把 /api/world 快照合并到 state(给 WebSocket 启动前用,以及轮询 fallback)
+    function mergeWorldSnapshot(data) {
+        state.regions = data.regions;
+        state.digimon = data.agents.map((a) => ({
+            name: a.name,
+            species: a.species,
+            stage: a.stage,
+            attribute: a.attribute,
+            region_id: a.region_id,
+            position: a.location,                 // backend 用 "location":[x,y]
+            current_plan: a.current_plan,
+        }));
+        state.lastFetch = Date.now();
+    }
+
+    // 把 WebSocket 推送的 positions 合并到 state(按 name 索引更新)
+    function mergePositions(positions) {
+        const byName = new Map(state.digimon.map((d) => [d.name, d]));
+        for (const p of positions) {
+            const d = byName.get(p.name);
+            if (d) {
+                d.position = p.position;
+                if (p.region_id) d.region_id = p.region_id;
+            } else {
+                // 新出现(后端 spawn 了新的)→ 加进去
+                state.digimon.push({
+                    name: p.name,
+                    position: p.position,
+                    region_id: p.region_id,
+                });
+            }
+        }
+        state.lastFetch = Date.now();
+    }
+
     async function fetchSnapshot() {
         try {
             const r = await fetch(API_BASE + '/api/world', { cache: 'no-store' });
             if (!r.ok) throw new Error('HTTP ' + r.status);
             const data = await r.json();
-            state.regions = data.regions;
-            state.digimon = data.agents.map((a) => ({
-                name: a.name,
-                species: a.species,
-                stage: a.stage,
-                attribute: a.attribute,
-                region_id: a.region_id,
-                position: a.location,                 // backend 用 "location":[x,y]
-                current_plan: a.current_plan,
-            }));
+            mergeWorldSnapshot(data);
             state.connected = true;
-            state.lastFetch = Date.now();
         } catch (err) {
             console.warn('[fetch] 后端不可达,使用本地模拟:', err.message);
             state.connected = false;
@@ -212,6 +240,112 @@
                 ];
             }
         }
+    }
+
+    // ---- WebSocket 客户端 ----
+    // 后端 /ws/world 每秒推一次 {type:"positions", digimon:[{name, position, region_id}]}
+    // 连上后立即推一份 {type:"snapshot", world:{...}}
+    const WS_BASE = (() => {
+        if (!API_BASE) {
+            // 同源:自动从 http:// 升级为 ws://
+            const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return proto + '//' + window.location.host;
+        }
+        // 跨源(本地开发):后端 http → ws
+        return API_BASE.replace(/^http/, 'ws');
+    })();
+
+    let ws = null;
+    let wsRetryDelay = 500;          // 退避起点
+    let wsRetryTimer = null;
+    let pollingFallbackTimer = null;
+    let wsConnected = false;
+
+    function handleWsMessage(msg) {
+        if (!msg || typeof msg !== 'object') return;
+        switch (msg.type) {
+            case 'snapshot':
+                if (msg.world) mergeWorldSnapshot(msg.world);
+                state.connected = true;
+                wsConnected = true;
+                render();
+                updateStatusBar();
+                break;
+            case 'positions':
+                if (Array.isArray(msg.digimon)) mergePositions(msg.digimon);
+                render();
+                updateStatusBar();
+                break;
+            case 'echo':
+                // Phase 1 暂不解析客户端命令
+                break;
+            default:
+                console.log('[ws] 未知消息类型:', msg.type);
+        }
+    }
+
+    function connectWs() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+        try {
+            ws = new WebSocket(WS_BASE + '/ws/world');
+        } catch (err) {
+            console.warn('[ws] 构造失败:', err.message);
+            scheduleWsReconnect();
+            return;
+        }
+
+        ws.addEventListener('open', () => {
+            console.log('[ws] 已连接', WS_BASE + '/ws/world');
+            wsConnected = true;
+            wsRetryDelay = 500;       // 重置退避
+            state.connected = true;
+            // 连上后停止 HTTP 轮询 fallback
+            if (pollingFallbackTimer) {
+                clearInterval(pollingFallbackTimer);
+                pollingFallbackTimer = null;
+            }
+            updateStatusBar();
+        });
+
+        ws.addEventListener('message', (ev) => {
+            try {
+                const msg = JSON.parse(ev.data);
+                handleWsMessage(msg);
+            } catch (err) {
+                console.warn('[ws] 解析失败:', err.message);
+            }
+        });
+
+        ws.addEventListener('close', () => {
+            console.log('[ws] 连接关闭');
+            wsConnected = false;
+            scheduleWsReconnect();
+        });
+
+        ws.addEventListener('error', (ev) => {
+            console.warn('[ws] 错误', ev);
+            // 让 close 处理重连
+        });
+    }
+
+    function scheduleWsReconnect() {
+        if (wsRetryTimer) return;
+        // 启动 polling fallback(只在第一次)
+        if (!pollingFallbackTimer) {
+            console.log('[ws] 降级为 HTTP 轮询(每 5s)');
+            pollingFallbackTimer = setInterval(async () => {
+                await fetchSnapshot();
+                render();
+                updateStatusBar();
+            }, 5000);
+        }
+        wsRetryTimer = setTimeout(() => {
+            wsRetryTimer = null;
+            wsRetryDelay = Math.min(wsRetryDelay * 2, 8000);  // 指数退避,封顶 8s
+            connectWs();
+        }, wsRetryDelay);
     }
 
     // 鼠标点击:点击数码兽选中
@@ -276,6 +410,8 @@
     let wanderTimer = 0;
     async function wanderLoop() {
         wanderTimer += 1;
+        // 没连后端就不打(避免无谓请求 + 浏览器报错)
+        if (!state.connected) return;
         // 每 3 秒尝试移动亚古兽
         if (wanderTimer % 3 === 0) {
             const dx = Math.floor(Math.random() * 41) - 20;  // [-20, 20]
@@ -290,18 +426,18 @@
         }
     }
 
+    // wander 也走定时器(和 WS 并行:客户端触发后端移动 → 后端再通过 WS 推回来)
+    setInterval(wanderLoop, 1000);
+
     // ---- 启动 ----
     async function start() {
+        // 1. 拉一次 HTTP 快照 → 立即有内容显示
         await fetchSnapshot();
         render();
         updateStatusBar();
-        // 每 2s 拉一次后端位置
-        setInterval(async () => {
-            await fetchSnapshot();
-            await wanderLoop();
-            render();
-            updateStatusBar();
-        }, 2000);
+        // 2. 建 WebSocket(成功后会覆盖快照;失败则降级为 5s 轮询)
+        connectWs();
+        // 3. 状态栏每秒刷新
         setInterval(updateStatusBar, 1000);
     }
 
