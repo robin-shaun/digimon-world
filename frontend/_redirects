@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/redirects.json",
+  "redirects": [
+    {
+      "source": "/world",
+      "destination": "/index.html",
+      "statusCode": 200
+    }
+  ]
+}
