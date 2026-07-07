@@ -22,14 +22,16 @@
 
 **目标**: 在浏览器里看到一个 2D 插画风的地图,有数码兽(暂时是脚本控制)在上面走来走去。
 
-- [ ] 前端: 加载 2D 插画地图(文件岛缩略图,先占位)
-- [ ] 前端: 数码兽 sprite 在地图上移动(键盘控制或脚本路径)
-- [ ] 后端: 最简 FastAPI,提供 `/api/digimon/{id}/position` 接口
-- [ ] 后端: 内存中的 `WorldState`, 维护数码兽位置
-- [ ] WebSocket: 实时推送位置变化
-- [ ] 测试: smoke test 验证后端可启动,前端可加载
+- [x] 前端: 加载 2D 插画地图(文件岛,代码生成 + POI 标签) ✅
+- [x] 前端: 数码兽 sprite 在地图上移动(脚本驱动亚古兽随机走动) ✅
+- [x] 后端: FastAPI,`/api/digimon` / `/api/digimon/{name}` / `/api/digimon/{name}/position` / `/api/digimon/{name}/move` ✅
+- [x] 后端: 内存中的 `WorldState`(含 2 个地区 / 3 只数码兽 / 4 个 POI) ✅
+- [x] WebSocket: `/ws/world` 端点 + 1Hz 位置广播(占位) ✅
+- [x] 测试: 25 个 pytest 全通过(API + world_state + smoke) ✅
+- [x] 前端: 鼠标点击数码兽 → 侧栏显示详情 + "戳一下"按钮 ✅
+- [ ] 前端: WebSocket 客户端(目前用 2s 轮询) ⏳
 
-**完成标志**: 浏览器看到一个会动的数码世界。
+**完成标志**: 浏览器看到一个会动的数码世界,后端 API 全跑通。
 
 ---
 

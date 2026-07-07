@@ -76,3 +76,77 @@ footer {
     color: #555f8a;
     font-size: 12px;
 }
+
+/* ---- Phase 1 追加: 侧栏 + canvas 容器 ---- */
+.canvas-wrap {
+    position: relative;
+    width: 960px;
+    margin: 0 auto;
+}
+
+.sidebar {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 240px;
+    min-height: 160px;
+    padding: 16px;
+    background: rgba(10, 14, 39, 0.85);
+    border: 1px solid #2a3a6a;
+    border-radius: 8px;
+    color: #e0e6ff;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    display: none;
+}
+
+.sidebar.open {
+    display: block;
+}
+
+.sidebar h3 {
+    margin: 0 0 8px 0;
+    color: #ffd700;
+    font-size: 20px;
+    letter-spacing: 2px;
+}
+
+.sidebar .meta {
+    color: #8b95c7;
+    font-size: 12px;
+    margin: 4px 0;
+    font-family: "SF Mono", "Consolas", monospace;
+}
+
+.sidebar .plan {
+    margin-top: 12px;
+    padding: 8px;
+    background: rgba(124, 58, 237, 0.15);
+    border-left: 3px solid #7c3aed;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.sidebar .hint {
+    color: #8b95c7;
+    font-size: 12px;
+    text-align: center;
+    padding-top: 40px;
+}
+
+.sidebar .poke {
+    margin-top: 12px;
+    width: 100%;
+    padding: 8px;
+    background: linear-gradient(90deg, #00d4ff, #7c3aed);
+    color: #0a0e27;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 2px;
+}
+
+.sidebar .poke:hover {
+    filter: brightness(1.2);
+}
