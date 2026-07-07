@@ -1,7 +1,6 @@
-/*
-   Cloudflare Pages / 通用静态站点安全 headers
-   参考: https://developers.cloudflare.com/pages/configuration/headers/
-*/
+; Cloudflare Pages 安全 headers
+; 格式: <path> \n  <Header-Name>: <value>
+; 参考: https://developers.cloudflare.com/pages/configuration/headers/
 
 /
   X-Frame-Options: DENY
