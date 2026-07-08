@@ -12,6 +12,7 @@
 详细设计: docs/DESIGN.md 第 2 节
 """
 from .clock import WorldClock
+from .relationships import RelationshipTracker, get_tracker, reset_tracker
 from .scheduler import DEFAULT_TICK_SECONDS, WorldScheduler
 from .world_state import (
     DEFAULT_REGIONS,
@@ -29,9 +30,12 @@ __all__ = [
     "FILE_ISLAND",
     "INFINITY_MOUNTAIN",
     "Region",
+    "RelationshipTracker",
     "WorldClock",
     "WorldScheduler",
     "WorldState",
+    "get_tracker",
     "get_world",
+    "reset_tracker",
     "reset_world",
 ]

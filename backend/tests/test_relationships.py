@@ -1,0 +1,164 @@
+"""
+社交关系系统测试
+================
+
+覆盖:
+- 初始关系为 0(中立)
+- update 正/负 + 对称 + 夹紧
+- get_faction 返回最友好 / 最敌对
+- battle 自动调整关系(-10 敌对, 输方 +5 敬畏)
+- dialogue 自动调整关系(+3 友好)
+"""
+
+from __future__ import annotations
+
+import pytest
+from fastapi.testclient import TestClient
+
+from digimon_world.api import app as fastapi_app
+from digimon_world.world import get_world, reset_world
+from digimon_world.world.relationships import (
+    BATTLE_AWE_DELTA,
+    BATTLE_DELTA,
+    DIALOGUE_DELTA,
+    MAX_SCORE,
+    MIN_SCORE,
+    RelationshipTracker,
+    reset_tracker,
+)
+
+
+# ---- 1. 初始化关系为 0 ----
+
+
+def test_initial_relationship_is_zero() -> None:
+    """从未互动过的两只数码兽,关系值为 0(中立)。"""
+    rt = RelationshipTracker()
+    assert rt.get_relationship("亚古兽", "加布兽") == 0.0
+    # 自我关系恒为 0
+    assert rt.get_relationship("亚古兽", "亚古兽") == 0.0
+
+
+# ---- 2. update 正负 ----
+
+
+def test_update_positive_and_negative() -> None:
+    """update 正负增量累加,双向对称,并夹紧在 [MIN, MAX]。"""
+    rt = RelationshipTracker()
+
+    rt.update("A", "B", +30)
+    assert rt.get_relationship("A", "B") == 30.0
+    # 对称: (B, A) 命中同一条
+    assert rt.get_relationship("B", "A") == 30.0
+
+    rt.update("A", "B", -50)
+    assert rt.get_relationship("A", "B") == -20.0
+
+    # 上界夹紧
+    rt.update("A", "B", +999)
+    assert rt.get_relationship("A", "B") == MAX_SCORE
+    # 下界夹紧
+    rt.update("A", "B", -9999)
+    assert rt.get_relationship("A", "B") == MIN_SCORE
+
+    # 自我 update 是 no-op
+    assert rt.update("A", "A", +50) == 0.0
+    assert rt.get_relationship("A", "A") == 0.0
+
+
+# ---- 3. get_faction ----
+
+
+def test_get_faction_returns_ally_and_rival() -> None:
+    """get_faction 返回最友好的 ally 和最敌对的 rival。"""
+    rt = RelationshipTracker()
+    rt.update("亚古兽", "加布兽", +40)   # 好朋友
+    rt.update("亚古兽", "比丘兽", +10)   # 一般朋友
+    rt.update("亚古兽", "暴龙兽", -60)   # 死敌
+
+    faction = rt.get_faction("亚古兽")
+    assert faction["ally"] == "加布兽"
+    assert faction["rival"] == "暴龙兽"
+
+    # 只有正关系时 rival 为 None
+    rt2 = RelationshipTracker()
+    rt2.update("X", "Y", +5)
+    f2 = rt2.get_faction("X")
+    assert f2["ally"] == "Y"
+    assert f2["rival"] is None
+
+    # 完全没关系 → 两者都 None
+    assert rt2.get_faction("孤独兽") == {"ally": None, "rival": None}
+
+
+# ---- 4. battle 自动调整 ----
+
+
+def test_battle_auto_adjusts_relationship() -> None:
+    """record_battle: 双方 -10 敌对, 输方对赢方 +5 敬畏 → 净 -5。"""
+    rt = RelationshipTracker()
+    rt.record_battle(winner="亚古兽", loser="加布兽")
+    expected = BATTLE_DELTA + BATTLE_AWE_DELTA  # -10 + 5 = -5
+    assert rt.get_relationship("亚古兽", "加布兽") == expected
+
+    # 平局 / None 不改变关系
+    rt.record_battle(winner=None, loser="加布兽")
+    assert rt.get_relationship("亚古兽", "加布兽") == expected
+
+
+def test_battle_api_updates_relationship() -> None:
+    """POST /api/battle/start 后 GET /api/relationships 出现这一对且为负。"""
+    reset_world()
+    reset_tracker()
+    get_world()  # 初始化亚古兽 / 加布兽 / 比丘兽
+    client = TestClient(fastapi_app)
+
+    r = client.post(
+        "/api/battle/start",
+        json={"attacker": "亚古兽", "defender": "加布兽"},
+    )
+    assert r.status_code == 200, r.text
+
+    rel = client.get("/api/relationships")
+    assert rel.status_code == 200
+    pairs = rel.json()["pairs"]
+    assert len(pairs) == 1
+    pair = pairs[0]
+    assert {pair["a"], pair["b"]} == {"亚古兽", "加布兽"}
+    # 打过一架 → 关系为负
+    assert pair["score"] < 0
+    reset_world()
+    reset_tracker()
+
+
+# ---- 5. dialogue 自动调整 ----
+
+
+@pytest.mark.asyncio
+async def test_dialogue_auto_adjusts_relationship() -> None:
+    """scheduler 相遇生成对话后,双方关系 += DIALOGUE_DELTA。"""
+    from digimon_world.agents.digimon_agent import DigimonAgent
+    from digimon_world.llm.client import FakeLlmClient, LlmModel
+    from digimon_world.agents.dialogue import Dialogue
+    from digimon_world.world.clock import WorldClock
+    from digimon_world.world.scheduler import WorldScheduler
+    from digimon_world.world.world_state import WorldState
+
+    world = WorldState()
+    # 两只放得足够近(距离 < DIALOGUE_RADIUS=100),同一 region
+    world.spawn(DigimonAgent(name="甲兽", species="a", region_id="file_island", location=(100, 100)))
+    world.spawn(DigimonAgent(name="乙兽", species="b", region_id="file_island", location=(120, 100)))
+
+    fake = FakeLlmClient()
+    fake.set_reply(LlmModel.HAIKU, reply="你好呀!")
+    dialogue = Dialogue(llm_client=fake)
+
+    tracker = RelationshipTracker()
+    clock = WorldClock()
+    sched = WorldScheduler(
+        world=world, clock=clock, dialogue=dialogue, relationships=tracker
+    )
+
+    assert tracker.get_relationship("甲兽", "乙兽") == 0.0
+    await sched.tick_once()
+    assert tracker.get_relationship("甲兽", "乙兽") == DIALOGUE_DELTA

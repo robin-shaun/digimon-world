@@ -30,7 +30,7 @@ from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
 from ..battle import BattleEngine, BattleResult
 from ..llm.client import get_client
-from ..world import WorldClock, WorldScheduler, WorldState, get_world
+from ..world import WorldClock, WorldScheduler, WorldState, get_tracker, get_world
 
 
 # ---- Pydantic models ----
@@ -314,6 +314,11 @@ async def start_battle(req: BattleStartRequest) -> BattleStartResponse:
             if evo_r.evolved:
                 evo_result_dict = evo_r.to_dict()
 
+    # 战斗后自动调整社交关系: 双方变敌对, 输方对赢方生出敬畏
+    if result.winner_name is not None:
+        loser_name = b.name if result.winner_name == a.name else a.name
+        get_tracker().record_battle(winner=result.winner_name, loser=loser_name)
+
     # 写世界事件
     event = {
         "type": "battle",
@@ -367,6 +372,17 @@ def get_battle_victories(name: str) -> dict[str, Any]:
     if agent is None:
         raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
     return {"name": name, "battle_victories": agent.battle_victories}
+
+
+# ---- Phase 4: 社交关系 API ----
+@app.get("/api/relationships")
+def get_relationships() -> dict[str, Any]:
+    """所有数码兽两两关系对: {pairs: [{a, b, score}, ...]}。
+
+    正数=友好, 负数=敌对, 0=中立。给前端画派系图 / Director 观察阵营用。
+    """
+    pairs = get_tracker().all_pairs()
+    return {"count": len(pairs), "pairs": pairs}
 
 
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----

@@ -28,6 +28,7 @@ from ..agents.digimon_agent import DigimonAgent
 from ..agents.dialogue import Dialogue
 from .clock import WorldClock
 from .interactions import detect_proximity
+from .relationships import RelationshipTracker, get_tracker
 from .world_state import WorldState
 
 logger = logging.getLogger(__name__)
@@ -54,12 +55,15 @@ class WorldScheduler:
         clock: WorldClock,
         on_event: Optional[EventCallback] = None,
         dialogue: Optional[Dialogue] = None,
+        relationships: Optional[RelationshipTracker] = None,
     ) -> None:
         self._world = world
         self._clock = clock
         self._on_event = on_event
         # 对话生成器(可选): 有则在相遇时生成对话,无则跳过互动阶段
         self._dialogue = dialogue
+        # 社交关系表: 默认用进程级单例,可注入独立实例(测试)
+        self._relationships = relationships if relationships is not None else get_tracker()
         self._tick_count = 0
 
     @property
@@ -116,8 +120,9 @@ class WorldScheduler:
             # 只在同一地区相遇
             if a.region_id != b.region_id:
                 continue
-            # 任一方仍在冷却期 → 跳过
+            # 任一方仍在冷却期 → 不生成对话,但相遇本身也拉近一点关系
             if self._in_cooldown(a, now) or self._in_cooldown(b, now):
+                self._relationships.record_proximity(a.name, b.name)
                 continue
 
             try:
@@ -138,6 +143,9 @@ class WorldScheduler:
                 "line": line,
                 "at": now.isoformat() if now is not None else None,
             })
+
+            # 一次成功对话 → 双方关系变友好
+            self._relationships.record_dialogue(a.name, b.name)
 
             # 刷新双方冷却时间戳
             a.last_interaction_at = now
