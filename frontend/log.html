@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📜 世界日志 - DIGIMON WORLD</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #e0e6ff;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .wrap { max-width: 1024px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 30px;
+            background: linear-gradient(90deg, #00d4ff, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 3px;
+        }
+
+        .home-link {
+            color: #00d4ff;
+            text-decoration: none;
+            font-size: 14px;
+            border: 1px solid #2a3a6a;
+            border-radius: 6px;
+            padding: 6px 12px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .home-link:hover { background: rgba(0, 212, 255, 0.1); border-color: #00d4ff; }
+
+        .meta-bar {
+            color: #8b95c7;
+            font-size: 13px;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .meta-bar .dot { color: #4ae8c4; }
+        .meta-bar .dot.off { color: #ff6b81; }
+
+        h2 {
+            font-size: 18px;
+            color: #b68aff;
+            margin: 28px 0 12px;
+            letter-spacing: 2px;
+            border-left: 3px solid #7c3aed;
+            padding-left: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #050816;
+            border: 1px solid #2a3a6a;
+            border-radius: 8px;
+            overflow: hidden;
+            font-size: 14px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 10px 14px;
+            border-bottom: 1px solid #1a2444;
+            vertical-align: top;
+        }
+
+        th {
+            color: #8b95c7;
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            background: #0a1128;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: rgba(0, 212, 255, 0.04); }
+
+        .type-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            background: #1a2444;
+            color: #7cc4ff;
+            white-space: nowrap;
+        }
+        .type-tag.battle { background: #3a1420; color: #ff8fa3; }
+        .type-tag.evolution { background: #2a1a3a; color: #d3a4ff; }
+        .type-tag.dialogue { background: #14322a; color: #6ee0bc; }
+        .type-tag.story_event { background: #2a2410; color: #e8d47c; }
+
+        .col-time { color: #8b95c7; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .col-desc { color: #cdd6ff; }
+        .col-idx { color: #556; text-align: right; font-variant-numeric: tabular-nums; }
+
+        .score {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+        .score.pos { color: #4ae8c4; }
+        .score.neg { color: #ff6b81; }
+        .score.zero { color: #8b95c7; }
+        .bar {
+            display: inline-block;
+            height: 6px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+        .bar.pos { background: #4ae8c4; }
+        .bar.neg { background: #ff6b81; }
+
+        .empty { color: #556; padding: 16px 14px; font-size: 14px; }
+
+        footer {
+            margin-top: 32px;
+            color: #556;
+            font-size: 12px;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header>
+            <h1>📜 世界日志</h1>
+            <a class="home-link" href="index.html">← 返回主页</a>
+        </header>
+
+        <div class="meta-bar">
+            <span id="conn"><span class="dot off">●</span> 连接中…</span>
+            <span id="world-time">世界时间: --</span>
+            <span id="updated">更新: --</span>
+        </div>
+
+        <h2>最近事件</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:110px">时间</th>
+                    <th style="width:120px">类型</th>
+                    <th>描述</th>
+                </tr>
+            </thead>
+            <tbody id="events-body">
+                <tr><td colspan="3" class="empty">加载中…</td></tr>
+            </tbody>
+        </table>
+
+        <h2>关系变化</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>数码兽 A</th>
+                    <th>数码兽 B</th>
+                    <th style="width:200px">关系值</th>
+                </tr>
+            </thead>
+            <tbody id="rel-body">
+                <tr><td colspan="3" class="empty">加载中…</td></tr>
+            </tbody>
+        </table>
+
+        <footer>每 5 秒自动刷新 · DIGIMON WORLD Phase 4</footer>
+    </div>
+
+    <script>
+        // API_BASE: 与 main.js 一致 —— Cloudflare 部署时用 index.html 注入的 window.API_BASE,
+        // 本地默认 http://localhost:8000。本页独立, 若未注入则回退。
+        const API_BASE = (() => {
+            if (typeof window.API_BASE === 'string') return window.API_BASE;
+            if (window.location.origin.includes('workers.dev')) return '';
+            return 'http://localhost:8000';
+        })();
+
+        const REFRESH_MS = 5000;
+
+        const el = {
+            conn: document.getElementById('conn'),
+            worldTime: document.getElementById('world-time'),
+            updated: document.getElementById('updated'),
+            eventsBody: document.getElementById('events-body'),
+            relBody: document.getElementById('rel-body'),
+        };
+
+        function esc(s) {
+            return String(s).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[c]));
+        }
+
+        // 事件字段不统一, 尽量拼出一句可读的中文描述。
+        function eventDesc(ev) {
+            if (ev.description) return esc(ev.description);
+            switch (ev.type) {
+                case 'battle':
+                    return `${esc(ev.attacker)} ⚔️ ${esc(ev.defender)}` +
+                        (ev.winner ? ` → 胜者 <b>${esc(ev.winner)}</b>` : ' → 平局') +
+                        (ev.rounds ? ` (${ev.rounds} 回合)` : '');
+                case 'dialogue':
+                    return `${esc(ev.speaker || ev.a || '?')}: ${esc(ev.line || ev.text || '')}`;
+                case 'moved':
+                    return `${esc(ev.agent || ev.name || '?')} 移动`;
+                default: {
+                    const rest = Object.entries(ev)
+                        .filter(([k]) => k !== 'type' && k !== 'at')
+                        .map(([k, v]) => `${esc(k)}=${esc(typeof v === 'object' ? JSON.stringify(v) : v)}`)
+                        .join(', ');
+                    return rest || '—';
+                }
+            }
+        }
+
+        function fmtTime(at) {
+            if (!at) return '--';
+            const d = new Date(at);
+            if (isNaN(d)) return esc(at);
+            const p = n => String(n).padStart(2, '0');
+            return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        }
+
+        function renderEvents(events) {
+            if (!events || !events.length) {
+                el.eventsBody.innerHTML = '<tr><td colspan="3" class="empty">暂无事件</td></tr>';
+                return;
+            }
+            // 最新在前
+            const rows = events.slice().reverse().map(ev => {
+                const t = ev.type || 'event';
+                return `<tr>
+                    <td class="col-time">${fmtTime(ev.at)}</td>
+                    <td><span class="type-tag ${esc(t)}">${esc(t)}</span></td>
+                    <td class="col-desc">${eventDesc(ev)}</td>
+                </tr>`;
+            }).join('');
+            el.eventsBody.innerHTML = rows;
+        }
+
+        function renderRelationships(pairs) {
+            if (!pairs || !pairs.length) {
+                el.relBody.innerHTML = '<tr><td colspan="3" class="empty">暂无关系数据</td></tr>';
+                return;
+            }
+            // 按关系强度 (绝对值) 排序, 最显著的在前
+            const sorted = pairs.slice().sort((x, y) => Math.abs(y.score) - Math.abs(x.score));
+            const rows = sorted.map(p => {
+                const s = p.score || 0;
+                const cls = s > 0 ? 'pos' : s < 0 ? 'neg' : 'zero';
+                const w = Math.min(Math.abs(s), 100);  // 关系值上限按 100 缩放
+                const bar = s === 0 ? '' :
+                    `<span class="bar ${cls}" style="width:${w}px"></span>`;
+                const label = s > 0 ? '友好' : s < 0 ? '敌对' : '中立';
+                return `<tr>
+                    <td>${esc(p.a)}</td>
+                    <td>${esc(p.b)}</td>
+                    <td><span class="score ${cls}">${s > 0 ? '+' : ''}${esc(s)}</span>
+                        <span style="color:#556;font-size:12px"> ${label}</span>${bar}</td>
+                </tr>`;
+            }).join('');
+            el.relBody.innerHTML = rows;
+        }
+
+        function setConn(ok, msg) {
+            el.conn.innerHTML = ok
+                ? '<span class="dot">●</span> 已连接'
+                : `<span class="dot off">●</span> ${esc(msg || '后端不可达')}`;
+        }
+
+        async function refresh() {
+            try {
+                const [stateRes, relRes] = await Promise.all([
+                    fetch(`${API_BASE}/api/director/state`),
+                    fetch(`${API_BASE}/api/relationships`),
+                ]);
+                if (!stateRes.ok) throw new Error(`HTTP ${stateRes.status}`);
+                const st = await stateRes.json();
+                renderEvents(st.recent_events);
+                el.worldTime.textContent = `世界时间: ${st.current_world_time || '--'}`;
+
+                if (relRes.ok) {
+                    const rel = await relRes.json();
+                    renderRelationships(rel.pairs);
+                }
+
+                const now = new Date();
+                const p = n => String(n).padStart(2, '0');
+                el.updated.textContent = `更新: ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+                setConn(true);
+            } catch (err) {
+                setConn(false, err.message);
+            }
+        }
+
+        refresh();
+        setInterval(refresh, REFRESH_MS);
+    </script>
+</body>
+</html>
