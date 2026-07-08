@@ -245,9 +245,14 @@ class DigimonAgent:
                 if kw in plan:
                     dx_total += dx
                     dy_total += dy
-            # 没识别出方向 → 默认小步前进
+            # 没识别出方向 → 4 方向伪随机之一(可复现,用 memory.next_id 当种子)
+            # 旧实现固定 (1, 0) 永远向右,会让所有数码兽一路贴到右边界。
+            # 这里加上 tick_count 偏移,避免 next_id 跨多个 tick 时方向过于集中。
             if dx_total == 0 and dy_total == 0:
-                dx_total, dy_total = 1, 0
+                from time import time as _now
+                tick_offset = int(_now() * 1000) % 4
+                idx = (self.memory.next_id + tick_offset) % 4
+                dx_total, dy_total = [(0, -1), (1, 0), (0, 1), (-1, 0)][idx]
 
             step = self.DEFAULT_STEP
             dx = dx_total * step

@@ -67,13 +67,21 @@ def test_act_move_up(agumon: DigimonAgent) -> None:
     assert event["to"][0] == old[0]
 
 
-def test_act_move_without_direction_defaults_rightward(agumon: DigimonAgent) -> None:
+def test_act_move_without_direction_defaults_to_one_of_four(agumon: DigimonAgent) -> None:
     agumon.current_plan = "去沙滩走走"
     old = agumon.location
     event = agumon.act()
     assert event["type"] == "moved"
-    # 没识别出方向 → 默认 (+1, 0)
-    assert event["to"][0] > old[0]
+    # 没识别出方向 → 4 方向之一(2faf0ec fix 之后不再是固定向右)
+    dx = event["to"][0] - old[0]
+    dy = event["to"][1] - old[1]
+    # 必须有移动 (dx, dy 至少一个非零)
+    assert (dx, dy) != (0, 0), "fallback 必须产生方向"
+    # 必须落在一个 4 方向里 (考虑 step 大小是 12)
+    valid_dx = {-12, 0, 12}  # 左/不横移/右
+    valid_dy = {-12, 0, 12}
+    assert dx in valid_dx, f"dx={dx} 不在 4 方向里"
+    assert dy in valid_dy, f"dy={dy} 不在 4 方向里"
 
 
 def test_act_move_combined_directions(agumon: DigimonAgent) -> None:
@@ -326,3 +334,32 @@ async def test_step_does_not_raise_with_any_plan(agumon: DigimonAgent) -> None:
         assert "type" in event
         assert "agent" in event
         assert event["agent"] == "亚古兽"
+
+@pytest.mark.asyncio
+async def test_act_fallback_4_directions_diverse(agumon: DigimonAgent) -> None:
+    """无方向关键词时, fallback 应在 4 方向中分布(连续多次 act() 不应只走 1 个方向)。
+
+    实际: 上次 2faf0ec fix 用 memory.next_id%4,但 next_id 跨多次 act 可能
+    产生重复方向,导致数码兽在 x=960 边界卡死。本测试在多次 act 后
+    验证至少命中过 2+ 个不同方向(用 time.time 偏移打散)。
+    """
+    # 把 plan 设成"无方向关键词" 触发 fallback
+    agumon.current_plan = "在附近闲逛, 保持警觉"
+    seen_dirs = set()
+    # 试 50 次, 必出现 2+ 不同方向
+    for _ in range(50):
+        # 重新初始化 location 让每次 act 都能产生不同 from
+        agumon.location = (100, 100)
+        event = agumon.act()
+        if event.get("type") == "moved":
+            from_xy = tuple(event["from"])
+            to_xy = tuple(event["to"])
+            dx = to_xy[0] - from_xy[0]
+            dy = to_xy[1] - from_xy[1]
+            if (dx, dy) != (0, 0):
+                # 归一化到 4 方向
+                if dx != 0: dx = 1 if dx > 0 else -1
+                if dy != 0: dy = 1 if dy > 0 else -1
+                seen_dirs.add((dx, dy))
+    # 至少看到 2 个不同方向
+    assert len(seen_dirs) >= 2, f"只看到一个方向 {seen_dirs}, fallback 退化"
