@@ -35,6 +35,7 @@ from ..world import (
     WorldScheduler,
     WorldState,
     get_director,
+    get_multiverse,
     get_registry,
     get_tracker,
     get_world,
@@ -69,6 +70,13 @@ class InjectEventRequest(BaseModel):
     # type == 'faction_create' 时: 派系 id + 成员(逗号分隔)
     faction_id: str | None = None
     members: str | None = None
+    # Phase 5 多元宇宙:
+    # type == 'world_create' 时: 新世界 id(不给则自动生成)
+    # type == 'digital_gate' 时: agent + from_world + to_world 决定跨世界迁移
+    world_id: str | None = None
+    agent: str | None = None
+    from_world: str | None = None
+    to_world: str | None = None
 
 
 class SpeedRequest(BaseModel):

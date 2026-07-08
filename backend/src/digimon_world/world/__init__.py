@@ -15,8 +15,21 @@ from . import persistence
 from .clock import WorldClock
 from .events import StoryDirector, StoryEvent, get_director, reset_director
 from .factions import Faction, FactionRegistry, get_registry, reset_registry
+from .multiverse import (
+    PRIME_WORLD_ID,
+    MultiverseManager,
+    get_multiverse,
+    reset_multiverse,
+)
 from .relationships import RelationshipTracker, get_tracker, reset_tracker
 from .scheduler import DEFAULT_TICK_SECONDS, WorldScheduler
+from .seasons import (
+    DAYS_PER_SEASON,
+    Season,
+    SeasonSystem,
+    get_season_system,
+    reset_season_system,
+)
 from .world_state import (
     DEFAULT_REGIONS,
     FILE_ISLAND,
@@ -28,14 +41,19 @@ from .world_state import (
 )
 
 __all__ = [
+    "DAYS_PER_SEASON",
     "DEFAULT_REGIONS",
     "DEFAULT_TICK_SECONDS",
     "FILE_ISLAND",
     "INFINITY_MOUNTAIN",
+    "PRIME_WORLD_ID",
     "Faction",
     "FactionRegistry",
+    "MultiverseManager",
     "Region",
     "RelationshipTracker",
+    "Season",
+    "SeasonSystem",
     "StoryDirector",
     "StoryEvent",
     "WorldClock",
@@ -43,11 +61,15 @@ __all__ = [
     "WorldState",
     "persistence",
     "get_director",
+    "get_multiverse",
     "get_registry",
+    "get_season_system",
     "get_tracker",
     "get_world",
     "reset_director",
+    "reset_multiverse",
     "reset_registry",
+    "reset_season_system",
     "reset_tracker",
     "reset_world",
 ]
