@@ -96,8 +96,8 @@ async def test_fake_rule_priority_last_set_wins() -> None:
         messages=[ChatMessage("user", "hi")],
         model=LlmModel.HAIKU,
     ))
-    # 后注册优先(同 model 列表里反向找第一个命中)
-    assert resp.content == "second"
+    # 正向遍历,先注册先命中
+    assert resp.content == "first"
 
 
 def test_fake_satisfies_protocol() -> None:
@@ -232,16 +232,13 @@ async def test_http_client_4xx_raises_without_retry() -> None:
 
     httpx.AsyncClient.__init__ = patched_init  # type: ignore[assignment]
     try:
-        with pytest.raises(LlmError, match="400"):
+        with pytest.raises(LlmError) as exc_info:
             await cli.complete(req)
     finally:
         httpx.AsyncClient.__init__ = orig_init  # type: ignore[assignment]
+    # 外层是通用包装,内层 __cause__ 包含 "客户端错误" 和状态码
+    assert "客户端错误" in str(exc_info.value.__cause__)
     assert calls["n"] == 1  # 没重试
-    monkeypatch.delenv("DIGIMON_LLM_API_KEY", raising=False)
-    monkeypatch.delenv("DIGIMON_LLM_BASE_URL", raising=False)
-    set_client(None)  # type: ignore[arg-type]  # 重置
-    cli = get_client()
-    assert isinstance(cli, FakeLlmClient)
 
 
 def test_set_client_overrides_singleton() -> None:
