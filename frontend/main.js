@@ -280,13 +280,15 @@
     function updateStatusBar() {
         const timeEl = document.getElementById('world-time');
         const countEl = document.getElementById('digimon-count');
+        const battleEl = document.getElementById('battle-count');
         const phaseEl = document.getElementById('phase');
 
         if (timeEl) timeEl.textContent = '世界时间: ' + new Date().toLocaleTimeString('zh-CN');
         if (countEl) countEl.textContent = '数码兽: ' + state.digimon.length;
+        if (battleEl) battleEl.textContent = '战斗: ' + battleCount24h;
 
         const connStatus = state.connected ? '🟢 在线' : '🔴 离线';
-        if (phaseEl) phaseEl.textContent = `Phase 1 · ${connStatus}`;
+        if (phaseEl) phaseEl.textContent = `Phase 3 · ${connStatus}`;
     }
 
     // ══════════════════════════════════════════════
@@ -389,6 +391,65 @@
     }
 
     // ══════════════════════════════════════════════
+    //  战斗轮询 + 进化 Overlay
+    // ══════════════════════════════════════════════
+
+    let battleCount24h = 0;
+
+    /** 每 30 秒拉最近战斗,检测进化事件 */
+    function startBattlePolling() {
+        async function poll() {
+            try {
+                const resp = await fetch(API_BASE + '/api/battle/recent?limit=3', { cache: 'no-store' });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                battleCount24h = data.count || 0;
+                updateStatusBar();
+
+                // 检查最近 3 场里有无进化
+                const battles = data.battles || [];
+                for (const b of battles) {
+                    if (b.evolution && b.evolution.evolved) {
+                        showEvolutionOverlay(
+                            b.winner,
+                            b.evolution.old_stage,
+                            b.evolution.new_stage
+                        );
+                        break; // 一次只弹一条
+                    }
+                }
+            } catch (e) {
+                // 静默失败,不影响主轮询
+            }
+        }
+        poll();
+        setInterval(poll, 30000);
+    }
+
+    /** 全屏半透明 overlay: 进化通知,3 秒后消失 */
+    function showEvolutionOverlay(name, oldStage, newStage) {
+        // 防止重复弹出同一事件
+        if (document.getElementById('evo-overlay')) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'evo-overlay';
+        overlay.className = 'evo-overlay';
+        overlay.textContent = `⚡ ${name} 进化了! ${oldStage} → ${newStage} ⚡`;
+
+        const wrap = document.querySelector('.canvas-wrap');
+        if (wrap) {
+            wrap.appendChild(overlay);
+        } else {
+            document.body.appendChild(overlay);
+        }
+
+        setTimeout(() => {
+            overlay.classList.add('fade-out');
+            setTimeout(() => overlay.remove(), 400);
+        }, 3000);
+    }
+
+    // ══════════════════════════════════════════════
     //  启动
     // ══════════════════════════════════════════════
 
@@ -406,6 +467,8 @@
         startPolling();
         // 5. 状态栏每秒刷新时间
         setInterval(updateStatusBar, 1000);
+        // 6. 启动战斗轮询 (30s) — 进化 overlay + 战斗数
+        startBattlePolling();
     }
 
     start();
