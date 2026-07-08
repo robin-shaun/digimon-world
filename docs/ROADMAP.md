@@ -1,6 +1,6 @@
 # 🗓️ 路线图 / Roadmap
 
-> 详细分阶段任务列表。Phase 1 进行中(剩 WS 客户端 1 项 ⏳)。
+> 详细分阶段任务列表。Phase 0+1+2 已完成,正在进入 Phase 3 (数码兽进化 + 战斗)。
 
 ## Phase 0: 技术调研 + 项目骨架 ✅ (本阶段)
 
@@ -46,11 +46,23 @@
 - [x] LLM 客户端: 中转 API 调用,模型分层 (opus/haiku) ✅
 - [x] WorldClock + WorldScheduler: 周期驱动 agent.step() ✅
 - [x] 单 agent 单元测试: 88+ 个 pytest 全通过(act/step/planner/reflector/memory/scheduler/api/world_state/smoke/llm_client) ✅
-- [ ] 多 agent 简单互动: 两只数码兽相遇→对话 ⏳
-- [ ] 把 scheduler 接入 FastAPI startup,真正让世界跑起来 ⏳
-- [ ] 端到端: 跑 1 天世界时间,检查 agent 记忆 / 反思 / 计划可读 ⏳
+- [x] 多 agent 简单互动: 两只数码兽相遇→对话 ✅
+- [x] 把 scheduler 接入 FastAPI startup,真正让世界跑起来 ✅
+- [x] 端到端: 跑 1 天世界时间,检查 agent 记忆 / 反思 / 计划可读 ✅ (脚本: `backend/scripts/verify_phase2.py`)
 
 **完成标志**: 一个数码兽能在文件岛上自主生活一天,有日志可看。
+
+**验证方法**:
+
+    cd backend && source .venv/bin/activate
+    python scripts/verify_phase2.py            # 默认 24 tick,15/15 PASS
+    python -m pytest tests/test_verify_phase2.py  # CI 兜底测试
+
+输出包含:
+- ✅ 15 项校验全过(时钟推进 / 移动 / 记忆 / plan / dialogue 等)
+- 🐾 每只数码兽的"一天生活报告"(位置 / 记忆数 / 当前计划 / 最近 3 条记忆)
+- 🌍 最近 5 条世界事件
+- 💬 主动触发 proximity 后的对话样本
 
 ---
 
@@ -102,7 +114,7 @@
 ```
 [████████░░░░░░░░░░░░░░]  35%  Phase 0
 [████████████████████] 100%  Phase 1 ✅ 完成
-[████████████████░░░░]  80%  Phase 2 (差 多 agent 互动 + 接入 API + 端到端跑一天)
+[████████████████████] 100%  Phase 2 ✅ 完成 (verify_phase2.py 15/15 PASS)
 [░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 3
 [░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 4
 ```
