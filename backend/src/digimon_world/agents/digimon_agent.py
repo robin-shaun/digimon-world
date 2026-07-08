@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, ClassVar, Optional, TYPE_CHECKING
 
 from ..memory.memory_stream import MemoryStream
 
@@ -149,10 +149,127 @@ class DigimonAgent:
         self.last_planned_at = datetime.utcnow()
         return plan
 
+    # 默认步长(像素/一次 act),Phase 2 暂用常量;后续可由 mood/性格/EP 决定
+    DEFAULT_STEP: ClassVar[int] = 12
+
+    # 方向关键词 → (dx, dy) 的多对多映射
+    # 中文世界偏好: 左/右/东/西 + 上/下/北/南
+    DIRECTION_KEYWORDS: ClassVar[dict[str, tuple[int, int]]] = {
+        "左": (-1, 0), "西": (-1, 0),
+        "右": (1, 0),  "东": (1, 0),
+        "上": (0, -1), "北": (0, -1), "天": (0, -1), "空中": (0, -1), "高处": (0, -1),
+        "下": (0, 1),  "南": (0, 1),  "地": (0, 1),  "低处": (0, 1),
+    }
+
     def act(self) -> dict[str, Any]:
-        """执行当前计划的第一步,产生世界事件。Phase 2 实现。"""
-        # TODO(Phase 2): 根据 plan 调用 WorldState 改写位置/发起对话/攻击
-        raise NotImplementedError("Phase 2 才实现")
+        """执行当前计划的第一步,产生世界事件。
+
+        Phase 2 简化版: 不调 LLM,直接用关键词解析当前计划,
+        推断一个方向位移,更新 self.location,返回世界事件 dict。
+
+        支持的意图(按 plan 文本里的关键词识别):
+        - 移动: 含 "走 / 移动 / 去 / 飞 / 爬 / 跑 / 逛" + 方向词
+        - 巡视/观察: 位置不变,返回 "observed" 事件
+        - 休息/睡觉/等待: 位置不变,返回 "rested" 事件
+        - 其它/无计划: 兜底为小幅随机走一步(伪随机,基于 self.next_id 做种子)
+
+        Returns:
+            世界事件 dict, 例如:
+                {"type": "moved", "agent": name,
+                 "from": [x, y], "to": [x', y'],
+                 "plan": "...", "at": iso}
+
+            调用方负责把事件写入 WorldState.events 与自身记忆。
+        """
+        plan = self.current_plan or ""
+        now_iso = datetime.utcnow().isoformat()
+
+        # ---- 1. 移动意图 ----
+        move_triggers = {"走", "移动", "去", "飞", "爬", "跑", "逛", "前往", "溜达", "赶"}
+        if any(k in plan for k in move_triggers):
+            dx_total = dy_total = 0
+            for kw, (dx, dy) in self.DIRECTION_KEYWORDS.items():
+                if kw in plan:
+                    dx_total += dx
+                    dy_total += dy
+            # 没识别出方向 → 默认小步前进
+            if dx_total == 0 and dy_total == 0:
+                dx_total, dy_total = 1, 0
+
+            step = self.DEFAULT_STEP
+            dx = dx_total * step
+            dy = dy_total * step
+            old_x, old_y = self.location
+            new_x = max(0, old_x + dx)
+            new_y = max(0, old_y + dy)
+            self.location = (new_x, new_y)
+            return {
+                "type": "moved",
+                "agent": self.name,
+                "from": [old_x, old_y],
+                "to": [new_x, new_y],
+                "plan": plan,
+                "at": now_iso,
+            }
+
+        # ---- 2. 观察/巡视 ----
+        observe_triggers = {"观察", "巡视", "看", "注意", "听", "嗅", "探查"}
+        if any(k in plan for k in observe_triggers):
+            return {
+                "type": "observed",
+                "agent": self.name,
+                "location": list(self.location),
+                "plan": plan,
+                "at": now_iso,
+            }
+
+        # ---- 3. 休息 ----
+        rest_triggers = {"休息", "睡觉", "睡", "等待", "发呆", "停"}
+        if any(k in plan for k in rest_triggers):
+            return {
+                "type": "rested",
+                "agent": self.name,
+                "location": list(self.location),
+                "plan": plan,
+                "at": now_iso,
+            }
+
+        # ---- 4. 兜底: 伪随机小步 ----
+        # 用 self.memory.next_id 当种子(保证可复现)
+        seed = self.memory.next_id
+        # 4 个方向之一
+        idx = seed % 4
+        direction = [(0, -1), (1, 0), (0, 1), (-1, 0)][idx]
+        step = self.DEFAULT_STEP // 2  # 兜底步长小一点
+        old_x, old_y = self.location
+        new_x = max(0, old_x + direction[0] * step)
+        new_y = max(0, old_y + direction[1] * step)
+        self.location = (new_x, new_y)
+        return {
+            "type": "moved",
+            "agent": self.name,
+            "from": [old_x, old_y],
+            "to": [new_x, new_y],
+            "plan": plan,
+            "at": now_iso,
+            "fallback": True,
+        }
+
+    async def step(self) -> dict[str, Any]:
+        """主循环一步: observe → reflect_if_needed → plan_next → act。
+
+        Returns:
+            act() 产出的世界事件。
+        """
+        # 1. 触发反思(无副作用失败时静默)
+        await self.reflect_if_needed()
+        # 2. 重新生成计划
+        await self.plan_next()
+        # 3. 执行并落事件到自身记忆
+        event = self.act()
+        # 把事件写回记忆流(importance 由启发式决定)
+        self.observe(event)
+        return event
 
     def to_dict(self) -> dict[str, Any]:
         """序列化(用于持久化到 SQLite)。"""
