@@ -29,11 +29,25 @@
     })();
 
     // ---- 数码兽 emoji 映射 ----
-    const SPECIES_EMOJI = {
-        agumon: '🦖',
-        gabumon: '🐺',
-        biyomon: '🦅',
+    // 进化后 species 会变成 'champion_form' 等占位值,所以优先用中文名匹配,
+    // 名字匹配不到时退回到 stage 匹配,保证进化后不会掉成 ❓。
+    const NAME_EMOJI = {
+        '亚古兽': '🦖',
+        '加布兽': '🐺',
+        '比丘兽': '🦅',
     };
+    const STAGE_EMOJI = {
+        rookie: '🦖',
+        champion: '⚔️',
+        mega: '👑',
+        baby_i: '🥚',
+        baby_ii: '🐣',
+    };
+    function getDigimonEmoji(name, species, stage) {
+        if (name && NAME_EMOJI[name]) return NAME_EMOJI[name];
+        if (stage && STAGE_EMOJI[stage]) return STAGE_EMOJI[stage];
+        return '❓';
+    }
 
     // ---- 区域样式 ----
     // 后端两个 region 的 bounds 都是整块 (0,0,960,600) 且重叠,
@@ -185,7 +199,7 @@
         for (const d of state.digimon) {
             const { x, y } = d.position;
             const isSelected = d.name === state.selectedName;
-            const emoji = SPECIES_EMOJI[d.species] || '❓';
+            const emoji = getDigimonEmoji(d.name, d.species, d.stage);
 
             // 光晕
             const aura = ctx.createRadialGradient(x, y, 4, x, y, 24);
@@ -360,7 +374,7 @@
     function showSidebar(d) {
         const sb = document.getElementById('sidebar');
         if (!sb) return;
-        const emoji = SPECIES_EMOJI[d.species] || '❓';
+        const emoji = getDigimonEmoji(d.name, d.species, d.stage);
         sb.innerHTML = `
             <h3>${emoji} ${d.name}</h3>
             <p class="meta">${d.species || ''} · ${d.stage || ''} · ${d.attribute || ''}</p>
@@ -434,7 +448,8 @@
         const overlay = document.createElement('div');
         overlay.id = 'evo-overlay';
         overlay.className = 'evo-overlay';
-        overlay.textContent = `⚡ ${name} 进化了! ${oldStage} → ${newStage} ⚡`;
+        const newEmoji = getDigimonEmoji(name, null, newStage);
+        overlay.textContent = `⚡ ${name} 进化了! ${oldStage} → ${newStage} ${newEmoji} ⚡`;
 
         const wrap = document.querySelector('.canvas-wrap');
         if (wrap) {
