@@ -153,7 +153,7 @@ class WorldScheduler:
     async def _step_agent(self, agent: DigimonAgent) -> dict[str, Any]:
         """调用单个 agent.step(),捕获异常不让一只炸了拖死整个 tick。"""
         try:
-            return await agent.step()
+            return await agent.step(self._world.regions)
         except Exception as e:
             logger.exception("agent.step failed for %s: %s", agent.name, e)
             return {

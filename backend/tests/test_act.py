@@ -23,6 +23,7 @@ from digimon_world.agents.digimon_agent import (
     DigimonStats,
     EvolutionStage,
 )
+from digimon_world.world.world_state import DEFAULT_REGIONS, Region
 
 
 @pytest.fixture
@@ -186,6 +187,82 @@ def test_act_move_clamps_to_non_negative(agumon: DigimonAgent) -> None:
     # 坐标不能变负
     assert event["to"][0] >= 0
     assert event["to"][1] >= 0
+
+
+def test_act_clamps_to_region_bounds(agumon: DigimonAgent) -> None:
+    """agent 已在地区右下边界,再往右下走,应停在边界不越界。"""
+    # file_island bounds = (0, 0, 960, 600)
+    agumon.region_id = "file_island"
+    agumon.location = (960, 600)
+    agumon.current_plan = "向右下方继续走"
+    event = agumon.act(DEFAULT_REGIONS)
+    assert event["type"] == "moved"
+    # 夹紧在 max_x / max_y,不越界
+    assert event["to"][0] == 960
+    assert event["to"][1] == 600
+    assert agumon.location == (960, 600)
+
+
+def test_act_clamps_to_region_bounds_smaller_region(agumon: DigimonAgent) -> None:
+    """自定义小地区: 边界应来自该 region,而非硬编码 960/600。"""
+    regions = {
+        "tiny": Region(region_id="tiny", name="小地区", description="", bounds=(0, 0, 100, 100)),
+    }
+    agumon.region_id = "tiny"
+    agumon.location = (100, 100)
+    agumon.current_plan = "向右下走"
+    event = agumon.act(regions)
+    assert event["to"][0] == 100
+    assert event["to"][1] == 100
+
+
+def test_act_unknown_region_logs_warning(agumon: DigimonAgent, caplog) -> None:
+    """region_id 不在 regions 中 → 跳过移动,原地不动,记 warning。"""
+    agumon.region_id = "atlantis"  # 不存在
+    agumon.location = (200, 400)
+    agumon.current_plan = "向右走"
+    with caplog.at_level("WARNING"):
+        event = agumon.act(DEFAULT_REGIONS)
+    # 位置不变
+    assert event["to"] == [200, 400]
+    assert event["from"] == [200, 400]
+    assert agumon.location == (200, 400)
+    assert event.get("skipped") == "unknown_region"
+    # 记了 warning
+    assert any("atlantis" in r.message or "atlantis" in str(r.args) for r in caplog.records)
+
+
+def test_act_unknown_region_skips_fallback_move(agumon: DigimonAgent) -> None:
+    """兜底分支同样受 region 检查保护,不会走出未知世界。"""
+    agumon.region_id = "atlantis"
+    agumon.location = (200, 400)
+    agumon.current_plan = "唱歌"  # 触发兜底
+    event = agumon.act(DEFAULT_REGIONS)
+    assert event["to"] == [200, 400]
+    assert event.get("skipped") == "unknown_region"
+    assert event.get("fallback") is True
+    assert agumon.location == (200, 400)
+
+
+def test_act_without_regions_preserves_legacy_behavior(agumon: DigimonAgent) -> None:
+    """不传 regions(旧调用方 / 单测)→ 行为不变: 仅非负夹紧,正常移动。"""
+    agumon.location = (200, 400)
+    agumon.current_plan = "向右走"
+    event = agumon.act()
+    assert event["type"] == "moved"
+    assert event["to"][0] > 200
+    assert "skipped" not in event
+
+
+def test_get_bounds_returns_region_bounds(agumon: DigimonAgent) -> None:
+    agumon.region_id = "file_island"
+    assert agumon.get_bounds(DEFAULT_REGIONS) == (0, 0, 960, 600)
+
+
+def test_get_bounds_none_when_unknown(agumon: DigimonAgent) -> None:
+    agumon.region_id = "atlantis"
+    assert agumon.get_bounds(DEFAULT_REGIONS) is None
+    assert agumon.get_bounds(None) is None
 
 
 def test_act_event_has_iso_timestamp(agumon: DigimonAgent) -> None:

@@ -15,6 +15,7 @@ DigimonAgent - 数码兽智能体核心循环
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -25,6 +26,9 @@ from ..memory.memory_stream import MemoryStream
 if TYPE_CHECKING:
     from .planner import Planner
     from .reflector import Reflector
+    from ..world.world_state import Region
+
+logger = logging.getLogger(__name__)
 
 
 class EvolutionStage(str, Enum):
@@ -163,7 +167,28 @@ class DigimonAgent:
         "下": (0, 1),  "南": (0, 1),  "地": (0, 1),  "低处": (0, 1),
     }
 
-    def act(self) -> dict[str, Any]:
+    def get_bounds(
+        self, regions: dict[str, "Region"] | None
+    ) -> Optional[tuple[int, int, int, int]]:
+        """查自己所在 region 的移动边界 (min_x, min_y, max_x, max_y)。
+
+        Args:
+            regions: region_id -> Region 的映射(通常是 WorldState.regions)。
+                     传 None 或查不到对应 region 时返回 None。
+
+        Returns:
+            边界四元组;拿不到时返回 None(调用方据此跳过移动)。
+        """
+        if not regions:
+            return None
+        region = regions.get(self.region_id)
+        if region is None:
+            return None
+        return region.bounds
+
+    def act(
+        self, regions: dict[str, "Region"] | None = None
+    ) -> dict[str, Any]:
         """执行当前计划的第一步,产生世界事件。
 
         Phase 2 简化版: 不调 LLM,直接用关键词解析当前计划,
@@ -174,6 +199,12 @@ class DigimonAgent:
         - 巡视/观察: 位置不变,返回 "observed" 事件
         - 休息/睡觉/等待: 位置不变,返回 "rested" 事件
         - 其它/无计划: 兜底为小幅随机走一步(伪随机,基于 self.next_id 做种子)
+
+        Args:
+            regions: region_id -> Region 映射,用于把移动夹紧在地区边界内。
+                     传 None(如单元测试直接调 act())时退化为仅夹紧非负,
+                     行为与旧版一致。传了但查不到自己的 region_id 时,
+                     跳过本次移动并记 warning(避免走出世界)。
 
         Returns:
             世界事件 dict, 例如:
@@ -186,9 +217,29 @@ class DigimonAgent:
         plan = self.current_plan or ""
         now_iso = datetime.utcnow().isoformat()
 
+        # 拿边界: regions 显式传入时才生效。
+        # - regions 为 None(如直接单测 act()) → bounds=None,退化为仅非负夹紧。
+        # - regions 传了但查不到自己的 region_id → 跳过所有移动,记 warning。
+        bounds = self.get_bounds(regions)
+        region_unknown = regions is not None and bounds is None
+
+        def _clamp(nx: int, ny: int) -> tuple[int, int]:
+            """把坐标夹紧到边界内(无边界时仅保证非负)。"""
+            if bounds is not None:
+                min_x, min_y, max_x, max_y = bounds
+                return (max(min_x, min(max_x, nx)), max(min_y, min(max_y, ny)))
+            return (max(0, nx), max(0, ny))
+
         # ---- 1. 移动意图 ----
         move_triggers = {"走", "移动", "去", "飞", "爬", "跑", "逛", "前往", "溜达", "赶"}
         if any(k in plan for k in move_triggers):
+            if region_unknown:
+                logger.warning(
+                    "agent %s 的 region_id=%r 不在 regions 中,跳过移动",
+                    self.name, self.region_id,
+                )
+                return self._stay_event(plan, now_iso)
+
             dx_total = dy_total = 0
             for kw, (dx, dy) in self.DIRECTION_KEYWORDS.items():
                 if kw in plan:
@@ -202,8 +253,7 @@ class DigimonAgent:
             dx = dx_total * step
             dy = dy_total * step
             old_x, old_y = self.location
-            new_x = max(0, old_x + dx)
-            new_y = max(0, old_y + dy)
+            new_x, new_y = _clamp(old_x + dx, old_y + dy)
             self.location = (new_x, new_y)
             return {
                 "type": "moved",
@@ -237,6 +287,13 @@ class DigimonAgent:
             }
 
         # ---- 4. 兜底: 伪随机小步 ----
+        if region_unknown:
+            logger.warning(
+                "agent %s 的 region_id=%r 不在 regions 中,跳过兜底移动",
+                self.name, self.region_id,
+            )
+            return self._stay_event(plan, now_iso, fallback=True)
+
         # 用 self.memory.next_id 当种子(保证可复现)
         seed = self.memory.next_id
         # 4 个方向之一
@@ -244,8 +301,7 @@ class DigimonAgent:
         direction = [(0, -1), (1, 0), (0, 1), (-1, 0)][idx]
         step = self.DEFAULT_STEP // 2  # 兜底步长小一点
         old_x, old_y = self.location
-        new_x = max(0, old_x + direction[0] * step)
-        new_y = max(0, old_y + direction[1] * step)
+        new_x, new_y = _clamp(old_x + direction[0] * step, old_y + direction[1] * step)
         self.location = (new_x, new_y)
         return {
             "type": "moved",
@@ -257,8 +313,32 @@ class DigimonAgent:
             "fallback": True,
         }
 
-    async def step(self) -> dict[str, Any]:
+    def _stay_event(
+        self, plan: str, now_iso: str, fallback: bool = False
+    ) -> dict[str, Any]:
+        """region 未知时用的原地事件: 位置不动,标记 skipped 原因。"""
+        old_x, old_y = self.location
+        event = {
+            "type": "moved",
+            "agent": self.name,
+            "from": [old_x, old_y],
+            "to": [old_x, old_y],
+            "plan": plan,
+            "at": now_iso,
+            "skipped": "unknown_region",
+        }
+        if fallback:
+            event["fallback"] = True
+        return event
+
+    async def step(
+        self, regions: dict[str, "Region"] | None = None
+    ) -> dict[str, Any]:
         """主循环一步: observe → reflect_if_needed → plan_next → act。
+
+        Args:
+            regions: region_id -> Region 映射,透传给 act() 做边界夹紧。
+                     scheduler 会传 WorldState.regions;不传则退化为仅非负夹紧。
 
         Returns:
             act() 产出的世界事件。
@@ -268,7 +348,7 @@ class DigimonAgent:
         # 2. 重新生成计划
         await self.plan_next()
         # 3. 执行并落事件到自身记忆
-        event = self.act()
+        event = self.act(regions)
         # 把事件写回记忆流(importance 由启发式决定)
         self.observe(event)
         return event
