@@ -30,7 +30,15 @@ from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
 from ..battle import BattleEngine, BattleResult
 from ..llm.client import get_client
-from ..world import WorldClock, WorldScheduler, WorldState, get_tracker, get_world
+from ..world import (
+    WorldClock,
+    WorldScheduler,
+    WorldState,
+    get_director,
+    get_registry,
+    get_tracker,
+    get_world,
+)
 
 
 # ---- Pydantic models ----
@@ -57,6 +65,9 @@ class InjectEventRequest(BaseModel):
     region_id: str | None = None
     description: str
     importance: int = 5
+    # type == 'faction_create' 时: 派系 id + 成员(逗号分隔)
+    faction_id: str | None = None
+    members: str | None = None
 
 
 class SpeedRequest(BaseModel):
@@ -219,6 +230,21 @@ def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:
         "at": datetime.now().isoformat(),
     }
     world.events.append(event)
+
+    # type == 'faction_create' → 顺手在派系登记处凭空造一个命名派系。
+    # 成员从 members 字段读(逗号分隔),派系 id / name 从 faction_id / description 读。
+    if req.type == "faction_create":
+        registry = get_registry()
+        members = [m.strip() for m in (req.members or "").split(",") if m.strip()]
+        faction_id = req.faction_id or f"faction_director_{len(registry.all_factions())}"
+        faction = registry.inject_faction(
+            faction_id=faction_id,
+            members=members,
+            name=req.description or faction_id,
+        )
+        event["faction_id"] = faction.faction_id
+        event["members"] = sorted(faction.members)
+
     # id 用当前列表长度 - 1 (即刚 append 的索引)
     return {
         "id": len(world.events) - 1,
@@ -443,7 +469,15 @@ async def _startup() -> None:
     # 相遇时通过 Dialogue(Haiku 4.5)生成对话。
     clock = WorldClock(real_to_world_ratio=world.real_to_world_ratio)
     dialogue = Dialogue(llm_client=get_client())
-    scheduler = WorldScheduler(world=world, clock=clock, dialogue=dialogue)
+    # 派系 / 剧情用进程级单例,让调度器与 director API 共享同一份状态
+    scheduler = WorldScheduler(
+        world=world,
+        clock=clock,
+        dialogue=dialogue,
+        relationships=get_tracker(),
+        factions=get_registry(),
+        story_director=get_director(),
+    )
     app.state.world_clock = clock
     app.state.scheduler = scheduler
     app.state.scheduler_task = asyncio.create_task(scheduler.run_forever())

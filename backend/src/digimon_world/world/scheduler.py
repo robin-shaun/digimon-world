@@ -27,6 +27,8 @@ from typing import Any, Awaitable, Callable, Optional
 from ..agents.digimon_agent import DigimonAgent
 from ..agents.dialogue import Dialogue
 from .clock import WorldClock
+from .events import CHECK_INTERVAL_TICKS, StoryDirector
+from .factions import FactionRegistry
 from .interactions import detect_proximity
 from .relationships import RelationshipTracker, get_tracker
 from .world_state import WorldState
@@ -56,6 +58,8 @@ class WorldScheduler:
         on_event: Optional[EventCallback] = None,
         dialogue: Optional[Dialogue] = None,
         relationships: Optional[RelationshipTracker] = None,
+        factions: Optional[FactionRegistry] = None,
+        story_director: Optional[StoryDirector] = None,
     ) -> None:
         self._world = world
         self._clock = clock
@@ -64,12 +68,26 @@ class WorldScheduler:
         self._dialogue = dialogue
         # 社交关系表: 默认用进程级单例,可注入独立实例(测试)
         self._relationships = relationships if relationships is not None else get_tracker()
+        # 派系登记处: 每 tick 由关系表重算自动派系(无则新建独立实例)
+        self._factions = factions if factions is not None else FactionRegistry()
+        # 剧情导演: 每 CHECK_INTERVAL_TICKS 扫描一次触发条件(无则新建独立实例)
+        self._story_director = story_director if story_director is not None else StoryDirector()
         self._tick_count = 0
 
     @property
     def tick_count(self) -> int:
         """已执行 tick 次数(测试 / 调试用)。"""
         return self._tick_count
+
+    @property
+    def factions(self) -> FactionRegistry:
+        """派系登记处(前端 / Director 视角读取)。"""
+        return self._factions
+
+    @property
+    def story_director(self) -> StoryDirector:
+        """剧情导演(前端 / Director 视角读取)。"""
+        return self._story_director
 
     async def tick_once(self, real_seconds: float = DEFAULT_TICK_SECONDS) -> list[dict[str, Any]]:
         """执行一次 tick: 推进时钟 + 所有 agent 并发 step。
@@ -98,6 +116,11 @@ class WorldScheduler:
                         logger.warning("on_event callback failed: %s", e)
         # 4. 互动阶段: 相遇的数码兽触发对话
         await self._run_interactions(agents)
+        # 5. 派系阶段: 从关系表重算自动派系(导演注入的派系保留)
+        self._factions.form_factions(self._relationships)
+        # 6. 剧情阶段: 每 CHECK_INTERVAL_TICKS 扫描一次全局剧情触发条件
+        if self._tick_count % CHECK_INTERVAL_TICKS == 0:
+            self._story_director.check_trigger(self._world, self._relationships)
         self._tick_count += 1
         return events
 

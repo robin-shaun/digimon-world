@@ -12,6 +12,8 @@
 详细设计: docs/DESIGN.md 第 2 节
 """
 from .clock import WorldClock
+from .events import StoryDirector, StoryEvent, get_director, reset_director
+from .factions import Faction, FactionRegistry, get_registry, reset_registry
 from .relationships import RelationshipTracker, get_tracker, reset_tracker
 from .scheduler import DEFAULT_TICK_SECONDS, WorldScheduler
 from .world_state import (
@@ -29,13 +31,21 @@ __all__ = [
     "DEFAULT_TICK_SECONDS",
     "FILE_ISLAND",
     "INFINITY_MOUNTAIN",
+    "Faction",
+    "FactionRegistry",
     "Region",
     "RelationshipTracker",
+    "StoryDirector",
+    "StoryEvent",
     "WorldClock",
     "WorldScheduler",
     "WorldState",
+    "get_director",
+    "get_registry",
     "get_tracker",
     "get_world",
+    "reset_director",
+    "reset_registry",
     "reset_tracker",
     "reset_world",
 ]
