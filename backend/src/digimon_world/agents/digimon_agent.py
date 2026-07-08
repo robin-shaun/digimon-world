@@ -16,10 +16,14 @@ DigimonAgent - 数码兽智能体核心循环
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 from ..memory.memory_stream import MemoryStream
+
+if TYPE_CHECKING:
+    from .reflector import Reflector
 
 
 class EvolutionStage(str, Enum):
@@ -82,7 +86,8 @@ class DigimonAgent:
     stats: DigimonStats = field(default_factory=DigimonStats)
     memory: MemoryStream = field(default_factory=MemoryStream)
     current_plan: Optional[str] = None
-    # TODO(Phase 2): reflections: list[Reflection] - 反思树
+    reflector: Optional["Reflector"] = field(default=None, repr=False)
+    last_reflection_at: Optional[datetime] = None
     # TODO(Phase 3): evolution_requirements - 进化前置条件
 
     def observe(self, event: dict[str, Any]) -> None:
@@ -104,11 +109,25 @@ class DigimonAgent:
             return 3
         return 5
 
-    def reflect_if_needed(self) -> None:
-        """如果记忆累积到阈值,触发反思。Phase 2 实现。"""
-        # TODO(Phase 2): 调用 LLM 生成 reflection
-        # 当 self.memory.importance_sum > threshold 时触发
-        raise NotImplementedError("Phase 2 才实现")
+    async def reflect_if_needed(self) -> None:
+        """如果记忆累积到阈值,触发反思。
+
+        反思频率: 30 分钟世界时间内最多一次。
+        需要 self.reflector 已设置,否则静默跳过。
+        """
+        if self.reflector is None:
+            return
+        if not self.memory.should_reflect():
+            return
+        # 30 分钟冷却
+        now = datetime.utcnow()
+        if self.last_reflection_at is not None:
+            elapsed = (now - self.last_reflection_at).total_seconds()
+            if elapsed < 30 * 60:
+                return
+        result = await self.reflector.reflect(self)
+        if result:
+            self.last_reflection_at = now
 
     def plan_next(self) -> str:
         """根据记忆和当前状态,生成下一个行动。Phase 2 实现。"""
