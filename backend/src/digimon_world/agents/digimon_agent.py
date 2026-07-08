@@ -98,7 +98,8 @@ class DigimonAgent:
     last_planned_at: Optional[datetime] = None
     # 最近一次与其它数码兽互动(对话)的世界时刻,用于互动冷却
     last_interaction_at: Optional[datetime] = None
-    # TODO(Phase 3): evolution_requirements - 进化前置条件
+    # Phase 3: 战斗胜利累计(用于触发进化)。由 battle API 在赢家身上 +1。
+    battle_victories: int = 0
 
     def observe(self, event: dict[str, Any]) -> None:
         """观察一个世界事件,写入记忆流。
@@ -379,4 +380,5 @@ class DigimonAgent:
             "stats": self.stats.__dict__,
             "memory": [m.to_dict() for m in self.memory.entries],
             "current_plan": self.current_plan,
+            "battle_victories": self.battle_victories,
         }

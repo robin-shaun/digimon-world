@@ -27,6 +27,8 @@ from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..agents.dialogue import Dialogue
+from ..agents.evolution import EvolutionSystem
+from ..battle import BattleEngine, BattleResult
 from ..llm.client import get_client
 from ..world import WorldClock, WorldScheduler, WorldState, get_world
 
@@ -61,6 +63,23 @@ class SpeedRequest(BaseModel):
     """调整世界时间流速(现实 1 秒 = 世界 ratio 分钟)。"""
 
     ratio: int
+
+
+# ---- Phase 3: 战斗 API 模型 ----
+class BattleStartRequest(BaseModel):
+    """发起一场 A vs B 战斗。"""
+
+    attacker: str = Field(..., description="先手方名字")
+    defender: str = Field(..., description="后手方名字")
+    use_llm: bool = Field(default=False, description="是否用 LLM 决策动作")
+
+
+class BattleStartResponse(BaseModel):
+    """战斗结果 + 触发的进化事件。"""
+
+    result: dict[str, Any]
+    evolution: Optional[dict[str, Any]] = None
+    event_id: int
 
 
 # ---- App ----
@@ -227,6 +246,127 @@ def director_state() -> dict[str, Any]:
         "current_world_time": clock.format_clock() if clock is not None else None,
         "recent_events": world.events[-10:],
     }
+
+
+# ---- Phase 3: 战斗 API ----
+
+# 内存里的战斗历史(轻量,只存最近 20 场,够前端调试 / Director 视角看)
+_BATTLE_HISTORY: list[dict[str, Any]] = []
+_BATTLE_HISTORY_MAX: int = 20
+
+
+def _result_to_dict(result: BattleResult) -> dict[str, Any]:
+    """BattleResult → API 友好的字典。"""
+    return {
+        "winner": result.winner_name,
+        "rounds": result.rounds,
+        "final_hp": result.final_hp,
+    }
+
+
+@app.post("/api/battle/start", response_model=BattleStartResponse)
+async def start_battle(req: BattleStartRequest) -> BattleStartResponse:
+    """发起一场战斗,跑完一轮,赢家 battle_victories+1。
+
+    流程:
+    1. 取两只数码兽(404 if not found)
+    2. 跑 BattleEngine (脚本式 / LLM 决策)
+    3. 赢家 +1 victory + 写 battle_victory 记忆 (importance=9)
+    4. 调用 EvolutionSystem.check_and_evolve() 检查进化
+    5. 写一条世界事件 (source="battle") → 返回 event id
+    6. 把战斗结果放进 _BATTLE_HISTORY
+    """
+    world = get_world()
+    a = world.get(req.attacker)
+    b = world.get(req.defender)
+    if a is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{req.attacker}' not found")
+    if b is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{req.defender}' not found")
+    if a.name == b.name:
+        raise HTTPException(status_code=400, detail="Cannot battle yourself")
+
+    engine = BattleEngine()
+    llm_client = get_client() if req.use_llm else None
+    result = await engine.run_battle(a, b, llm_client=llm_client)
+
+    # 赢家 +1 victory, 写记忆, 触发进化
+    evo_result_dict: Optional[dict[str, Any]] = None
+    if result.winner_name is not None:
+        winner = world.get(result.winner_name)
+        if winner is not None:
+            winner.battle_victories += 1
+            winner.observe(
+                {
+                    "type": "battle_victory",
+                    "opponent": result.winner_name and (
+                        a.name if winner.name == a.name else b.name
+                    ),
+                    "rounds": result.rounds,
+                }
+            )
+            # 检查进化 (bond 从 memory 流里自动累加)
+            evo = EvolutionSystem()
+            bond = evo.compute_bond(winner)
+            evo_r = evo.check_and_evolve(
+                winner, battle_victories=winner.battle_victories, bond=bond
+            )
+            if evo_r.evolved:
+                evo_result_dict = evo_r.to_dict()
+
+    # 写世界事件
+    event = {
+        "type": "battle",
+        "attacker": a.name,
+        "defender": b.name,
+        "winner": result.winner_name,
+        "rounds": result.rounds,
+        "use_llm": req.use_llm,
+        "evolution": evo_result_dict,
+        "at": datetime.now().isoformat(),
+    }
+    world.events.append(event)
+    event_id = len(world.events) - 1
+
+    # 加入战斗历史(只保留最近 N 场)
+    history_entry = {
+        "event_id": event_id,
+        "attacker": a.name,
+        "defender": b.name,
+        "winner": result.winner_name,
+        "rounds": result.rounds,
+        "evolution": evo_result_dict,
+        "at": event["at"],
+    }
+    _BATTLE_HISTORY.append(history_entry)
+    if len(_BATTLE_HISTORY) > _BATTLE_HISTORY_MAX:
+        del _BATTLE_HISTORY[: len(_BATTLE_HISTORY) - _BATTLE_HISTORY_MAX]
+
+    return BattleStartResponse(
+        result=_result_to_dict(result),
+        evolution=evo_result_dict,
+        event_id=event_id,
+    )
+
+
+@app.get("/api/battle/recent")
+def recent_battles(limit: int = 10) -> dict[str, Any]:
+    """最近 N 场战斗记录 (给 Director 观察者视角用)。"""
+    n = max(1, min(limit, _BATTLE_HISTORY_MAX))
+    return {
+        "count": len(_BATTLE_HISTORY),
+        "battles": _BATTLE_HISTORY[-n:][::-1],  # 最新在前
+    }
+
+
+@app.get("/api/digimon/{name}/battle_victories")
+def get_battle_victories(name: str) -> dict[str, Any]:
+    """某只数码兽的战斗胜利累计(前端调试用)。"""
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+    return {"name": name, "battle_victories": agent.battle_victories}
 
 
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
