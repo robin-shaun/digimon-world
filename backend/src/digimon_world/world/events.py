@@ -36,6 +36,13 @@ CHECK_INTERVAL_TICKS: int = 30
 CHAMPION_COUNT_THRESHOLD: int = 3      # dark_tower: 需要至少 3 只 champion
 RELATIONSHIP_SUM_THRESHOLD: float = 200.0  # creators_return: 关系总和阈值
 
+# rivalry_emerges: 关系低于此值的一对 → 宿敌对决
+RIVALRY_THRESHOLD: float = -50.0
+# alliance_formed: 同一派系成员达到此数 → 结盟庆典
+ALLIANCE_MIN_MEMBERS: int = 3
+# digital_world_resonance: 关系高于此值的一对 champion → 共鸣
+RESONANCE_RELATIONSHIP_THRESHOLD: float = 100.0
+
 
 class StoryEvent:
     """一个全局剧情事件: 条件 + 描述 + 点火状态。
