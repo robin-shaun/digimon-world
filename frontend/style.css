@@ -390,3 +390,115 @@ footer {
     color: #ff5c5c;
     font-weight: bold;
 }
+
+/* ---- 数码兽详情卡 (点击后 sidebar 补全的完整数据) ---- */
+.hp-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 10px 0 6px 0;
+    font-size: 12px;
+    font-family: "SF Mono", "Consolas", monospace;
+}
+
+.hp-label {
+    color: #8b95c7;
+}
+
+.hp-bar {
+    flex: 1;
+    height: 8px;
+    background: rgba(42, 58, 106, 0.6);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.hp-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #4ae8c4, #00d4ff);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.hp-num {
+    color: #e0e6ff;
+    min-width: 54px;
+    text-align: right;
+}
+
+.detail-block {
+    margin-top: 12px;
+}
+
+.detail-block h4 {
+    color: #00d4ff;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(42, 58, 106, 0.6);
+    padding-bottom: 3px;
+}
+
+.rel-list,
+.mem-list {
+    list-style: none;
+    font-size: 11px;
+    font-family: "SF Mono", "Consolas", monospace;
+}
+
+.rel-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+}
+
+.rel-other {
+    color: #c0c8f0;
+}
+
+.rel-score {
+    font-weight: bold;
+}
+
+.rel-pos {
+    color: #4ae8c4;
+}
+
+.rel-neg {
+    color: #ff5c5c;
+}
+
+.rel-neutral {
+    color: #8b95c7;
+}
+
+.mem-list li {
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(42, 58, 106, 0.35);
+    line-height: 1.4;
+    word-break: break-word;
+    color: #a8b0d8;
+}
+
+.mem-imp {
+    display: inline-block;
+    min-width: 18px;
+    margin-right: 6px;
+    padding: 0 4px;
+    text-align: center;
+    background: rgba(42, 58, 106, 0.6);
+    border-radius: 3px;
+    color: #8b95c7;
+    font-size: 10px;
+}
+
+/* 高重要性记忆 (importance >= 7) 高亮 */
+.mem-hot {
+    color: #ffe08a;
+}
+
+.mem-hot .mem-imp {
+    background: rgba(255, 215, 0, 0.25);
+    color: #ffd700;
+}

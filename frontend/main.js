@@ -371,18 +371,106 @@
     //  侧栏
     // ══════════════════════════════════════════════
 
+    /** 中文阶段名 */
+    const STAGE_LABEL = {
+        baby_i: '幼年期 I',
+        baby_ii: '幼年期 II',
+        rookie: '成长期',
+        champion: '成熟期',
+        ultimate: '完全体',
+        mega: '究极体',
+    };
+
+    /**
+     * 点击数码兽 → 先用轻量数据渲染骨架, 再拉完整详情补全。
+     * 完整数据: GET /api/digimon/{name} (stage/HP/记忆/胜利数) + /api/relationships (关系)。
+     */
     function showSidebar(d) {
         const sb = document.getElementById('sidebar');
         if (!sb) return;
         const emoji = getDigimonEmoji(d.name, d.species, d.stage);
+
+        // 先渲染骨架 (轻量数据即时可见, 详情加载中)
         sb.innerHTML = `
-            <h3>${emoji} ${d.name}</h3>
-            <p class="meta">${d.species || ''} · ${d.stage || ''} · ${d.attribute || ''}</p>
-            <p class="meta">区域: ${d.region_id || '未知'}</p>
-            <p class="meta">坐标: (${d.position.x}, ${d.position.y})</p>
-            <p class="plan">📍 ${d.current_plan || '暂无计划'}</p>
+            <h3>${emoji} ${escapeHtml(d.name)}</h3>
+            <p class="meta">${escapeHtml(d.species || '')} · ${escapeHtml(STAGE_LABEL[d.stage] || d.stage || '')} · ${escapeHtml(d.attribute || '')}</p>
+            <p class="meta">区域: ${escapeHtml(d.region_id || '未知')}</p>
+            <p class="plan">📍 ${escapeHtml(d.current_plan || '暂无计划')}</p>
+            <p class="dir-hint" id="detail-loading">加载详情中…</p>
         `;
         sb.classList.add('open');
+
+        // 异步补全完整详情 (只在仍选中同一只时写回, 防止快速切换错位)
+        loadSidebarDetail(d.name);
+    }
+
+    async function loadSidebarDetail(name) {
+        let detail = null;
+        let pairs = [];
+        try {
+            const [dResp, rResp] = await Promise.all([
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
+                fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
+            ]);
+            if (dResp.ok) detail = await dResp.json();
+            if (rResp.ok) pairs = (await rResp.json()).pairs || [];
+        } catch (e) {
+            console.warn('[sidebar] 详情加载失败:', e.message);
+        }
+
+        // 期间用户可能已切换选中 → 丢弃过期结果
+        if (state.selectedName !== name) return;
+        const loading = document.getElementById('detail-loading');
+        if (loading) loading.remove();
+        const sb = document.getElementById('sidebar');
+        if (!sb || !detail) return;
+
+        // HP 条
+        const stats = detail.stats || {};
+        const hp = stats.hp != null ? stats.hp : 0;
+        const maxHp = stats.max_hp || 100;
+        const hpPct = Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100)));
+
+        // 关系: 挑出与本兽相关的对, 按 |score| 降序
+        const rels = pairs
+            .filter((p) => p.a === name || p.b === name)
+            .map((p) => ({ other: p.a === name ? p.b : p.a, score: p.score }))
+            .sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
+
+        // 最近记忆: 最多 5 条 (最新在前), importance >= 7 高亮
+        const mems = (detail.memory || []).slice(-5).reverse();
+
+        const detailHtml = `
+            <div class="hp-row">
+                <span class="hp-label">HP</span>
+                <span class="hp-bar"><span class="hp-fill" style="width:${hpPct}%"></span></span>
+                <span class="hp-num">${hp}/${maxHp}</span>
+            </div>
+            <p class="meta">🏆 战斗胜利: ${detail.battle_victories || 0}</p>
+            <div class="detail-block">
+                <h4>关系</h4>
+                ${rels.length === 0
+                    ? '<p class="dir-hint">暂无关系</p>'
+                    : '<ul class="rel-list">' + rels.map((r) => {
+                        const cls = r.score > 0 ? 'rel-pos' : (r.score < 0 ? 'rel-neg' : 'rel-neutral');
+                        const sign = r.score > 0 ? '+' : '';
+                        return `<li><span class="rel-other">${escapeHtml(r.other)}</span>` +
+                            `<span class="rel-score ${cls}">${sign}${r.score}</span></li>`;
+                    }).join('') + '</ul>'}
+            </div>
+            <div class="detail-block">
+                <h4>最近记忆</h4>
+                ${mems.length === 0
+                    ? '<p class="dir-hint">暂无记忆</p>'
+                    : '<ul class="mem-list">' + mems.map((m) => {
+                        const hot = (m.importance || 0) >= 7;
+                        return `<li class="${hot ? 'mem-hot' : ''}">` +
+                            `<span class="mem-imp">${m.importance || 0}</span>` +
+                            `${escapeHtml(m.description || '')}</li>`;
+                    }).join('') + '</ul>'}
+            </div>
+        `;
+        sb.insertAdjacentHTML('beforeend', detailHtml);
     }
 
     function hideSidebar() {
