@@ -264,13 +264,14 @@ def director_speed(req: SpeedRequest) -> dict[str, Any]:
 
 @app.get("/api/director/state")
 def director_state() -> dict[str, Any]:
-    """导演视角状态: 当前流速 / 世界时间 / 最近 10 条事件。"""
+    """导演视角状态: 当前流速 / 世界时间 / 最近 10 条事件 / 派系列表。"""
     world = get_world()
     clock: Optional[WorldClock] = getattr(app.state, "world_clock", None)
     return {
         "ratio": world.real_to_world_ratio,
         "current_world_time": clock.format_clock() if clock is not None else None,
         "recent_events": world.events[-10:],
+        "factions": [f.to_dict() for f in get_registry().all_factions()],
     }
 
 

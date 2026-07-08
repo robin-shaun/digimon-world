@@ -465,6 +465,283 @@
     }
 
     // ══════════════════════════════════════════════
+    //  Phase 4: 导演面板
+    // ══════════════════════════════════════════════
+    //
+    // 右侧 200px 半透明 sidebar, 仅在屏幕宽度 > 768px 时显示。
+    // - 关系图: 3 只数码兽互连, 连线颜色 = 好感度 (正=绿, 负=红, 0=灰)
+    // - 派系列表 + 最近事件: 每 30s 刷新
+    // - 导演操作: 注入事件 / 速度控制 (1x / 5x / 60x)
+
+    const DIRECTOR_MIN_WIDTH = 769; // 严格大于 768px 才显示
+
+    const director = {
+        pairs: [],      // [{a, b, score}]
+        factions: [],   // [{faction_id, name, members}]
+        events: [],     // 最近事件 (最新在后)
+        ratio: null,    // 当前时间流速
+        enabled: false, // 面板是否处于显示状态
+    };
+
+    /** 好感度分数 → 连线颜色 (正=绿, 负=红, 0=灰), alpha 随强度增大 */
+    function scoreToColor(score) {
+        const mag = Math.min(Math.abs(score) / 10, 1);   // 归一到 [0,1]
+        const alpha = (0.25 + mag * 0.65).toFixed(2);
+        if (score > 0) return `rgba(74, 232, 196, ${alpha})`;  // 绿 = 友好
+        if (score < 0) return `rgba(255, 92, 92, ${alpha})`;   // 红 = 敌对
+        return 'rgba(139, 149, 199, 0.35)';                    // 灰 = 中立
+    }
+
+    /** 画关系图: 数码兽绕圆环排布, 两两连线, 颜色 = 好感度 */
+    function drawRelationshipGraph() {
+        const c = document.getElementById('relationship-graph');
+        if (!c) return;
+        const g = c.getContext('2d');
+        const w = c.width;
+        const h = c.height;
+        g.clearRect(0, 0, w, h);
+
+        // 参与者 = 当前世界里的数码兽名字 (兜底用关系对里出现的名字)
+        let names = state.digimon.map((d) => d.name);
+        if (names.length === 0) {
+            const set = new Set();
+            for (const p of director.pairs) { set.add(p.a); set.add(p.b); }
+            names = [...set];
+        }
+
+        const hint = document.getElementById('rel-hint');
+        if (names.length === 0) {
+            if (hint) hint.textContent = '暂无数码兽';
+            return;
+        }
+
+        // 圆环坐标
+        const cx = w / 2;
+        const cy = h / 2;
+        const radius = Math.min(w, h) / 2 - 30;
+        const pos = {};
+        names.forEach((name, i) => {
+            const ang = -Math.PI / 2 + (i / names.length) * Math.PI * 2;
+            pos[name] = { x: cx + Math.cos(ang) * radius, y: cy + Math.sin(ang) * radius };
+        });
+
+        // 快速查分: "a\x00b" (排序后) → score
+        const scoreOf = {};
+        for (const p of director.pairs) {
+            const key = [p.a, p.b].sort().join(' ');
+            scoreOf[key] = p.score;
+        }
+
+        // 连线 (两两)
+        g.lineWidth = 2;
+        for (let i = 0; i < names.length; i++) {
+            for (let j = i + 1; j < names.length; j++) {
+                const pa = pos[names[i]];
+                const pb = pos[names[j]];
+                const key = [names[i], names[j]].sort().join(' ');
+                const score = scoreOf[key] || 0;
+                g.strokeStyle = scoreToColor(score);
+                g.beginPath();
+                g.moveTo(pa.x, pa.y);
+                g.lineTo(pb.x, pb.y);
+                g.stroke();
+            }
+        }
+
+        // 节点 + 名字
+        for (const name of names) {
+            const p = pos[name];
+            g.fillStyle = '#00d4ff';
+            g.beginPath();
+            g.arc(p.x, p.y, 6, 0, Math.PI * 2);
+            g.fill();
+
+            g.fillStyle = '#e0e6ff';
+            g.font = '10px monospace';
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            // 名字放在节点朝外一侧
+            const outX = p.x + (p.x - cx) * 0.28;
+            const outY = p.y + (p.y - cy) * 0.28;
+            g.fillText(name, outX, outY);
+        }
+        g.textBaseline = 'alphabetic';
+
+        if (hint) {
+            hint.textContent = `绿=友好 红=敌对 (${director.pairs.length} 对)`;
+        }
+    }
+
+    /** 渲染派系列表 */
+    function renderFactions() {
+        const ul = document.getElementById('faction-list');
+        if (!ul) return;
+        if (director.factions.length === 0) {
+            ul.innerHTML = '<li class="dir-hint">暂无派系</li>';
+            return;
+        }
+        ul.innerHTML = director.factions.map((f) => {
+            const members = (f.members || []).join('、') || '(空)';
+            return `<li><span class="fac-name">${escapeHtml(f.name || f.faction_id)}</span><br>${escapeHtml(members)}</li>`;
+        }).join('');
+    }
+
+    /** 渲染最近事件 (最新在前) */
+    function renderDirectorEvents() {
+        const ul = document.getElementById('director-events');
+        if (!ul) return;
+        if (director.events.length === 0) {
+            ul.innerHTML = '<li class="dir-hint">暂无事件</li>';
+            return;
+        }
+        const items = director.events.slice().reverse().slice(0, 8);
+        ul.innerHTML = items.map((e) => {
+            const isDirector = e.source === 'director';
+            const desc = e.description || e.type || '(未知事件)';
+            return `<li class="${isDirector ? 'director-src' : ''}">` +
+                `<span class="evt-type">[${escapeHtml(e.type || '?')}]</span>` +
+                `${escapeHtml(desc)}</li>`;
+        }).join('');
+    }
+
+    /** 简单 HTML 转义, 防止事件描述里的字符破坏 DOM */
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    /** 高亮当前速度按钮 */
+    function updateSpeedButtons() {
+        const btns = document.querySelectorAll('.speed-btn');
+        btns.forEach((b) => {
+            const r = parseInt(b.dataset.ratio, 10);
+            b.classList.toggle('active', r === director.ratio);
+        });
+        const st = document.getElementById('speed-status');
+        if (st) st.textContent = director.ratio != null ? `当前: ${director.ratio}x` : '当前: --';
+    }
+
+    /** 拉关系对 */
+    async function fetchRelationships() {
+        try {
+            const resp = await fetch(API_BASE + '/api/relationships', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            director.pairs = data.pairs || [];
+        } catch (e) {
+            console.warn('[director] /api/relationships 不可达:', e.message);
+        }
+    }
+
+    /** 拉导演状态 (流速 / 世界时间 / 最近事件 / 派系) */
+    async function fetchDirectorState() {
+        try {
+            const resp = await fetch(API_BASE + '/api/director/state', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            director.events = data.recent_events || [];
+            director.factions = data.factions || [];
+            if (typeof data.ratio === 'number') director.ratio = data.ratio;
+        } catch (e) {
+            console.warn('[director] /api/director/state 不可达:', e.message);
+        }
+    }
+
+    /** 刷新整个导演面板 (数据 + 重绘) */
+    async function refreshDirector() {
+        if (!director.enabled) return;
+        await Promise.all([fetchRelationships(), fetchDirectorState()]);
+        drawRelationshipGraph();
+        renderFactions();
+        renderDirectorEvents();
+        updateSpeedButtons();
+    }
+
+    /** POST 设置速度 */
+    async function setSpeed(ratio) {
+        try {
+            const resp = await fetch(API_BASE + '/api/director/speed', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ratio }),
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            director.ratio = data.new_ratio;
+            updateSpeedButtons();
+        } catch (e) {
+            console.warn('[director] 设置速度失败:', e.message);
+        }
+    }
+
+    /** POST 注入事件 */
+    async function injectEvent(description) {
+        const status = document.getElementById('inject-status');
+        const btn = document.getElementById('inject-btn');
+        if (btn) btn.disabled = true;
+        try {
+            const resp = await fetch(API_BASE + '/api/director/inject_event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'director_event',
+                    description,
+                    importance: 7,
+                }),
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            if (status) status.textContent = '✅ 已注入';
+            const input = document.getElementById('inject-input');
+            if (input) input.value = '';
+            await refreshDirector(); // 立刻反映到事件列表
+        } catch (e) {
+            if (status) status.textContent = '❌ 注入失败: ' + e.message;
+        } finally {
+            if (btn) btn.disabled = false;
+            setTimeout(() => { if (status) status.textContent = ''; }, 3000);
+        }
+    }
+
+    /** 根据屏幕宽度决定是否显示导演面板 */
+    function updateDirectorVisibility() {
+        const panel = document.getElementById('director-panel');
+        if (!panel) return;
+        const shouldShow = window.innerWidth >= DIRECTOR_MIN_WIDTH;
+        if (shouldShow === director.enabled) return;
+        director.enabled = shouldShow;
+        panel.classList.toggle('open', shouldShow);
+        if (shouldShow) refreshDirector();
+    }
+
+    /** 绑定导演面板交互 + 启动 30s 刷新 */
+    function initDirector() {
+        // 速度按钮
+        document.querySelectorAll('.speed-btn').forEach((b) => {
+            b.addEventListener('click', () => setSpeed(parseInt(b.dataset.ratio, 10)));
+        });
+        // 注入事件
+        const btn = document.getElementById('inject-btn');
+        const input = document.getElementById('inject-input');
+        const submit = () => {
+            const desc = (input && input.value || '').trim();
+            if (desc) injectEvent(desc);
+        };
+        if (btn) btn.addEventListener('click', submit);
+        if (input) {
+            input.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') submit();
+            });
+        }
+        // 屏宽变化 → 显隐
+        window.addEventListener('resize', updateDirectorVisibility);
+        updateDirectorVisibility();
+        // 每 30s 刷新
+        setInterval(refreshDirector, 30000);
+    }
+
+    // ══════════════════════════════════════════════
     //  启动
     // ══════════════════════════════════════════════
 
@@ -484,6 +761,8 @@
         setInterval(updateStatusBar, 1000);
         // 6. 启动战斗轮询 (30s) — 进化 overlay + 战斗数
         startBattlePolling();
+        // 7. 初始化导演面板 (仅宽屏显示, 30s 刷新)
+        initDirector();
     }
 
     start();
