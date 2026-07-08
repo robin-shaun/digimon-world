@@ -175,3 +175,57 @@ def test_get_digimon_memories_endpoint(client: TestClient) -> None:
 def test_get_digimon_memories_not_found(client: TestClient) -> None:
     r = client.get("/api/digimon/不存在兽/memories")
     assert r.status_code == 404
+
+
+# ---- Phase 4: 观察者/导演接口 ----
+
+
+def test_director_inject_event(client: TestClient) -> None:
+    """注入事件应 append 到 world.events 并返回序号。"""
+    world = get_world()
+    before = len(world.events)
+
+    r = client.post("/api/director/inject_event", json={
+        "type": "storm",
+        "region_id": "file_island",
+        "description": "文件岛突降暴风雨",
+        "importance": 8,
+    })
+    assert r.status_code == 200
+    data = r.json()
+    assert data["id"] == before  # 刚 append 的索引
+    assert data["type"] == "storm"
+    assert data["description"] == "文件岛突降暴风雨"
+
+    # 事件确实进了列表
+    assert len(world.events) == before + 1
+    assert world.events[-1]["source"] == "director"
+
+
+def test_director_speed(client: TestClient) -> None:
+    """调整流速应返回旧/新 ratio 并写回 world_state。"""
+    world = get_world()
+    old = world.real_to_world_ratio
+
+    r = client.post("/api/director/speed", json={"ratio": 120})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["old_ratio"] == old
+    assert data["new_ratio"] == 120
+    assert world.real_to_world_ratio == 120
+
+
+def test_director_state(client: TestClient) -> None:
+    """state 应返回流速 / 世界时间 / 最近事件。"""
+    world = get_world()
+    # 塞 12 条事件,验证只返回最近 10 条
+    for i in range(12):
+        world.events.append({"type": "test", "description": f"事件 {i}"})
+
+    r = client.get("/api/director/state")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["ratio"] == world.real_to_world_ratio
+    assert "current_world_time" in data
+    assert len(data["recent_events"]) == 10
+    assert data["recent_events"][-1]["description"] == "事件 11"

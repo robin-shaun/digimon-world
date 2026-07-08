@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -44,6 +45,22 @@ class MoveRequest(BaseModel):
 class MoveResponse(BaseModel):
     name: str
     position: Position
+
+
+# ---- Phase 4: 观察者/导演 API ----
+class InjectEventRequest(BaseModel):
+    """导演往世界里注入一个事件(如天灾、访客、剧情触发)。"""
+
+    type: str
+    region_id: str | None = None
+    description: str
+    importance: int = 5
+
+
+class SpeedRequest(BaseModel):
+    """调整世界时间流速(现实 1 秒 = 世界 ratio 分钟)。"""
+
+    ratio: int
 
 
 # ---- App ----
@@ -163,6 +180,52 @@ def get_digimon_memories(name: str) -> dict[str, Any]:
         "name": name,
         "count": len(recent),
         "memories": [m.to_dict() for m in recent],
+    }
+
+
+# ---- Phase 4: 观察者/导演接口 ----
+@app.post("/api/director/inject_event")
+def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:
+    """导演注入一条世界事件。
+
+    直接 append 到 world_state.events,返回该事件的序号(id)。
+    """
+    world = get_world()
+    event = {
+        "type": req.type,
+        "region_id": req.region_id,
+        "description": req.description,
+        "importance": req.importance,
+        "source": "director",
+        "at": datetime.now().isoformat(),
+    }
+    world.events.append(event)
+    # id 用当前列表长度 - 1 (即刚 append 的索引)
+    return {
+        "id": len(world.events) - 1,
+        "type": req.type,
+        "description": req.description,
+    }
+
+
+@app.post("/api/director/speed")
+def director_speed(req: SpeedRequest) -> dict[str, Any]:
+    """调整世界时间流速,返回旧/新 ratio。"""
+    world = get_world()
+    old_ratio = world.real_to_world_ratio
+    world.real_to_world_ratio = req.ratio
+    return {"old_ratio": old_ratio, "new_ratio": req.ratio}
+
+
+@app.get("/api/director/state")
+def director_state() -> dict[str, Any]:
+    """导演视角状态: 当前流速 / 世界时间 / 最近 10 条事件。"""
+    world = get_world()
+    clock: Optional[WorldClock] = getattr(app.state, "world_clock", None)
+    return {
+        "ratio": world.real_to_world_ratio,
+        "current_world_time": clock.format_clock() if clock is not None else None,
+        "recent_events": world.events[-10:],
     }
 
 
