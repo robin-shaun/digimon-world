@@ -23,6 +23,7 @@ from typing import Any, Optional, TYPE_CHECKING
 from ..memory.memory_stream import MemoryStream
 
 if TYPE_CHECKING:
+    from .planner import Planner
     from .reflector import Reflector
 
 
@@ -86,8 +87,11 @@ class DigimonAgent:
     stats: DigimonStats = field(default_factory=DigimonStats)
     memory: MemoryStream = field(default_factory=MemoryStream)
     current_plan: Optional[str] = None
+    mood: str = "calm"  # calm/excited/tired/scared/curious
     reflector: Optional["Reflector"] = field(default=None, repr=False)
+    planner: Optional["Planner"] = field(default=None, repr=False)
     last_reflection_at: Optional[datetime] = None
+    last_planned_at: Optional[datetime] = None
     # TODO(Phase 3): evolution_requirements - 进化前置条件
 
     def observe(self, event: dict[str, Any]) -> None:
@@ -129,10 +133,21 @@ class DigimonAgent:
         if result:
             self.last_reflection_at = now
 
-    def plan_next(self) -> str:
-        """根据记忆和当前状态,生成下一个行动。Phase 2 实现。"""
-        # TODO(Phase 2): 调用 LLM 生成下一段计划
-        raise NotImplementedError("Phase 2 才实现")
+    async def plan_next(self, world_state_snapshot: dict | None = None) -> str:
+        """根据记忆和当前状态,调用 Planner 生成下一段计划。
+
+        Returns:
+            计划字符串,同时写入 self.current_plan 和 self.last_planned_at。
+        """
+        if self.planner is None:
+            from .planner import FALLBACK_PLAN
+            self.current_plan = FALLBACK_PLAN
+            return FALLBACK_PLAN
+
+        plan = await self.planner.plan(self, world_state_snapshot or {})
+        self.current_plan = plan
+        self.last_planned_at = datetime.utcnow()
+        return plan
 
     def act(self) -> dict[str, Any]:
         """执行当前计划的第一步,产生世界事件。Phase 2 实现。"""

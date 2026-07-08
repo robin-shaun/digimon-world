@@ -6,6 +6,7 @@
 详细设计: docs/DESIGN.md 第 3 节
 """
 from .digimon_agent import DigimonAgent
+from .planner import Planner
 from .reflector import Reflection, Reflector
 
-__all__ = ["DigimonAgent", "Reflection", "Reflector"]
+__all__ = ["DigimonAgent", "Planner", "Reflection", "Reflector"]
