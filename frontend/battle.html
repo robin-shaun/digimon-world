@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚔️ 战斗模拟 - DIGIMON WORLD</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #e0e6ff;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .wrap { max-width: 1024px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 30px;
+            background: linear-gradient(90deg, #00d4ff, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 3px;
+        }
+
+        .home-link {
+            color: #00d4ff;
+            text-decoration: none;
+            font-size: 14px;
+            border: 1px solid #2a3a6a;
+            border-radius: 6px;
+            padding: 6px 12px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .home-link:hover { background: rgba(0, 212, 255, 0.1); border-color: #00d4ff; }
+
+        .meta-bar {
+            color: #8b95c7;
+            font-size: 13px;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .meta-bar .dot { color: #4ae8c4; }
+        .meta-bar .dot.off { color: #ff6b81; }
+
+        /* ---- 选择区 ---- */
+        .setup {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .fighter-pick {
+            background: rgba(42, 58, 106, 0.35);
+            border: 1px solid #2a3a6a;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .fighter-pick.side-a { border-color: rgba(0, 212, 255, 0.5); }
+        .fighter-pick.side-b { border-color: rgba(255, 92, 92, 0.5); }
+
+        .fighter-pick label {
+            display: block;
+            font-size: 12px;
+            letter-spacing: 2px;
+            color: #8b95c7;
+            margin-bottom: 8px;
+        }
+        .side-a label { color: #00d4ff; }
+        .side-b label { color: #ff8a8a; }
+
+        select {
+            width: 100%;
+            padding: 9px 10px;
+            background: rgba(5, 8, 22, 0.7);
+            border: 1px solid #2a3a6a;
+            border-radius: 6px;
+            color: #e0e6ff;
+            font-size: 14px;
+        }
+        select:focus { outline: none; border-color: #00d4ff; }
+
+        .pick-info {
+            margin-top: 10px;
+            font-size: 11px;
+            font-family: "SF Mono", "Consolas", monospace;
+            color: #8b95c7;
+            line-height: 1.6;
+            min-height: 48px;
+        }
+        .pick-info .sp { color: #ffd700; }
+
+        .vs {
+            font-size: 26px;
+            font-weight: bold;
+            color: #7c3aed;
+            letter-spacing: 2px;
+            text-shadow: 0 0 12px rgba(124, 58, 237, 0.6);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .llm-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #8b95c7;
+            cursor: pointer;
+        }
+
+        .fight-btn {
+            padding: 12px 40px;
+            background: linear-gradient(90deg, #00d4ff, #7c3aed);
+            color: #0a0e27;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            cursor: pointer;
+            transition: filter 0.2s, transform 0.1s;
+        }
+        .fight-btn:hover:not(:disabled) { filter: brightness(1.15); }
+        .fight-btn:active:not(:disabled) { transform: scale(0.97); }
+        .fight-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ---- 竞技场 ---- */
+        .arena {
+            display: none;
+            background: rgba(5, 8, 22, 0.55);
+            border: 1px solid #2a3a6a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .arena.show { display: block; }
+
+        .hp-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .hp-card .name-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 6px;
+        }
+        .hp-card .fname { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
+        .side-a .fname { color: #00d4ff; }
+        .side-b .fname { color: #ff8a8a; }
+        .hp-card .hp-num {
+            font-size: 12px;
+            font-family: "SF Mono", "Consolas", monospace;
+            color: #8b95c7;
+        }
+
+        .hp-bar {
+            height: 16px;
+            background: rgba(42, 58, 106, 0.6);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .hp-fill {
+            height: 100%;
+            width: 100%;
+            border-radius: 8px;
+            transition: width 0.45s ease;
+        }
+        .side-a .hp-fill { background: linear-gradient(90deg, #4ae8c4, #00d4ff); }
+        .side-b .hp-fill { background: linear-gradient(90deg, #ff5c5c, #ff9a3c); }
+        .hp-fill.low { background: linear-gradient(90deg, #ff5c5c, #ffb03c) !important; }
+
+        /* ---- 回合日志 ---- */
+        .log-box {
+            background: rgba(5, 8, 22, 0.7);
+            border: 1px solid #2a3a6a;
+            border-radius: 8px;
+            padding: 14px 16px;
+            max-height: 340px;
+            overflow-y: auto;
+            font-family: "SF Mono", "Consolas", monospace;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+        .log-box .line { padding: 2px 0; opacity: 0; animation: fade-in 0.3s forwards; }
+        @keyframes fade-in { to { opacity: 1; } }
+
+        .log-box .round-tag { color: #6b74a0; margin-right: 8px; }
+        .log-box .atk-a { color: #4ae8c4; }
+        .log-box .atk-b { color: #ff8a8a; }
+        .log-box .skill { color: #ffd700; }
+        .log-box .dmg { color: #ff6b81; font-weight: bold; }
+        .log-box .defend { color: #8b95c7; }
+
+        .verdict {
+            text-align: center;
+            margin-top: 16px;
+            padding: 14px;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            border-radius: 8px;
+            background: radial-gradient(ellipse at center, rgba(124, 58, 237, 0.3), rgba(10, 14, 39, 0.6));
+            color: #ffd700;
+            text-shadow: 0 0 14px rgba(255, 215, 0, 0.6);
+            display: none;
+        }
+        .verdict.show { display: block; animation: fade-in 0.5s; }
+        .verdict .evo {
+            display: block;
+            margin-top: 8px;
+            font-size: 14px;
+            color: #b98aff;
+            text-shadow: 0 0 12px rgba(124, 58, 237, 0.8);
+        }
+
+        .err {
+            color: #ff6b81;
+            font-size: 13px;
+            text-align: center;
+            margin-top: 12px;
+            min-height: 18px;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 24px;
+            color: #555f8a;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header>
+            <h1>⚔️ 战斗模拟</h1>
+            <a class="home-link" href="index.html">← 返回世界</a>
+        </header>
+        <div class="meta-bar">
+            <span>选两只数码兽,让它们在竞技场对决</span>
+            <span id="conn">连接中 <span class="dot">●</span></span>
+        </div>
+
+        <div class="setup">
+            <div class="fighter-pick side-a">
+                <label>先手方 (A)</label>
+                <select id="sel-a"></select>
+                <div class="pick-info" id="info-a"></div>
+            </div>
+            <div class="vs">VS</div>
+            <div class="fighter-pick side-b">
+                <label>后手方 (B)</label>
+                <select id="sel-b"></select>
+                <div class="pick-info" id="info-b"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <label class="llm-toggle">
+                <input type="checkbox" id="use-llm">
+                LLM 决策 (更慢,更真实)
+            </label>
+            <button class="fight-btn" id="fight-btn">开 战</button>
+        </div>
+
+        <div class="err" id="err"></div>
+
+        <div class="arena" id="arena">
+            <div class="hp-panels">
+                <div class="hp-card side-a">
+                    <div class="name-row">
+                        <span class="fname" id="hp-name-a">—</span>
+                        <span class="hp-num" id="hp-num-a">—</span>
+                    </div>
+                    <div class="hp-bar"><div class="hp-fill" id="hp-fill-a"></div></div>
+                </div>
+                <div class="hp-card side-b">
+                    <div class="name-row">
+                        <span class="fname" id="hp-name-b">—</span>
+                        <span class="hp-num" id="hp-num-b">—</span>
+                    </div>
+                    <div class="hp-bar"><div class="hp-fill" id="hp-fill-b"></div></div>
+                </div>
+            </div>
+            <div class="log-box" id="log-box"></div>
+            <div class="verdict" id="verdict"></div>
+        </div>
+
+        <footer>DIGIMON WORLD · Phase 5 · 战斗竞技场</footer>
+    </div>
+
+    <script>
+        // API_BASE: 与 main.js / log.html 一致
+        const API_BASE = (() => {
+            if (typeof window.API_BASE === 'string') return window.API_BASE;
+            if (window.location.origin.includes('workers.dev')) return '';
+            return 'http://localhost:8000';
+        })();
+
+        const el = {
+            conn: document.getElementById('conn'),
+            selA: document.getElementById('sel-a'),
+            selB: document.getElementById('sel-b'),
+            infoA: document.getElementById('info-a'),
+            infoB: document.getElementById('info-b'),
+            useLlm: document.getElementById('use-llm'),
+            fightBtn: document.getElementById('fight-btn'),
+            err: document.getElementById('err'),
+            arena: document.getElementById('arena'),
+            hpNameA: document.getElementById('hp-name-a'),
+            hpNameB: document.getElementById('hp-name-b'),
+            hpNumA: document.getElementById('hp-num-a'),
+            hpNumB: document.getElementById('hp-num-b'),
+            hpFillA: document.getElementById('hp-fill-a'),
+            hpFillB: document.getElementById('hp-fill-b'),
+            logBox: document.getElementById('log-box'),
+            verdict: document.getElementById('verdict'),
+        };
+
+        // 缓存已拉取的数码兽详情 (stats + skills)
+        const detailCache = {};
+
+        function esc(s) {
+            return String(s).replace(/[&<>"']/g, c =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function setConn(ok) {
+            el.conn.innerHTML = ok
+                ? '已连接 <span class="dot">●</span>'
+                : '离线 <span class="dot off">●</span>';
+        }
+
+        async function loadRoster() {
+            try {
+                const res = await fetch(`${API_BASE}/api/digimon`);
+                if (!res.ok) throw new Error(res.status);
+                const data = await res.json();
+                const list = data.digimon || [];
+                setConn(true);
+                if (list.length < 2) {
+                    el.err.textContent = '世界里的数码兽不足两只,无法开战。';
+                    el.fightBtn.disabled = true;
+                    return;
+                }
+                fillSelect(el.selA, list, 0);
+                fillSelect(el.selB, list, 1);
+                refreshInfo('a');
+                refreshInfo('b');
+            } catch (e) {
+                setConn(false);
+                el.err.textContent = '无法连接后端 API,请确认服务已启动。';
+                el.fightBtn.disabled = true;
+            }
+        }
+
+        function fillSelect(sel, list, defaultIdx) {
+            sel.innerHTML = list.map(d =>
+                `<option value="${esc(d.name)}">${esc(d.name)} · ${esc(d.species)}</option>`
+            ).join('');
+            sel.selectedIndex = Math.min(defaultIdx, list.length - 1);
+        }
+
+        // 拉单只数码兽详情 (带缓存)
+        async function getDetail(name) {
+            if (detailCache[name]) return detailCache[name];
+            const res = await fetch(`${API_BASE}/api/digimon/${encodeURIComponent(name)}`);
+            if (!res.ok) throw new Error(`详情加载失败: ${name}`);
+            const d = await res.json();
+            detailCache[name] = d;
+            return d;
+        }
+
+        async function refreshInfo(side) {
+            const sel = side === 'a' ? el.selA : el.selB;
+            const box = side === 'a' ? el.infoA : el.infoB;
+            const name = sel.value;
+            if (!name) { box.textContent = ''; return; }
+            try {
+                const d = await getDetail(name);
+                const s = d.stats || {};
+                const skills = (s.skills && s.skills.length) ? s.skills.join('、') : '普通攻击';
+                box.innerHTML =
+                    `<span class="sp">${esc(d.species || '')}</span> · ${esc(d.stage || '')}<br>` +
+                    `HP ${s.max_hp ?? s.hp ?? '?'} · 攻 ${s.attack ?? '?'} · 防 ${s.defense ?? '?'} · 速 ${s.speed ?? '?'}<br>` +
+                    `技能: ${esc(skills)}`;
+            } catch (e) {
+                box.textContent = '(详情加载失败)';
+            }
+        }
+
+        el.selA.addEventListener('change', () => refreshInfo('a'));
+        el.selB.addEventListener('change', () => refreshInfo('b'));
+
+        // ---- HP 条渲染 ----
+        function renderHp(side, hp, maxHp) {
+            const fill = side === 'a' ? el.hpFillA : el.hpFillB;
+            const num = side === 'a' ? el.hpNumA : el.hpNumB;
+            const pct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 0;
+            fill.style.width = pct + '%';
+            fill.classList.toggle('low', pct <= 30);
+            num.textContent = `${Math.max(0, Math.round(hp))} / ${maxHp}`;
+        }
+
+        function logLine(html) {
+            const div = document.createElement('div');
+            div.className = 'line';
+            div.innerHTML = html;
+            el.logBox.appendChild(div);
+            el.logBox.scrollTop = el.logBox.scrollHeight;
+        }
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        function pickSkill(skills) {
+            if (skills && skills.length) return skills[Math.floor(Math.random() * skills.length)];
+            return '普通攻击';
+        }
+
+        // 根据后端返回的最终结果, 客户端演绎逐回合日志与掉血动画。
+        // 后端只回传 winner / rounds / final_hp, 故这里按回合数把伤害平摊到各回合,
+        // 并从各自技能池随机挑技能名, 让模拟更有观感。
+        async function animateBattle(a, b, result) {
+            const stA = a.stats || {}, stB = b.stats || {};
+            const maxA = stA.max_hp ?? stA.hp ?? 100;
+            const maxB = stB.max_hp ?? stB.hp ?? 100;
+            let hpA = maxA, hpB = maxB;
+
+            const finalHp = result.final_hp || {};
+            const targetA = finalHp[a.name] ?? hpA;
+            const targetB = finalHp[b.name] ?? hpB;
+            const rounds = Math.max(1, result.rounds || 1);
+
+            // 每回合平均掉血量 (A 承受 / B 承受)
+            const perA = (maxA - targetA) / rounds;
+            const perB = (maxB - targetB) / rounds;
+
+            el.hpNameA.textContent = a.name;
+            el.hpNameB.textContent = b.name;
+            renderHp('a', hpA, maxA);
+            renderHp('b', hpB, maxB);
+            el.logBox.innerHTML = '';
+            el.verdict.classList.remove('show');
+
+            for (let r = 1; r <= rounds; r++) {
+                const last = (r === rounds);
+                // A 出手打 B
+                const dmgB = last ? Math.max(0, hpB - targetB) : Math.round(perB * (0.7 + Math.random() * 0.6));
+                if (dmgB > 0) {
+                    hpB = Math.max(targetB, hpB - dmgB);
+                    logLine(`<span class="round-tag">回合 ${r}</span>` +
+                        `<span class="atk-a">${esc(a.name)}</span> 使出 ` +
+                        `<span class="skill">${esc(pickSkill(stA.skills))}</span>, ` +
+                        `对 ${esc(b.name)} 造成 <span class="dmg">${dmgB}</span> 伤害`);
+                    renderHp('b', hpB, maxB);
+                    await sleep(520);
+                }
+                if (hpB <= 0.5 && targetB <= 0) break;
+
+                // B 反击 A
+                const dmgA = last ? Math.max(0, hpA - targetA) : Math.round(perA * (0.7 + Math.random() * 0.6));
+                if (dmgA > 0) {
+                    hpA = Math.max(targetA, hpA - dmgA);
+                    logLine(`<span class="round-tag">回合 ${r}</span>` +
+                        `<span class="atk-b">${esc(b.name)}</span> 使出 ` +
+                        `<span class="skill">${esc(pickSkill(stB.skills))}</span>, ` +
+                        `对 ${esc(a.name)} 造成 <span class="dmg">${dmgA}</span> 伤害`);
+                    renderHp('a', hpA, maxA);
+                    await sleep(520);
+                } else if (dmgB === 0) {
+                    logLine(`<span class="round-tag">回合 ${r}</span><span class="defend">双方僵持,互相试探</span>`);
+                    await sleep(360);
+                }
+                if (hpA <= 0.5 && targetA <= 0) break;
+            }
+
+            // 收尾对齐最终 HP
+            renderHp('a', targetA, maxA);
+            renderHp('b', targetB, maxB);
+
+            // 判定
+            let text;
+            if (result.winner) {
+                text = `🏆 ${esc(result.winner)} 获胜! (${rounds} 回合)`;
+            } else {
+                text = `双方战平,谁也没能击倒对手 (${rounds} 回合)`;
+            }
+            let evoHtml = '';
+            if (result.evolution && result.evolution.evolved) {
+                const evo = result.evolution;
+                const from = evo.old_stage || '';
+                const to = evo.new_stage || '';
+                const sp = evo.next_species ? ` (${evo.next_species})` : '';
+                evoHtml = `<span class="evo">✨ 进化! ${esc(from)} → ${esc(to)}${esc(sp)}</span>`;
+            }
+            el.verdict.innerHTML = text + evoHtml;
+            el.verdict.classList.add('show');
+        }
+
+        async function startBattle() {
+            el.err.textContent = '';
+            const nameA = el.selA.value;
+            const nameB = el.selB.value;
+            if (!nameA || !nameB) return;
+            if (nameA === nameB) {
+                el.err.textContent = '不能选同一只数码兽对打,请换一个对手。';
+                return;
+            }
+
+            el.fightBtn.disabled = true;
+            el.fightBtn.textContent = '战斗中…';
+            el.arena.classList.add('show');
+            el.logBox.innerHTML = '<div class="line">⏳ 战斗开始…</div>';
+            el.verdict.classList.remove('show');
+
+            try {
+                // 拉双方详情 (拿 stats + skills 供 HP 条与技能名)
+                const [a, b] = await Promise.all([getDetail(nameA), getDetail(nameB)]);
+
+                const res = await fetch(`${API_BASE}/api/battle/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        attacker: nameA,
+                        defender: nameB,
+                        use_llm: el.useLlm.checked,
+                    }),
+                });
+                if (!res.ok) {
+                    let detail = res.status;
+                    try { detail = (await res.json()).detail || detail; } catch (_) {}
+                    throw new Error(detail);
+                }
+                const data = await res.json();
+                const result = data.result || {};
+                result.evolution = data.evolution;
+
+                setConn(true);
+                await animateBattle(a, b, result);
+            } catch (e) {
+                el.logBox.innerHTML = '';
+                el.err.textContent = '战斗失败: ' + (e.message || e);
+                setConn(false);
+            } finally {
+                el.fightBtn.disabled = false;
+                el.fightBtn.textContent = '再 战';
+            }
+        }
+
+        el.fightBtn.addEventListener('click', startBattle);
+        loadRoster();
+    </script>
+</body>
+</html>
