@@ -92,6 +92,8 @@ class DigimonAgent:
     planner: Optional["Planner"] = field(default=None, repr=False)
     last_reflection_at: Optional[datetime] = None
     last_planned_at: Optional[datetime] = None
+    # 最近一次与其它数码兽互动(对话)的世界时刻,用于互动冷却
+    last_interaction_at: Optional[datetime] = None
     # TODO(Phase 3): evolution_requirements - 进化前置条件
 
     def observe(self, event: dict[str, Any]) -> None:

@@ -25,7 +25,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .. import __version__
-from ..world import WorldState, get_world
+from ..agents.dialogue import Dialogue
+from ..llm.client import get_client
+from ..world import WorldClock, WorldScheduler, WorldState, get_world
 
 
 # ---- Pydantic models ----
@@ -130,6 +132,40 @@ def get_world_snapshot() -> dict[str, Any]:
     return get_world().to_dict()
 
 
+@app.get("/api/scheduler/status")
+def get_scheduler_status() -> dict[str, Any]:
+    """调度器运行状态(前端调试用)。
+
+    返回 running / tick_count / current_world_time。
+    调度器尚未启动(如未走 startup)时返回 running=False 的兜底值。
+    """
+    scheduler: Optional[WorldScheduler] = getattr(app.state, "scheduler", None)
+    task: Optional[asyncio.Task] = getattr(app.state, "scheduler_task", None)
+    clock: Optional[WorldClock] = getattr(app.state, "world_clock", None)
+
+    running = task is not None and not task.done()
+    return {
+        "running": running,
+        "tick_count": scheduler.tick_count if scheduler is not None else 0,
+        "current_world_time": clock.format_clock() if clock is not None else None,
+    }
+
+
+@app.get("/api/digimon/{name}/memories")
+def get_digimon_memories(name: str) -> dict[str, Any]:
+    """某只数码兽最近 10 条记忆(前端调试用)。"""
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+    recent = agent.memory.entries[-10:]
+    return {
+        "name": name,
+        "count": len(recent),
+        "memories": [m.to_dict() for m in recent],
+    }
+
+
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
 class ConnectionManager:
     def __init__(self) -> None:
@@ -181,15 +217,25 @@ async def _position_broadcaster() -> None:
 @app.on_event("startup")
 async def _startup() -> None:
     # 触发单例创建 + 启动广播任务
-    get_world()
+    world = get_world()
     app.state.broadcaster = asyncio.create_task(_position_broadcaster())
+
+    # 启动世界调度器: 用 WorldClock 周期性驱动所有 agent 自主生活。
+    # 相遇时通过 Dialogue(Haiku 4.5)生成对话。
+    clock = WorldClock(real_to_world_ratio=world.real_to_world_ratio)
+    dialogue = Dialogue(llm_client=get_client())
+    scheduler = WorldScheduler(world=world, clock=clock, dialogue=dialogue)
+    app.state.world_clock = clock
+    app.state.scheduler = scheduler
+    app.state.scheduler_task = asyncio.create_task(scheduler.run_forever())
 
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-    task: Optional[asyncio.Task] = getattr(app.state, "broadcaster", None)
-    if task is not None:
-        task.cancel()
+    for attr in ("broadcaster", "scheduler_task"):
+        task: Optional[asyncio.Task] = getattr(app.state, attr, None)
+        if task is not None:
+            task.cancel()
 
 
 @app.websocket("/ws/world")

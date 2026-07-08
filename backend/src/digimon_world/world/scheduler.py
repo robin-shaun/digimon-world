@@ -25,13 +25,21 @@ import logging
 from typing import Any, Awaitable, Callable, Optional
 
 from ..agents.digimon_agent import DigimonAgent
+from ..agents.dialogue import Dialogue
 from .clock import WorldClock
+from .interactions import detect_proximity
 from .world_state import WorldState
 
 logger = logging.getLogger(__name__)
 
 # 一次 tick 默认推进多少现实秒
 DEFAULT_TICK_SECONDS = 1.0
+
+# 相遇半径(像素): 距离小于此值才可能触发对话
+DIALOGUE_RADIUS = 100
+
+# 互动冷却(世界分钟): 同一对数码兽在此窗口内最多互动一次
+DIALOGUE_COOLDOWN_MINUTES = 30
 
 # 事件回调签名: async def cb(event: dict, agent: DigimonAgent) -> None
 EventCallback = Callable[[dict[str, Any], DigimonAgent], Awaitable[None]]
@@ -45,10 +53,13 @@ class WorldScheduler:
         world: WorldState,
         clock: WorldClock,
         on_event: Optional[EventCallback] = None,
+        dialogue: Optional[Dialogue] = None,
     ) -> None:
         self._world = world
         self._clock = clock
         self._on_event = on_event
+        # 对话生成器(可选): 有则在相遇时生成对话,无则跳过互动阶段
+        self._dialogue = dialogue
         self._tick_count = 0
 
     @property
@@ -81,8 +92,63 @@ class WorldScheduler:
                         await self._on_event(ev, self._world.get(ev.get("agent", "")) or agents[0])
                     except Exception as e:  # 回调失败不影响主循环
                         logger.warning("on_event callback failed: %s", e)
+        # 4. 互动阶段: 相遇的数码兽触发对话
+        await self._run_interactions(agents)
         self._tick_count += 1
         return events
+
+    async def _run_interactions(self, agents: list[DigimonAgent]) -> None:
+        """检测相遇的数码兽并触发对话,写入双方记忆。
+
+        触发条件(全部满足):
+        - 同一 region
+        - 欧氏距离 < DIALOGUE_RADIUS
+        - 双方都在冷却窗口(DIALOGUE_COOLDOWN_MINUTES 世界分钟)之外
+
+        未挂 dialogue 生成器时直接跳过整个互动阶段。
+        """
+        if self._dialogue is None:
+            return
+
+        now = self._clock.now
+        pairs = detect_proximity(agents, radius=DIALOGUE_RADIUS)
+        for a, b in pairs:
+            # 只在同一地区相遇
+            if a.region_id != b.region_id:
+                continue
+            # 任一方仍在冷却期 → 跳过
+            if self._in_cooldown(a, now) or self._in_cooldown(b, now):
+                continue
+
+            try:
+                line = await self._dialogue.generate_dialogue(a, b, self._world.events[-5:])
+            except Exception as e:  # 生成器内部已兜底,这里再保一层
+                logger.warning("dialogue generation failed for %s / %s: %s", a.name, b.name, e)
+                continue
+
+            # 写入双方记忆(first_meet 级别的重要事件)
+            a.observe({"type": "first_meet", "description": f"遇到{b.name},对它说:{line}"})
+            b.observe({"type": "first_meet", "description": f"{a.name}对我说:{line}"})
+
+            # 记录互动事件到世界日志
+            self._world.events.append({
+                "type": "dialogue",
+                "speaker": a.name,
+                "listener": b.name,
+                "line": line,
+                "at": now.isoformat() if now is not None else None,
+            })
+
+            # 刷新双方冷却时间戳
+            a.last_interaction_at = now
+            b.last_interaction_at = now
+
+    def _in_cooldown(self, agent: DigimonAgent, now: Any) -> bool:
+        """判断 agent 是否仍在互动冷却窗口内。"""
+        if agent.last_interaction_at is None or now is None:
+            return False
+        elapsed_minutes = (now - agent.last_interaction_at).total_seconds() / 60
+        return elapsed_minutes < DIALOGUE_COOLDOWN_MINUTES
 
     async def _step_agent(self, agent: DigimonAgent) -> dict[str, Any]:
         """调用单个 agent.step(),捕获异常不让一只炸了拖死整个 tick。"""

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from digimon_world import __version__
 from digimon_world.api import app
-from digimon_world.world import reset_world
+from digimon_world.world import get_world, reset_world
 
 
 @pytest.fixture(autouse=True)
@@ -127,3 +127,51 @@ def test_websocket_snapshot() -> None:
             assert msg["type"] == "snapshot"
             assert "world" in msg
             assert msg["world"]["agents"], "快照里应该有数码兽"
+
+
+# ---- Phase 2: scheduler 接入 ----
+
+
+def test_scheduler_starts_on_startup() -> None:
+    """startup hook 应启动 scheduler task。"""
+    # 用 context manager 形式的 TestClient 触发 startup/shutdown 事件
+    with TestClient(app) as client:
+        task = getattr(app.state, "scheduler_task", None)
+        assert task is not None
+        assert not task.done()
+        sched = getattr(app.state, "scheduler", None)
+        assert sched is not None
+
+
+def test_scheduler_status_endpoint() -> None:
+    """GET /api/scheduler/status 返回 running / tick_count / current_world_time。"""
+    with TestClient(app) as client:
+        r = client.get("/api/scheduler/status")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["running"] is True
+        assert isinstance(data["tick_count"], int)
+        assert isinstance(data["current_world_time"], str)
+
+
+def test_get_digimon_memories_endpoint(client: TestClient) -> None:
+    """GET /api/digimon/{name}/memories 返回最近记忆(最多 10 条)。"""
+    # 先给亚古兽塞一些记忆
+    agent = get_world().get("亚古兽")
+    assert agent is not None
+    for i in range(15):
+        agent.memory.add(f"记忆事件 {i}", importance=5)
+
+    r = client.get("/api/digimon/亚古兽/memories")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["name"] == "亚古兽"
+    assert data["count"] == 10  # 只返回最近 10 条
+    assert len(data["memories"]) == 10
+    # 最后一条应是最新记忆
+    assert data["memories"][-1]["description"] == "记忆事件 14"
+
+
+def test_get_digimon_memories_not_found(client: TestClient) -> None:
+    r = client.get("/api/digimon/不存在兽/memories")
+    assert r.status_code == 404
