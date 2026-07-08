@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧬 进化图鉴 - DIGIMON WORLD</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #e0e6ff;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .wrap { max-width: 1080px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 30px;
+            background: linear-gradient(90deg, #00d4ff, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 3px;
+        }
+
+        .home-link {
+            color: #00d4ff;
+            text-decoration: none;
+            font-size: 14px;
+            border: 1px solid #2a3a6a;
+            border-radius: 6px;
+            padding: 6px 12px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .home-link:hover { background: rgba(0, 212, 255, 0.1); border-color: #00d4ff; }
+
+        /* ---- 导航栏 (与主页一致) ---- */
+        .main-nav {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .nav-link {
+            color: #8b95c7;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 7px 16px;
+            border: 1px solid #2a3a6a;
+            border-radius: 6px;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+        }
+        .nav-link:hover { background: rgba(0, 212, 255, 0.1); border-color: #00d4ff; color: #e0e6ff; }
+        .nav-link.active {
+            color: #0a0e27;
+            background: linear-gradient(90deg, #00d4ff, #7c3aed);
+            border-color: transparent;
+            font-weight: bold;
+        }
+
+        .intro {
+            color: #8b95c7;
+            font-size: 13px;
+            letter-spacing: 1px;
+            margin-bottom: 24px;
+            line-height: 1.7;
+        }
+
+        /* ---- 进化链卡片 ---- */
+        .chain {
+            background: rgba(5, 8, 22, 0.5);
+            border: 1px solid #2a3a6a;
+            border-radius: 12px;
+            padding: 20px 22px 24px;
+            margin-bottom: 26px;
+        }
+
+        .chain-head {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .chain-head .cname {
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        .chain-head .cdesc {
+            font-size: 12px;
+            color: #8b95c7;
+        }
+
+        /* 每条链一个主题色 */
+        .chain.fire  .cname { color: #ff9a3c; }
+        .chain.ice   .cname { color: #4ae8c4; }
+        .chain.bird  .cname { color: #ff8ac4; }
+
+        .stages {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+            flex-wrap: wrap;
+        }
+
+        .stage {
+            flex: 1 1 180px;
+            min-width: 160px;
+            background: rgba(42, 58, 106, 0.28);
+            border: 1px solid #2a3a6a;
+            border-radius: 10px;
+            padding: 16px 14px;
+            text-align: center;
+            transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+        }
+        .stage:hover {
+            transform: translateY(-4px);
+            border-color: #00d4ff;
+            box-shadow: 0 8px 22px rgba(0, 212, 255, 0.15);
+        }
+
+        .stage .emoji {
+            font-size: 46px;
+            line-height: 1;
+            display: block;
+            margin-bottom: 10px;
+            filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.4));
+        }
+        .stage .sname {
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        .stage .en {
+            font-size: 11px;
+            color: #6b74a0;
+            font-family: "SF Mono", "Consolas", monospace;
+            margin-bottom: 6px;
+        }
+        .stage .tier {
+            display: inline-block;
+            font-size: 10px;
+            letter-spacing: 1px;
+            color: #b98aff;
+            border: 1px solid rgba(124, 58, 237, 0.5);
+            border-radius: 4px;
+            padding: 2px 8px;
+            margin-bottom: 10px;
+        }
+        .stage .skills {
+            list-style: none;
+            font-size: 12px;
+            color: #c3cbf0;
+            line-height: 1.8;
+        }
+        .stage .skills li::before {
+            content: "⚡ ";
+            color: #ffd700;
+        }
+
+        /* 进化箭头 */
+        .arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 34px;
+            color: #7c3aed;
+            font-size: 24px;
+            text-shadow: 0 0 10px rgba(124, 58, 237, 0.7);
+            user-select: none;
+        }
+        @media (max-width: 620px) {
+            .arrow { flex-basis: 100%; padding: 4px 0; transform: rotate(90deg); }
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 24px;
+            color: #555f8a;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header>
+            <h1>🧬 进化图鉴</h1>
+            <a class="home-link" href="index.html">← 返回世界</a>
+        </header>
+
+        <nav class="main-nav" aria-label="主导航">
+            <a href="index.html" class="nav-link">主页</a>
+            <a href="battle.html" class="nav-link">战斗模拟</a>
+            <a href="evolution.html" class="nav-link active">进化图鉴</a>
+            <a href="log.html" class="nav-link">世界日志</a>
+        </nav>
+
+        <p class="intro">
+            数码兽通过战斗胜利与羁绊累积逐阶进化。以下为三条经典进化链,
+            每阶段标注了代表招式。将鼠标悬停在卡片上可高亮查看。
+        </p>
+
+        <!-- 亚古兽线 (火焰) -->
+        <section class="chain fire">
+            <div class="chain-head">
+                <span class="cname">🦖 亚古兽 进化线</span>
+                <span class="cdesc">火焰系 · 勇气的象征</span>
+            </div>
+            <div class="stages">
+                <div class="stage">
+                    <span class="emoji">🦖</span>
+                    <div class="sname">亚古兽</div>
+                    <div class="en">Agumon</div>
+                    <div class="tier">成长期 ROOKIE</div>
+                    <ul class="skills">
+                        <li>小型火焰</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">🐲</span>
+                    <div class="sname">暴龙兽</div>
+                    <div class="en">Greymon</div>
+                    <div class="tier">成熟期 CHAMPION</div>
+                    <ul class="skills">
+                        <li>超级火焰</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">🤖</span>
+                    <div class="sname">机械暴龙兽</div>
+                    <div class="en">MetalGreymon</div>
+                    <div class="tier">完全体 ULTIMATE</div>
+                    <ul class="skills">
+                        <li>超究极火焰</li>
+                        <li>大地破坏炮</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">🐉</span>
+                    <div class="sname">战斗暴龙兽</div>
+                    <div class="en">WarGreymon</div>
+                    <div class="tier">究极体 MEGA</div>
+                    <ul class="skills">
+                        <li>盖亚能量炮</li>
+                        <li>战斗龙卷风</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 加布兽线 (冰) -->
+        <section class="chain ice">
+            <div class="chain-head">
+                <span class="cname">🐺 加布兽 进化线</span>
+                <span class="cdesc">冰雪系 · 友情的象征</span>
+            </div>
+            <div class="stages">
+                <div class="stage">
+                    <span class="emoji">🦊</span>
+                    <div class="sname">加布兽</div>
+                    <div class="en">Gabumon</div>
+                    <div class="tier">成长期 ROOKIE</div>
+                    <ul class="skills">
+                        <li>爆炎火焰弹</li>
+                        <li>妖狐火焰</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">🐺</span>
+                    <div class="sname">加鲁鲁兽</div>
+                    <div class="en">Garurumon</div>
+                    <div class="tier">成熟期 CHAMPION</div>
+                    <ul class="skills">
+                        <li>绝对冷冻气</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">🥋</span>
+                    <div class="sname">银河卡机狼</div>
+                    <div class="en">WereGarurumon</div>
+                    <div class="tier">完全体 ULTIMATE</div>
+                    <ul class="skills">
+                        <li>狼爪拳</li>
+                        <li>疾风踢</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">❄️</span>
+                    <div class="sname">钢铁加鲁鲁兽</div>
+                    <div class="en">MetalGarurumon</div>
+                    <div class="tier">究极体 MEGA</div>
+                    <ul class="skills">
+                        <li>战斧斯坦纳</li>
+                        <li>绝对零度爆</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 比丘兽线 (鸟/风) -->
+        <section class="chain bird">
+            <div class="chain-head">
+                <span class="cname">🐦 比丘兽 进化线</span>
+                <span class="cdesc">风焰系 · 爱心的象征</span>
+            </div>
+            <div class="stages">
+                <div class="stage">
+                    <span class="emoji">🐦</span>
+                    <div class="sname">比丘兽</div>
+                    <div class="en">Biyomon</div>
+                    <div class="tier">成长期 ROOKIE</div>
+                    <ul class="skills">
+                        <li>魔法之火</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">🦅</span>
+                    <div class="sname">鸟龙兽</div>
+                    <div class="en">Birdramon</div>
+                    <div class="tier">成熟期 CHAMPION</div>
+                    <ul class="skills">
+                        <li>火焰之翼</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">🦉</span>
+                    <div class="sname">大鸟兽</div>
+                    <div class="en">Garudamon</div>
+                    <div class="tier">完全体 ULTIMATE</div>
+                    <ul class="skills">
+                        <li>神鸟冲击波</li>
+                    </ul>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="stage">
+                    <span class="emoji">🔥</span>
+                    <div class="sname">凤凰兽</div>
+                    <div class="en">Phoenixmon</div>
+                    <div class="tier">究极体 MEGA</div>
+                    <ul class="skills">
+                        <li>星辰之火</li>
+                        <li>苍炎烈焰</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <footer>DIGIMON WORLD · Phase 5 · 进化图鉴 · 经典 Adventure 进化线</footer>
+    </div>
+</body>
+</html>
