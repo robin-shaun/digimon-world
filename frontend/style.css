@@ -338,3 +338,55 @@ footer {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+.inject-type {
+    width: 100%;
+    padding: 6px 8px;
+    background: rgba(5, 8, 22, 0.7);
+    border: 1px solid #2a3a6a;
+    border-radius: 4px;
+    color: #e0e6ff;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.inject-type:focus {
+    outline: none;
+    border-color: #00d4ff;
+}
+
+.save-btns {
+    display: flex;
+    gap: 8px;
+}
+
+.save-btn {
+    flex: 1;
+    padding: 8px;
+    background: rgba(5, 8, 22, 0.7);
+    border: 1px solid #2a3a6a;
+    border-radius: 4px;
+    color: #e0e6ff;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.save-btn:hover {
+    border-color: #00d4ff;
+}
+
+.save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 面板连接状态: 任一接口挂掉 → 红字 '⚠️ 不可用' */
+#director-conn {
+    text-align: center;
+    margin-top: 8px;
+}
+
+#director-conn.dir-down {
+    color: #ff5c5c;
+    font-weight: bold;
+}

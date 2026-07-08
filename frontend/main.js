@@ -475,12 +475,16 @@
 
     const DIRECTOR_MIN_WIDTH = 769; // 严格大于 768px 才显示
 
+    const DIRECTOR_REFRESH_MS = 10000; // 每 10s 自动拉一次
+
     const director = {
         pairs: [],      // [{a, b, score}]
         factions: [],   // [{faction_id, name, members}]
         events: [],     // 最近事件 (最新在后)
         ratio: null,    // 当前时间流速
         enabled: false, // 面板是否处于显示状态
+        relOk: true,    // GET /api/relationships 最近一次是否成功
+        stateOk: true,  // GET /api/director/state 最近一次是否成功
     };
 
     /** 好感度分数 → 连线颜色 (正=绿, 负=红, 0=灰), alpha 随强度增大 */
@@ -533,13 +537,15 @@
         }
 
         // 连线 (两两)
-        g.lineWidth = 2;
         for (let i = 0; i < names.length; i++) {
             for (let j = i + 1; j < names.length; j++) {
                 const pa = pos[names[i]];
                 const pb = pos[names[j]];
                 const key = [names[i], names[j]].sort().join(' ');
                 const score = scoreOf[key] || 0;
+                // 线宽 = 关系强度: |score| 归一到 [0,1], 映射到 1~6px
+                const mag = Math.min(Math.abs(score) / 10, 1);
+                g.lineWidth = 1 + mag * 5;
                 g.strokeStyle = scoreToColor(score);
                 g.beginPath();
                 g.moveTo(pa.x, pa.y);
@@ -547,6 +553,7 @@
                 g.stroke();
             }
         }
+        g.lineWidth = 1;
 
         // 节点 + 名字
         for (const name of names) {
@@ -594,7 +601,7 @@
             ul.innerHTML = '<li class="dir-hint">暂无事件</li>';
             return;
         }
-        const items = director.events.slice().reverse().slice(0, 8);
+        const items = director.events.slice().reverse().slice(0, 5);
         ul.innerHTML = items.map((e) => {
             const isDirector = e.source === 'director';
             const desc = e.description || e.type || '(未知事件)';
@@ -630,8 +637,10 @@
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
             director.pairs = data.pairs || [];
+            director.relOk = true;
         } catch (e) {
             console.warn('[director] /api/relationships 不可达:', e.message);
+            director.relOk = false;
         }
     }
 
@@ -644,8 +653,23 @@
             director.events = data.recent_events || [];
             director.factions = data.factions || [];
             if (typeof data.ratio === 'number') director.ratio = data.ratio;
+            director.stateOk = true;
         } catch (e) {
             console.warn('[director] /api/director/state 不可达:', e.message);
+            director.stateOk = false;
+        }
+    }
+
+    /** 面板顶部连接状态: 任一接口挂掉就显示 '⚠️ 不可用' */
+    function updateDirectorConn() {
+        const el = document.getElementById('director-conn');
+        if (!el) return;
+        if (director.relOk && director.stateOk) {
+            el.textContent = '🟢 数据实时';
+            el.classList.remove('dir-down');
+        } else {
+            el.textContent = '⚠️ 不可用';
+            el.classList.add('dir-down');
         }
     }
 
@@ -657,6 +681,7 @@
         renderFactions();
         renderDirectorEvents();
         updateSpeedButtons();
+        updateDirectorConn();
     }
 
     /** POST 设置速度 */
@@ -673,11 +698,13 @@
             updateSpeedButtons();
         } catch (e) {
             console.warn('[director] 设置速度失败:', e.message);
+            const st = document.getElementById('speed-status');
+            if (st) st.textContent = '⚠️ 不可用';
         }
     }
 
-    /** POST 注入事件 */
-    async function injectEvent(description) {
+    /** POST 注入事件. type 从下拉框读, description 从输入框读 */
+    async function injectEvent(type, description) {
         const status = document.getElementById('inject-status');
         const btn = document.getElementById('inject-btn');
         if (btn) btn.disabled = true;
@@ -686,7 +713,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    type: 'director_event',
+                    type: type || 'director_event',
                     description,
                     importance: 7,
                 }),
@@ -697,9 +724,43 @@
             if (input) input.value = '';
             await refreshDirector(); // 立刻反映到事件列表
         } catch (e) {
-            if (status) status.textContent = '❌ 注入失败: ' + e.message;
+            if (status) status.textContent = '⚠️ 不可用: ' + e.message;
         } finally {
             if (btn) btn.disabled = false;
+            setTimeout(() => { if (status) status.textContent = ''; }, 3000);
+        }
+    }
+
+    /** POST 保存 / 加载世界状态 */
+    async function saveWorld() {
+        await worldPersist('/api/world/save', '💾 已保存');
+    }
+    async function loadWorld() {
+        await worldPersist('/api/world/load', '📂 已加载');
+        // 加载后世界可能整个换了 — 立刻拉一次数码兽 + 导演数据
+        await fetchDigimon();
+        render();
+        await refreshDirector();
+    }
+    async function worldPersist(path, okText) {
+        const status = document.getElementById('save-status');
+        const saveBtn = document.getElementById('save-btn');
+        const loadBtn = document.getElementById('load-btn');
+        if (saveBtn) saveBtn.disabled = true;
+        if (loadBtn) loadBtn.disabled = true;
+        try {
+            const resp = await fetch(API_BASE + path, { method: 'POST' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            if (status) {
+                const n = typeof data.digimon_count === 'number' ? ` (${data.digimon_count})` : '';
+                status.textContent = okText + n;
+            }
+        } catch (e) {
+            if (status) status.textContent = '⚠️ 不可用: ' + e.message;
+        } finally {
+            if (saveBtn) saveBtn.disabled = false;
+            if (loadBtn) loadBtn.disabled = false;
             setTimeout(() => { if (status) status.textContent = ''; }, 3000);
         }
     }
@@ -721,12 +782,14 @@
         document.querySelectorAll('.speed-btn').forEach((b) => {
             b.addEventListener('click', () => setSpeed(parseInt(b.dataset.ratio, 10)));
         });
-        // 注入事件
+        // 注入事件: 下拉选 type + 输入框填描述
         const btn = document.getElementById('inject-btn');
         const input = document.getElementById('inject-input');
+        const typeSel = document.getElementById('inject-type');
         const submit = () => {
             const desc = (input && input.value || '').trim();
-            if (desc) injectEvent(desc);
+            const type = (typeSel && typeSel.value) || 'director_event';
+            if (desc) injectEvent(type, desc);
         };
         if (btn) btn.addEventListener('click', submit);
         if (input) {
@@ -734,11 +797,16 @@
                 if (ev.key === 'Enter') submit();
             });
         }
+        // 保存 / 加载
+        const saveBtn = document.getElementById('save-btn');
+        const loadBtn = document.getElementById('load-btn');
+        if (saveBtn) saveBtn.addEventListener('click', saveWorld);
+        if (loadBtn) loadBtn.addEventListener('click', loadWorld);
         // 屏宽变化 → 显隐
         window.addEventListener('resize', updateDirectorVisibility);
         updateDirectorVisibility();
-        // 每 30s 刷新
-        setInterval(refreshDirector, 30000);
+        // 每 10s 自动刷新 (关系 + 导演状态)
+        setInterval(refreshDirector, DIRECTOR_REFRESH_MS);
     }
 
     // ══════════════════════════════════════════════

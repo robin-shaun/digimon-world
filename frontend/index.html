@@ -69,11 +69,29 @@
 
         <section class="dir-section">
             <h3>注入事件</h3>
+            <select id="inject-type" class="inject-type">
+                <option value="director_event">通用事件</option>
+                <option value="weather">天气</option>
+                <option value="disaster">灾害</option>
+                <option value="faction_create">创建派系</option>
+                <option value="encounter">遭遇</option>
+            </select>
             <input type="text" id="inject-input" class="inject-input"
                    placeholder="事件描述…" maxlength="120">
             <button id="inject-btn" class="inject-btn">注入事件</button>
             <p class="dir-hint" id="inject-status"></p>
         </section>
+
+        <section class="dir-section">
+            <h3>存档</h3>
+            <div class="save-btns">
+                <button id="save-btn" class="save-btn">💾 保存</button>
+                <button id="load-btn" class="save-btn">📂 加载</button>
+            </div>
+            <p class="dir-hint" id="save-status"></p>
+        </section>
+
+        <p class="dir-hint" id="director-conn"></p>
     </aside>
 
     <script>
