@@ -39,13 +39,16 @@
 
 **目标**: 数码兽不再由脚本控制,而是 LLM 自主决策"接下来去哪、做什么"。
 
-- [ ] 实现 `MemoryStream`: 写入、重要性评分、检索
-- [ ] 实现 `Reflector`: 阈值触发反思,生成高级抽象
-- [ ] 实现 `Planner`: 高层+子计划+行动三层
-- [ ] 实现 `DigimonAgent` 主循环 (Observe → Memory → Reflect → Plan → Act)
-- [ ] LLM 客户端: 中转 API 调用,模型分层 (opus/haiku)
-- [ ] 单 agent 单元测试: 模拟观察 → 检查记忆 → 检查计划
-- [ ] 多 agent 简单互动: 两只数码兽相遇→对话
+- [x] 实现 `MemoryStream`: 写入、重要性评分、检索 ✅
+- [x] 实现 `Reflector`: 阈值触发反思,生成高级抽象 ✅
+- [x] 实现 `Planner`: 计划生成 (LLM-driven,Fallback 兜底) ✅
+- [x] 实现 `DigimonAgent` 主循环 (Observe → Memory → Reflect → Plan → Act) ✅
+- [x] LLM 客户端: 中转 API 调用,模型分层 (opus/haiku) ✅
+- [x] WorldClock + WorldScheduler: 周期驱动 agent.step() ✅
+- [x] 单 agent 单元测试: 88+ 个 pytest 全通过(act/step/planner/reflector/memory/scheduler/api/world_state/smoke/llm_client) ✅
+- [ ] 多 agent 简单互动: 两只数码兽相遇→对话 ⏳
+- [ ] 把 scheduler 接入 FastAPI startup,真正让世界跑起来 ⏳
+- [ ] 端到端: 跑 1 天世界时间,检查 agent 记忆 / 反思 / 计划可读 ⏳
 
 **完成标志**: 一个数码兽能在文件岛上自主生活一天,有日志可看。
 
@@ -98,8 +101,8 @@
 
 ```
 [████████░░░░░░░░░░░░░░]  35%  Phase 0
-[░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 1
-[░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 2
+[████████████████████] 100%  Phase 1 ✅ 完成
+[████████████████░░░░]  80%  Phase 2 (差 多 agent 互动 + 接入 API + 端到端跑一天)
 [░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 3
 [░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 4
 ```
