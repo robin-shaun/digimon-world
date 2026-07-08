@@ -45,6 +45,38 @@ h1 {
     letter-spacing: 2px;
 }
 
+.main-nav {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.main-nav .nav-link {
+    padding: 8px 18px;
+    color: #8b95c7;
+    text-decoration: none;
+    font-size: 14px;
+    letter-spacing: 1px;
+    border: 1px solid #2a3a6a;
+    border-radius: 6px;
+    background: rgba(10, 16, 40, 0.6);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.main-nav .nav-link:hover {
+    background: rgba(0, 212, 255, 0.1);
+    border-color: #00d4ff;
+    color: #d7e3ff;
+}
+
+.main-nav .nav-link.active {
+    color: #00d4ff;
+    border-color: #00d4ff;
+    background: rgba(0, 212, 255, 0.12);
+}
+
 #world-map {
     display: block;
     margin: 0 auto;
