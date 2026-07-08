@@ -5,9 +5,31 @@
 
 详细设计: docs/DESIGN.md 第 3 节
 """
-from .digimon_agent import DigimonAgent
+from .digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
 from .dialogue import Dialogue
+from .evolution import (
+    EVOLUTION_CHAIN,
+    EvolutionReason,
+    EvolutionRequirement,
+    EvolutionResult,
+    EvolutionSystem,
+    is_final_stage,
+    next_stage,
+)
 from .planner import Planner
 from .reflector import Reflection, Reflector
 
-__all__ = ["DigimonAgent", "Dialogue", "Planner", "Reflection", "Reflector"]
+__all__ = [
+    "DigimonAgent",
+    "Dialogue",
+    "Planner",
+    "Reflection",
+    "Reflector",
+    "EvolutionSystem",
+    "EvolutionResult",
+    "EvolutionReason",
+    "EvolutionRequirement",
+    "EVOLUTION_CHAIN",
+    "is_final_stage",
+    "next_stage",
+]

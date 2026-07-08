@@ -16,9 +16,11 @@ from digimon_world.agents.digimon_agent import (
     DigimonAttribute,
     DigimonStats,
 )
+from digimon_world.battle import llm_ai
 from digimon_world.battle.damage import DamageCalculator, is_strong_against
 from digimon_world.battle.engine import BattleEngine, MAX_ROUNDS
 from digimon_world.battle.types import ActionType, BattleResult
+from digimon_world.llm.client import FakeLlmClient, LlmModel
 
 
 # ---- helpers ----
@@ -180,3 +182,54 @@ class TestBattleEngine:
         # 战斗后 agent 原始 HP 不变
         assert a.stats.hp == 50
         assert b.stats.hp == 50
+
+
+# ========== LLM 决策 ==========
+
+
+class TestBattleLlmAi:
+    """LLM 战斗决策测试。"""
+
+    @pytest.mark.asyncio
+    async def test_llm_decide_action_returns_string(self) -> None:
+        """decide_action 返回合法动作字符串。"""
+        fake = FakeLlmClient(default_reply="attack")
+        a = _agent("亚古兽", attribute=DigimonAttribute.VACCINE)
+        b = _agent("加布兽", attribute=DigimonAttribute.DATA)
+
+        action = await llm_ai.decide_action(fake, a, b, 1.0, 1.0)
+        assert isinstance(action, str)
+        assert action in llm_ai.VALID_ACTIONS
+
+    @pytest.mark.asyncio
+    async def test_llm_action_failure_falls_back_to_attack(self) -> None:
+        """LLM 调用抛异常时,兜底为 'attack'。"""
+
+        class _BoomClient:
+            async def complete(self, req):  # type: ignore[no-untyped-def]
+                raise RuntimeError("网络挂了")
+
+        a = _agent("A")
+        b = _agent("B")
+        action = await llm_ai.decide_action(_BoomClient(), a, b, 0.5, 0.5)
+        assert action == "attack"
+        assert action == llm_ai.FALLBACK_ACTION
+
+    @pytest.mark.asyncio
+    async def test_battle_with_llm_runs(self) -> None:
+        """传入 LLM 客户端(始终 attack)时战斗跑通并分出胜者。"""
+        fake = FakeLlmClient(default_reply="attack")
+        a = _agent("强攻兽", attack=30, defense=5, hp=80)
+        b = _agent("弱防兽", attack=10, defense=5, hp=60)
+        engine = BattleEngine()
+        result = await engine.run_battle(a, b, llm_client=fake)
+
+        assert isinstance(result, BattleResult)
+        assert result.rounds > 0
+        assert result.winner_name in {"强攻兽", "弱防兽"}
+        # 双方都 attack 时应打出胜负,行为等价脚本式
+        loser = "弱防兽" if result.winner_name == "强攻兽" else "强攻兽"
+        assert result.final_hp[loser] == 0
+        # 确认确实调用了 LLM
+        assert len(fake.calls) > 0
+        assert fake.calls[0].model == LlmModel.HAIKU
