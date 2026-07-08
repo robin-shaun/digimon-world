@@ -38,6 +38,9 @@ logger = logging.getLogger(__name__)
 # 一次 tick 默认推进多少现实秒
 DEFAULT_TICK_SECONDS = 1.0
 
+# 每隔多少 tick 自动持久化一次世界状态
+SAVE_INTERVAL_TICKS = 100
+
 # 相遇半径(像素): 距离小于此值才可能触发对话
 DIALOGUE_RADIUS = 100
 
@@ -60,10 +63,15 @@ class WorldScheduler:
         relationships: Optional[RelationshipTracker] = None,
         factions: Optional[FactionRegistry] = None,
         story_director: Optional[StoryDirector] = None,
+        auto_save: bool = False,
+        save_db_path: Optional[str] = None,
     ) -> None:
         self._world = world
         self._clock = clock
         self._on_event = on_event
+        # 是否每 SAVE_INTERVAL_TICKS 自动持久化一次(默认关,测试 / 独立实例不落盘)
+        self._auto_save = auto_save
+        self._save_db_path = save_db_path
         # 对话生成器(可选): 有则在相遇时生成对话,无则跳过互动阶段
         self._dialogue = dialogue
         # 社交关系表: 默认用进程级单例,可注入独立实例(测试)
@@ -122,7 +130,23 @@ class WorldScheduler:
         if self._tick_count % CHECK_INTERVAL_TICKS == 0:
             self._story_director.check_trigger(self._world, self._relationships)
         self._tick_count += 1
+        # 7. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
+        if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
+            await self._auto_save_world()
         return events
+
+    async def _auto_save_world(self) -> None:
+        """自动全量保存世界状态。失败只记 warning,不打断 tick 循环。"""
+        # 局部 import 避免 world 包内的循环依赖
+        from . import persistence
+
+        try:
+            if self._save_db_path is not None:
+                await persistence.save(self._world, self._relationships, self._save_db_path)
+            else:
+                await persistence.save(self._world, self._relationships)
+        except Exception as e:
+            logger.warning("auto-save failed at tick %d: %s", self._tick_count, e)
 
     async def _run_interactions(self, agents: list[DigimonAgent]) -> None:
         """检测相遇的数码兽并触发对话,写入双方记忆。

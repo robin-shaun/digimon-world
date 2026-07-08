@@ -11,6 +11,7 @@
 
 详细设计: docs/DESIGN.md 第 2 节
 """
+from . import persistence
 from .clock import WorldClock
 from .events import StoryDirector, StoryEvent, get_director, reset_director
 from .factions import Faction, FactionRegistry, get_registry, reset_registry
@@ -40,6 +41,7 @@ __all__ = [
     "WorldClock",
     "WorldScheduler",
     "WorldState",
+    "persistence",
     "get_director",
     "get_registry",
     "get_tracker",

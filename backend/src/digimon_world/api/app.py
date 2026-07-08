@@ -38,6 +38,7 @@ from ..world import (
     get_registry,
     get_tracker,
     get_world,
+    persistence,
 )
 
 
@@ -177,6 +178,22 @@ def move_digimon(name: str, req: MoveRequest) -> MoveResponse:
 def get_world_snapshot() -> dict[str, Any]:
     """整个世界快照(前端 canvas 渲染用)。"""
     return get_world().to_dict()
+
+
+@app.post("/api/world/save")
+async def save_world() -> dict[str, Any]:
+    """手动全量保存世界状态到 SQLite(data/world.db)。"""
+    world = get_world()
+    await persistence.save(world, get_tracker())
+    return {"status": "saved", "digimon_count": world.count()}
+
+
+@app.post("/api/world/load")
+async def load_world() -> dict[str, Any]:
+    """手动从 SQLite 全量恢复世界状态。库不存在则 loaded=False。"""
+    world = get_world()
+    loaded = await persistence.load(world, get_tracker())
+    return {"status": "loaded" if loaded else "no_data", "digimon_count": world.count()}
 
 
 @app.get("/api/scheduler/status")
@@ -478,6 +495,7 @@ async def _startup() -> None:
         relationships=get_tracker(),
         factions=get_registry(),
         story_director=get_director(),
+        auto_save=True,  # 每 100 tick 自动落盘到 data/world.db
     )
     app.state.world_clock = clock
     app.state.scheduler = scheduler
