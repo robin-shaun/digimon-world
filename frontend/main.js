@@ -273,8 +273,8 @@
         ctx.globalAlpha = 1.0;
     }
 
-    /** 完整渲染 */
-    function render() {
+    /** 完整渲染 (实际绘制, 只在 rAF 回调里调用) */
+    function renderNow() {
         if (!state.connected && state.digimon.length === 0) {
             drawPlaceholder();
             return;
@@ -285,6 +285,18 @@
         drawPOIs();
         drawDigimon();
         drawTitle();
+    }
+
+    // render() 可能在一帧内被多次触发 (轮询 / 点击 / 加载), 用 rAF 防抖:
+    // 同一帧内的多次调用合并成一次绘制, 且绘制与浏览器刷新对齐。
+    let rafPending = false;
+    function render() {
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => {
+            rafPending = false;
+            renderNow();
+        });
     }
 
     // ══════════════════════════════════════════════
@@ -326,19 +338,28 @@
         }
     }
 
-    /** 拉取数码兽列表 (轻量) */
+    /** 拉取数码兽列表 (轻量)
+     *  用 AbortController 防并发: 上一次请求还没回来就发下一次时,
+     *  先取消旧请求, 避免慢响应堆积 / 旧数据覆盖新数据。 */
+    let digimonAbort = null;
     async function fetchDigimon() {
+        if (digimonAbort) digimonAbort.abort();
+        const ctrl = new AbortController();
+        digimonAbort = ctrl;
         try {
-            const resp = await fetch(API_BASE + '/api/digimon', { cache: 'no-store' });
+            const resp = await fetch(API_BASE + '/api/digimon', { cache: 'no-store', signal: ctrl.signal });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
             state.digimon = data.digimon || [];
             state.connected = true;
             state.error = null;
         } catch (err) {
+            if (err.name === 'AbortError') return;  // 被新请求主动取消, 不算失败
             console.warn('[api] /api/digimon 不可达:', err.message);
             state.connected = false;
             state.error = err.message;
+        } finally {
+            if (digimonAbort === ctrl) digimonAbort = null;
         }
     }
 
@@ -761,9 +782,20 @@
         }
     }
 
-    /** 刷新整个导演面板 (数据 + 重绘) */
+    /** 刷新整个导演面板 (数据 + 重绘)
+     *  防并发: 10s 定时器与手动触发 (注入/加载) 可能重叠,
+     *  上一次刷新未完成时直接跳过本次, 避免请求堆积。 */
+    let directorRefreshing = false;
     async function refreshDirector() {
-        if (!director.enabled) return;
+        if (!director.enabled || directorRefreshing) return;
+        directorRefreshing = true;
+        try {
+            await refreshDirectorInner();
+        } finally {
+            directorRefreshing = false;
+        }
+    }
+    async function refreshDirectorInner() {
         await Promise.all([fetchRelationships(), fetchDirectorState()]);
         drawRelationshipGraph();
         renderFactions();
