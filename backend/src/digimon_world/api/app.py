@@ -38,6 +38,7 @@ from ..world import (
     WorldScheduler,
     WorldState,
     get_director,
+    get_festival_system,
     get_landmark_system,
     get_multiverse,
     get_registry,

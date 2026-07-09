@@ -29,6 +29,7 @@ from ..agents.dialogue import Dialogue
 from .clock import WorldClock
 from .events import CHECK_INTERVAL_TICKS, StoryDirector
 from .factions import FactionRegistry
+from .festivals import FestivalSystem, get_festival_system
 from .interactions import detect_proximity
 from .landmarks import LandmarkSystem, get_landmark_system
 from .relationships import RelationshipTracker, get_tracker
@@ -65,6 +66,7 @@ class WorldScheduler:
         factions: Optional[FactionRegistry] = None,
         story_director: Optional[StoryDirector] = None,
         landmarks: Optional[LandmarkSystem] = None,
+        festivals: Optional[FestivalSystem] = None,
         auto_save: bool = False,
         save_db_path: Optional[str] = None,
     ) -> None:
@@ -84,6 +86,8 @@ class WorldScheduler:
         self._story_director = story_director if story_director is not None else StoryDirector()
         # 地标系统: 每 tick 检测数码兽是否靠近地标并施加效果(无则用进程级单例)
         self._landmarks = landmarks if landmarks is not None else get_landmark_system()
+        # 节日系统: 每 tick 检查是否跨入节日日(无则用进程级单例)
+        self._festivals = festivals if festivals is not None else get_festival_system()
         self._tick_count = 0
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
         self._last_world_day: Optional[int] = None
@@ -107,6 +111,11 @@ class WorldScheduler:
     def landmarks(self) -> LandmarkSystem:
         """地标系统(前端 / Director 视角读取)。"""
         return self._landmarks
+
+    @property
+    def festivals(self) -> FestivalSystem:
+        """节日系统(前端 / Director 视角读取)。"""
+        return self._festivals
 
     async def tick_once(self, real_seconds: float = DEFAULT_TICK_SECONDS) -> list[dict[str, Any]]:
         """执行一次 tick: 推进时钟 + 所有 agent 并发 step。
@@ -150,6 +159,19 @@ class WorldScheduler:
         # 7. 剧情阶段: 每 CHECK_INTERVAL_TICKS 扫描一次全局剧情触发条件
         if self._tick_count % CHECK_INTERVAL_TICKS == 0:
             self._story_director.check_trigger(self._world, self._relationships)
+        # 7.5 节日阶段: 检查是否跨入节日日,跨入则全员心情 / 关系增益
+        festival = self._festivals.update_from_clock(
+            self._clock.elapsed_minutes,
+            world_state=self._world,
+            tracker=self._relationships,
+        )
+        if festival is not None:
+            # 让全体数码兽记住这场节日(中等重要性)
+            for agent in agents:
+                try:
+                    agent.observe(festival)
+                except Exception as e:
+                    logger.warning("festival observe failed for %s: %s", agent.name, e)
         self._tick_count += 1
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
