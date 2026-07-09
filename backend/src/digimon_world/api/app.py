@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from .. import __version__
 from .pokedex import router as pokedex_router
+from ..agents.achievements import AchievementSystem
 from ..agents.badges import Badge, BadgeSystem
 from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
@@ -530,6 +531,23 @@ def get_digimon_badges(name: str) -> dict[str, Any]:
         "name": name,
         "count": len(badges),
         "badges": badges,
+    }
+
+
+# ---- 里程碑/成就 API ----
+@app.get("/api/digimon/{name}/achievements")
+def get_digimon_achievements(name: str) -> dict[str, Any]:
+    """某只数码兽已达成的里程碑列表(实时计算)。"""
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+    achievement_system = AchievementSystem()
+    achievements = achievement_system.evaluate(agent)
+    return {
+        "name": name,
+        "count": len(achievements),
+        "achievements": achievements,
     }
 
 
