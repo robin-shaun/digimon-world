@@ -88,6 +88,9 @@ class WorldScheduler:
         self._landmarks = landmarks if landmarks is not None else get_landmark_system()
         # 节日系统: 每 tick 检查是否跨入节日日(无则用进程级单例)
         self._festivals = festivals if festivals is not None else get_festival_system()
+        # 治疗系统: 每 tick 让受伤数码兽自然回血(神殿附近加成)
+        from ..agents.healing import get_healing_system
+        self._healing = get_healing_system()
         self._tick_count = 0
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
         self._last_world_day: Optional[int] = None
@@ -152,6 +155,10 @@ class WorldScheduler:
             target = self._world.get(ev.get("agent", ""))
             if target is not None:
                 target.observe(ev)
+        # 4.6 治疗阶段: 受伤数码兽自然回血(进化神殿附近 +5,否则 +1)
+        heal_events = self._healing.process(self._world)
+        for ev in heal_events:
+            self._world.events.append(ev)
         # 5. 互动阶段: 相遇的数码兽触发对话
         await self._run_interactions(agents)
         # 6. 派系阶段: 从关系表重算自动派系(导演注入的派系保留)

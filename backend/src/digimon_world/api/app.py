@@ -31,6 +31,7 @@ from ..agents.achievements import AchievementSystem
 from ..agents.badges import Badge, BadgeSystem
 from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
+from ..agents.healing import get_healing_system
 from ..battle import BattleEngine, BattleResult, spar
 from ..llm.client import get_client
 from ..world import (
@@ -116,6 +117,12 @@ class SparRequest(BaseModel):
     defender: str = Field(..., description="陪练方名字")
 
 
+class HealRequest(BaseModel):
+    """使用治疗道具让数码兽立即回满 HP。"""
+
+    item_name: str = Field(default="治疗道具", description="治疗道具名(仅用于事件展示)")
+
+
 # ---- App ----
 app = FastAPI(
     title="DIGIMON WORLD API",
@@ -197,6 +204,29 @@ def move_digimon(name: str, req: MoveRequest) -> MoveResponse:
     if new_pos is None:
         raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found or region missing")
     return MoveResponse(name=name, position=Position(x=new_pos[0], y=new_pos[1]))
+
+
+@app.post("/api/digimon/{name}/heal")
+def heal_digimon(name: str, req: HealRequest) -> dict[str, Any]:
+    """使用治疗道具让数码兽立即回满 HP。
+
+    自然回血(每 tick +1,神殿附近 +5)由 scheduler 自动处理;
+    本接口是「手动嗑一颗治疗道具直接回满」的即时操作。
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+    event = get_healing_system().heal_with_item(agent, item_name=req.item_name)
+    # 让数码兽记住这次治疗(接入自身记忆流)
+    agent.observe(event)
+    world.events.append(event)
+    return {
+        "name": name,
+        "hp": agent.stats.hp,
+        "max_hp": agent.stats.max_hp,
+        "event": event,
+    }
 
 
 @app.get("/api/world")

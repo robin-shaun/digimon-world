@@ -17,6 +17,11 @@ from .evolution import (
     next_stage,
 )
 from .badges import Badge, BadgeSystem
+from .healing import (
+    HealingSystem,
+    get_healing_system,
+    reset_healing_system,
+)
 from .planner import Planner
 from .reflector import Reflection, Reflector
 
@@ -35,4 +40,7 @@ __all__ = [
     "EVOLUTION_CHAIN",
     "is_final_stage",
     "next_stage",
+    "HealingSystem",
+    "get_healing_system",
+    "reset_healing_system",
 ]
