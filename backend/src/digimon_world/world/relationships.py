@@ -123,6 +123,10 @@ class RelationshipTracker:
         # 输的一方对赢的一方生出敬畏,回一点
         self.update(winner, loser, BATTLE_AWE_DELTA)
 
+    def reset(self) -> None:
+        """抹平所有关系,回到全员中立(黑暗塔波动等灾难调用)。"""
+        self._scores.clear()
+
     def all_pairs(self) -> list[dict[str, Any]]:
         """导出所有关系对: [{a, b, score}, ...],按 (a, b) 排序(确定性)。"""
         return [

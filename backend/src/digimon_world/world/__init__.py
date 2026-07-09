@@ -13,6 +13,12 @@
 """
 from . import persistence
 from .clock import WorldClock
+from .disasters import (
+    Disaster,
+    DisasterSystem,
+    get_disaster_system,
+    reset_disaster_system,
+)
 from .economy import (
     EconomySystem,
     get_economy_system,
