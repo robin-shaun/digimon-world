@@ -147,6 +147,9 @@ h1 {
 #world-map {
     display: block;
     margin: 0 auto;
+    /* 画布内部分辨率固定 960x600, 显示尺寸随容器自适应缩放 (保持宽高比) */
+    width: 100%;
+    height: auto;
     border: 2px solid var(--border);
     border-radius: 8px;
     background: var(--canvas-bg);
@@ -179,7 +182,8 @@ footer {
 /* ---- Phase 1 追加: 侧栏 + canvas 容器 ---- */
 .canvas-wrap {
     position: relative;
-    width: 960px;
+    width: 100%;
+    max-width: 960px;
     margin: 0 auto;
 }
 

@@ -13,6 +13,11 @@
 """
 from . import persistence
 from .clock import WorldClock
+from .economy import (
+    EconomySystem,
+    get_economy_system,
+    reset_economy_system,
+)
 from .events import StoryDirector, StoryEvent, get_director, reset_director
 from .factions import Faction, FactionRegistry, get_registry, reset_registry
 from .festivals import (
@@ -67,6 +72,7 @@ __all__ = [
     "DEFAULT_REGIONS",
     "DEFAULT_TICK_SECONDS",
     "DEFAULT_LANDMARKS",
+    "EconomySystem",
     "FILE_ISLAND",
     "INFINITY_MOUNTAIN",
     "PRIME_WORLD_ID",
@@ -91,6 +97,7 @@ __all__ = [
     "WorldState",
     "persistence",
     "get_director",
+    "get_economy_system",
     "get_festival_system",
     "get_landmark_system",
     "get_multiverse",
