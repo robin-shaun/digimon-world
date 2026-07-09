@@ -36,6 +36,7 @@ from ..world import (
     WorldScheduler,
     WorldState,
     get_director,
+    get_landmark_system,
     get_multiverse,
     get_registry,
     get_tracker,
@@ -461,6 +462,13 @@ def get_digimon_badges(name: str) -> dict[str, Any]:
         "count": len(badges),
         "badges": badges,
     }
+
+
+# ---- 地标 API ----
+@app.get("/api/landmarks")
+def get_landmarks() -> dict[str, Any]:
+    """各地标状态(坐标 + 效果 + 当前附近的数码兽)。"""
+    return get_landmark_system().status(get_world())
 
 
 # ---- 日记 API ----

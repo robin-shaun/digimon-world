@@ -15,6 +15,14 @@ from . import persistence
 from .clock import WorldClock
 from .events import StoryDirector, StoryEvent, get_director, reset_director
 from .factions import Faction, FactionRegistry, get_registry, reset_registry
+from .landmarks import (
+    DEFAULT_LANDMARKS,
+    Landmark,
+    LandmarkEffect,
+    LandmarkSystem,
+    get_landmark_system,
+    reset_landmark_system,
+)
 from .multiverse import (
     PRIME_WORLD_ID,
     MultiverseManager,
@@ -50,11 +58,15 @@ __all__ = [
     "DAYS_PER_SEASON",
     "DEFAULT_REGIONS",
     "DEFAULT_TICK_SECONDS",
+    "DEFAULT_LANDMARKS",
     "FILE_ISLAND",
     "INFINITY_MOUNTAIN",
     "PRIME_WORLD_ID",
     "Faction",
     "FactionRegistry",
+    "Landmark",
+    "LandmarkEffect",
+    "LandmarkSystem",
     "MultiverseManager",
     "Region",
     "RelationshipTracker",
@@ -69,6 +81,7 @@ __all__ = [
     "WorldState",
     "persistence",
     "get_director",
+    "get_landmark_system",
     "get_multiverse",
     "get_registry",
     "get_season_system",
@@ -76,6 +89,7 @@ __all__ = [
     "get_weather_system",
     "get_world",
     "reset_director",
+    "reset_landmark_system",
     "reset_multiverse",
     "reset_registry",
     "reset_season_system",

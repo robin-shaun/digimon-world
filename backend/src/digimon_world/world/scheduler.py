@@ -30,6 +30,7 @@ from .clock import WorldClock
 from .events import CHECK_INTERVAL_TICKS, StoryDirector
 from .factions import FactionRegistry
 from .interactions import detect_proximity
+from .landmarks import LandmarkSystem, get_landmark_system
 from .relationships import RelationshipTracker, get_tracker
 from .world_state import WorldState
 
@@ -63,6 +64,7 @@ class WorldScheduler:
         relationships: Optional[RelationshipTracker] = None,
         factions: Optional[FactionRegistry] = None,
         story_director: Optional[StoryDirector] = None,
+        landmarks: Optional[LandmarkSystem] = None,
         auto_save: bool = False,
         save_db_path: Optional[str] = None,
     ) -> None:
@@ -80,6 +82,8 @@ class WorldScheduler:
         self._factions = factions if factions is not None else FactionRegistry()
         # 剧情导演: 每 CHECK_INTERVAL_TICKS 扫描一次触发条件(无则新建独立实例)
         self._story_director = story_director if story_director is not None else StoryDirector()
+        # 地标系统: 每 tick 检测数码兽是否靠近地标并施加效果(无则用进程级单例)
+        self._landmarks = landmarks if landmarks is not None else get_landmark_system()
         self._tick_count = 0
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
         self._last_world_day: Optional[int] = None
@@ -98,6 +102,11 @@ class WorldScheduler:
     def story_director(self) -> StoryDirector:
         """剧情导演(前端 / Director 视角读取)。"""
         return self._story_director
+
+    @property
+    def landmarks(self) -> LandmarkSystem:
+        """地标系统(前端 / Director 视角读取)。"""
+        return self._landmarks
 
     async def tick_once(self, real_seconds: float = DEFAULT_TICK_SECONDS) -> list[dict[str, Any]]:
         """执行一次 tick: 推进时钟 + 所有 agent 并发 step。
@@ -126,6 +135,14 @@ class WorldScheduler:
                         await self._on_event(ev, self._world.get(ev.get("agent", "")) or agents[0])
                     except Exception as e:  # 回调失败不影响主循环
                         logger.warning("on_event callback failed: %s", e)
+        # 4.5 地标阶段: 移动后检测是否靠近地标并施加效果
+        landmark_effects = self._landmarks.process(self._world)
+        for ev in landmark_effects:
+            self._world.events.append(ev)
+            # 让当事数码兽记住这次地标经历(中等重要性)
+            target = self._world.get(ev.get("agent", ""))
+            if target is not None:
+                target.observe(ev)
         # 5. 互动阶段: 相遇的数码兽触发对话
         await self._run_interactions(agents)
         # 6. 派系阶段: 从关系表重算自动派系(导演注入的派系保留)
