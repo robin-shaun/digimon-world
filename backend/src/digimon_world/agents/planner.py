@@ -74,6 +74,12 @@ class Planner:
                 f"(强烈度 {agent.desire_strength:.1f})\n"
             )
 
+        # 个性特征: 影响行动倾向
+        personality_line = ""
+        personality_summary = agent.get_personality_summary()
+        if personality_summary:
+            personality_line = personality_summary + "\n"
+
         # 构造 prompt
         prompt = (
             f"你是{agent.name}({agent.species}), "
@@ -82,10 +88,11 @@ class Planner:
             f"EP={agent.stats.ep}/50, "
             f"心情={agent.mood}\n"
             f"{desire_line}"
+            f"{personality_line}"
             f"最近记忆:\n{memories_text}\n"
             f"最近的反思:\n{reflections_text}\n"
             f"当前世界: {world_state_snapshot}\n"
-            f"请生成你的下一段计划 (1-2 句, 中文, 具体行动)."
+            f"请根据你的性格特点生成下一段计划 (1-2 句, 中文, 具体行动)."
         )
 
         try:

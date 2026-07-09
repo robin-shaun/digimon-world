@@ -15,7 +15,9 @@ DigimonAgent - 数码兽智能体核心循环
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import random
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -40,6 +42,41 @@ class EvolutionStage(str, Enum):
     ROOKIE = "rookie"          # 成熟期
     CHAMPION = "champion"      # 完全体
     MEGA = "mega"              # 究极体
+
+
+class PersonalityTrait(str, Enum):
+    """数码兽的个性特征。"""
+
+    BRAVE = "brave"            # 勇敢 - 倾向战斗/冒险
+    TIMID = "timid"            # 胆小 - 倾向回避危险
+    CURIOUS = "curious"        # 好奇 - 倾向探索新事物
+    LAZY = "lazy"              # 懒惰 - 倾向休息/原地不动
+    AGGRESSIVE = "aggressive"  # 好斗 - 倾向主动攻击
+    GENTLE = "gentle"          # 温和 - 倾向社交/友善互动
+
+
+# 个性特征对计划的行为倾向描述(注入 planner prompt)
+PERSONALITY_DESCRIPTIONS: dict[str, str] = {
+    "brave": "你勇敢无畏,遇到危险会主动迎战,喜欢挑战强敌",
+    "timid": "你比较胆小,倾向于回避危险,寻找安全的地方",
+    "curious": "你充满好奇心,喜欢探索未知区域,调查新事物",
+    "lazy": "你比较懒散,能休息就休息,不喜欢长距离移动",
+    "aggressive": "你好斗好胜,看到其他数码兽就想较量一番",
+    "gentle": "你性格温和,喜欢和其他数码兽交朋友,避免冲突",
+}
+
+
+def _generate_personality_traits() -> dict[str, int]:
+    """随机生成个性特征: 选 3 个突出特征(7-10),其余为低值(0-3)。"""
+    all_traits = [t.value for t in PersonalityTrait]
+    prominent = random.sample(all_traits, 3)
+    traits: dict[str, int] = {}
+    for t in all_traits:
+        if t in prominent:
+            traits[t] = random.randint(7, 10)
+        else:
+            traits[t] = random.randint(0, 3)
+    return traits
 
 
 class DigimonAttribute(str, Enum):
@@ -105,6 +142,24 @@ class DigimonAgent:
     last_interaction_at: Optional[datetime] = None
     # Phase 3: 战斗胜利累计(用于触发进化)。由 battle API 在赢家身上 +1。
     battle_victories: int = 0
+    # 个性特征: {trait_name: 0-10},初始化时随机 3 个突出特征
+    personality_traits: dict[str, int] = field(default_factory=_generate_personality_traits)
+
+    def get_personality_summary(self) -> str:
+        """返回突出个性特征的描述文本(用于注入 planner prompt)。"""
+        # 取值 >= 7 的特征为"突出"
+        prominent = [
+            (trait, val) for trait, val in self.personality_traits.items()
+            if val >= 7
+        ]
+        prominent.sort(key=lambda x: x[1], reverse=True)
+        if not prominent:
+            return ""
+        lines = []
+        for trait, val in prominent:
+            desc = PERSONALITY_DESCRIPTIONS.get(trait, "")
+            lines.append(f"- {trait}({val}/10): {desc}")
+        return "你的性格:\n" + "\n".join(lines)
 
     def observe(self, event: dict[str, Any]) -> None:
         """观察一个世界事件,写入记忆流。
@@ -487,4 +542,5 @@ class DigimonAgent:
             "memory": [m.to_dict() for m in self.memory.entries],
             "current_plan": self.current_plan,
             "battle_victories": self.battle_victories,
+            "personality_traits": self.personality_traits,
         }
