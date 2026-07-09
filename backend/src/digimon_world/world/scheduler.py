@@ -81,6 +81,8 @@ class WorldScheduler:
         # 剧情导演: 每 CHECK_INTERVAL_TICKS 扫描一次触发条件(无则新建独立实例)
         self._story_director = story_director if story_director is not None else StoryDirector()
         self._tick_count = 0
+        # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
+        self._last_world_day: Optional[int] = None
 
     @property
     def tick_count(self) -> int:
@@ -105,7 +107,9 @@ class WorldScheduler:
         """
         # 1. 时钟推进(同步)
         self._clock.tick(real_seconds=real_seconds)
-        # 2. 并发驱动所有 agent
+        # 2. 日记阶段: 检测世界日期是否跨天,跨天则让所有 agent 写日记
+        await self._maybe_write_diaries()
+        # 3. 并发驱动所有 agent
         agents = self._world.all()
         if not agents:
             return []
@@ -113,7 +117,7 @@ class WorldScheduler:
             *[self._step_agent(a) for a in agents],
             return_exceptions=False,
         )
-        # 3. 写回世界事件日志 + 触发回调
+        # 4. 写回世界事件日志 + 触发回调
         for ev in events:
             if isinstance(ev, dict):
                 self._world.events.append(ev)
@@ -122,15 +126,15 @@ class WorldScheduler:
                         await self._on_event(ev, self._world.get(ev.get("agent", "")) or agents[0])
                     except Exception as e:  # 回调失败不影响主循环
                         logger.warning("on_event callback failed: %s", e)
-        # 4. 互动阶段: 相遇的数码兽触发对话
+        # 5. 互动阶段: 相遇的数码兽触发对话
         await self._run_interactions(agents)
-        # 5. 派系阶段: 从关系表重算自动派系(导演注入的派系保留)
+        # 6. 派系阶段: 从关系表重算自动派系(导演注入的派系保留)
         self._factions.form_factions(self._relationships)
-        # 6. 剧情阶段: 每 CHECK_INTERVAL_TICKS 扫描一次全局剧情触发条件
+        # 7. 剧情阶段: 每 CHECK_INTERVAL_TICKS 扫描一次全局剧情触发条件
         if self._tick_count % CHECK_INTERVAL_TICKS == 0:
             self._story_director.check_trigger(self._world, self._relationships)
         self._tick_count += 1
-        # 7. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
+        # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
             await self._auto_save_world()
         return events
@@ -147,6 +151,34 @@ class WorldScheduler:
                 await persistence.save(self._world, self._relationships)
         except Exception as e:
             logger.warning("auto-save failed at tick %d: %s", self._tick_count, e)
+
+    async def _maybe_write_diaries(self) -> None:
+        """检测世界日期跨天,触发所有 agent 写日记。
+
+        逻辑: 比较当前世界时间的 day-of-year 与上一次记录的。
+        首次 tick 只记录不触发(避免启动时立刻写空日记)。
+        """
+        now = self._clock.now
+        if now is None:
+            return
+        current_day = now.toordinal()
+
+        if self._last_world_day is None:
+            # 首次 tick: 只记录,不写日记
+            self._last_world_day = current_day
+            return
+
+        if current_day > self._last_world_day:
+            # 跨天了: 对昨天写日记
+            from datetime import timedelta
+            yesterday = now - timedelta(days=1)
+            agents = self._world.all()
+            for agent in agents:
+                try:
+                    agent.write_diary(yesterday)
+                except Exception as e:
+                    logger.warning("write_diary failed for %s: %s", agent.name, e)
+            self._last_world_day = current_day
 
     async def _run_interactions(self, agents: list[DigimonAgent]) -> None:
         """检测相遇的数码兽并触发对话,写入双方记忆。

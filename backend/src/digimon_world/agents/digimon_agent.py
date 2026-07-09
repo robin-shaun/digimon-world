@@ -16,8 +16,9 @@ DigimonAgent - 数码兽智能体核心循环
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, ClassVar, Optional, TYPE_CHECKING
 
@@ -377,6 +378,101 @@ class DigimonAgent:
         # 把事件写回记忆流(importance 由启发式决定)
         self.observe(event)
         return event
+
+    # ---- 日记系统 ----
+
+    # 心情关键词映射: 事件类型 → 正面/负面/中性
+    _MOOD_POSITIVE: ClassVar[set[str]] = {
+        "battle_victory", "first_meet", "gift_received", "evolution",
+    }
+    _MOOD_NEGATIVE: ClassVar[set[str]] = {
+        "near_death", "threat", "step_error",
+    }
+
+    def write_diary(self, world_date: datetime) -> None:
+        """浓缩当天记忆为一条日记,存入记忆流(memory_type='diary')。
+
+        由 WorldScheduler 在世界时间跨越午夜时调用。
+
+        日记格式: '今天经历了 X 次战斗, 遇见 Y 个朋友, 心情 Z'
+        只统计 world_date 当天(00:00 ~ 23:59:59)的 observation/reflection 记忆。
+        """
+        day_start = world_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+
+        # 筛选当天非日记类型的记忆
+        today_memories = [
+            m for m in self.memory.entries
+            if m.memory_type != "diary"
+            and day_start <= m.timestamp < day_end
+        ]
+
+        if not today_memories:
+            return  # 无事可记,不写空日记
+
+        # 统计
+        type_counts: Counter[str] = Counter()
+        friends_met: set[str] = set()
+        positive = 0
+        negative = 0
+
+        for m in today_memories:
+            # 从 description 推断事件类型(记忆的 description 通常包含类型关键词)
+            desc = m.description
+            # 战斗
+            if "战斗" in desc or "battle" in desc.lower():
+                type_counts["battle"] += 1
+            # 遇见朋友
+            if "遇到" in desc or "meet" in desc.lower():
+                type_counts["meet"] += 1
+                # 尝试提取名字: "遇到XXX" 模式
+                for token in desc.replace(",", " ").replace(",", " ").split():
+                    if token.startswith("遇到"):
+                        friend = token[2:]
+                        if friend:
+                            friends_met.add(friend)
+            # 心情评估: 高重要性正面 vs 负面
+            if m.importance >= 7:
+                positive += 1
+            elif m.importance <= 3:
+                negative += 1
+
+        # 心情判定
+        if positive > negative:
+            mood_word = "开心"
+        elif negative > positive:
+            mood_word = "低落"
+        else:
+            mood_word = "平静"
+
+        # 组装日记
+        battle_count = type_counts.get("battle", 0)
+        meet_count = type_counts.get("meet", 0) or len(friends_met)
+        date_str = day_start.strftime("%Y-%m-%d")
+
+        diary_text = (
+            f"[{date_str}] "
+            f"今天经历了 {battle_count} 次战斗, "
+            f"遇见 {meet_count} 个朋友, "
+            f"心情{mood_word}"
+        )
+
+        # 写入记忆流
+        self.memory.add(
+            event=diary_text,
+            importance=6,
+            memory_type="diary",
+        )
+
+    def get_diary(self, limit: int = 7) -> list[dict[str, Any]]:
+        """获取最近 N 条日记(memory_type='diary'),最新在前。"""
+        diaries = [
+            m for m in self.memory.entries
+            if m.memory_type == "diary"
+        ]
+        # 按时间倒序,取最近 limit 条
+        diaries.sort(key=lambda m: m.timestamp, reverse=True)
+        return [m.to_dict() for m in diaries[:limit]]
 
     def to_dict(self) -> dict[str, Any]:
         """序列化(用于持久化到 SQLite)。"""

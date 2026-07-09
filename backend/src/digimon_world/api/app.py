@@ -463,6 +463,22 @@ def get_digimon_badges(name: str) -> dict[str, Any]:
     }
 
 
+# ---- 日记 API ----
+@app.get("/api/digimon/{name}/diary")
+def get_digimon_diary(name: str) -> dict[str, Any]:
+    """某只数码兽最近 7 天日记(memory_type='diary',最新在前)。"""
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+    entries = agent.get_diary(limit=7)
+    return {
+        "name": name,
+        "count": len(entries),
+        "entries": entries,
+    }
+
+
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
 class ConnectionManager:
     def __init__(self) -> None:
