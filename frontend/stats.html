@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 数据仪表盘 - DIGIMON WORLD</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // 早于渲染设置主题, 避免闪烁 (默认 dark), 与 index.html 一致
+        (function () {
+            var saved = localStorage.getItem('theme');
+            if (saved === 'light' || saved === 'dark') {
+                document.documentElement.setAttribute('data-theme', saved);
+            }
+        })();
+    </script>
+    <style>
+        /* ---- 仪表盘专属样式 (复用 style.css 主题变量) ---- */
+        #app { max-width: 1024px; }
+
+        .meta-bar {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            color: var(--text-secondary);
+            font-size: 13px;
+            letter-spacing: 1px;
+            margin-top: 16px;
+            font-family: "SF Mono", "Consolas", monospace;
+        }
+        .meta-bar .dot { color: var(--positive); }
+        .meta-bar .dot.off { color: var(--negative); }
+
+        /* 顶部大数字卡片 */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .stat-card {
+            padding: 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .stat-card .label {
+            color: var(--text-secondary);
+            font-size: 13px;
+            letter-spacing: 1px;
+        }
+
+        .stat-card .value {
+            font-size: 40px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.1;
+        }
+
+        .stat-card .sub {
+            color: var(--text-muted);
+            font-size: 12px;
+            font-family: "SF Mono", "Consolas", monospace;
+        }
+
+        /* 明细区块 */
+        .panels {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .panel {
+            padding: 18px 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .panel h2 {
+            font-size: 15px;
+            color: var(--accent-cyan);
+            letter-spacing: 2px;
+            margin-bottom: 14px;
+            border-left: 3px solid var(--accent-purple);
+            padding-left: 10px;
+        }
+
+        .kv-list {
+            list-style: none;
+            font-size: 13px;
+            font-family: "SF Mono", "Consolas", monospace;
+        }
+        .kv-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+        }
+        .kv-list li:last-child { border-bottom: none; }
+        .kv-list .k { color: var(--text-secondary); }
+        .kv-list .v {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        .kv-list .v.pos { color: var(--positive); }
+        .kv-list .v.neg { color: var(--negative); }
+
+        /* 迷你水平条 (阶段分布 / 关系分布) */
+        .distbar {
+            display: flex;
+            height: 14px;
+            border-radius: 7px;
+            overflow: hidden;
+            background: var(--input-bg);
+            margin-bottom: 12px;
+        }
+        .distbar span { height: 100%; }
+
+        .legend {
+            list-style: none;
+            font-size: 12px;
+            font-family: "SF Mono", "Consolas", monospace;
+        }
+        .legend li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+        }
+        .legend .swatch {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        .legend .k { flex: 1; color: var(--text-secondary); }
+        .legend .v {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .empty { color: var(--text-muted); font-size: 13px; padding: 8px 0; }
+    </style>
+</head>
+<body>
+    <button id="theme-toggle" class="theme-toggle" type="button"
+            aria-label="切换明暗主题" title="切换明暗主题">🌙</button>
+    <div id="app">
+        <header>
+            <h1>📊 数据仪表盘</h1>
+            <p class="subtitle">DIGIMON WORLD · 实时世界指标</p>
+            <nav class="main-nav" aria-label="主导航">
+                <a href="index.html" class="nav-link">主页</a>
+                <a href="battle.html" class="nav-link">战斗模拟</a>
+                <a href="evolution.html" class="nav-link">进化图鉴</a>
+                <a href="log.html" class="nav-link">世界日志</a>
+                <a href="stats.html" class="nav-link active">数据仪表盘</a>
+            </nav>
+            <div class="meta-bar">
+                <span id="conn"><span class="dot off">●</span> 连接中…</span>
+                <span id="world-time">世界时间: --</span>
+                <span id="updated">更新: --</span>
+            </div>
+        </header>
+
+        <main>
+            <section class="stat-grid">
+                <div class="stat-card">
+                    <span class="label">总 Tick</span>
+                    <span class="value" id="s-tick">--</span>
+                    <span class="sub" id="s-tick-sub">调度器状态: --</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">累计战斗</span>
+                    <span class="value" id="s-battle">--</span>
+                    <span class="sub" id="s-battle-sub">最近记录 --</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">进化次数</span>
+                    <span class="value" id="s-evo">--</span>
+                    <span class="sub" id="s-evo-sub">事件流统计</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">关系对</span>
+                    <span class="value" id="s-rel">--</span>
+                    <span class="sub" id="s-rel-sub">友好 -- · 敌对 --</span>
+                </div>
+            </section>
+
+            <section class="panels">
+                <div class="panel">
+                    <h2>数码兽阶段分布</h2>
+                    <div class="distbar" id="stage-bar"></div>
+                    <ul class="legend" id="stage-legend">
+                        <li class="empty">加载中…</li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h2>关系分布</h2>
+                    <div class="distbar" id="rel-bar"></div>
+                    <ul class="legend" id="rel-legend">
+                        <li class="empty">加载中…</li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h2>战斗胜场 Top 5</h2>
+                    <ul class="kv-list" id="lb-battle">
+                        <li class="empty">加载中…</li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h2>最近事件类型</h2>
+                    <ul class="kv-list" id="evt-types">
+                        <li class="empty">加载中…</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>每 10 秒自动刷新 · 指标由多个接口聚合 · DIGIMON WORLD Phase 5</p>
+        </footer>
+    </div>
+
+    <script>
+        // 主题切换 (与 index.html 一致)
+        (function () {
+            var root = document.documentElement;
+            var btn = document.getElementById('theme-toggle');
+            function currentTheme() {
+                return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            }
+            function syncIcon() {
+                btn.textContent = currentTheme() === 'light' ? '🌙' : '☀️';
+            }
+            syncIcon();
+            btn.addEventListener('click', function () {
+                var next = currentTheme() === 'light' ? 'dark' : 'light';
+                root.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                syncIcon();
+            });
+        })();
+    </script>
+
+    <script>
+        // API_BASE: 与 log.html 一致 —— Cloudflare 部署时用注入的 window.API_BASE, 本地默认 localhost。
+        const API_BASE = (() => {
+            if (typeof window.API_BASE === 'string') return window.API_BASE;
+            if (window.location.origin.includes('workers.dev')) return '';
+            return 'http://localhost:8000';
+        })();
+
+        const REFRESH_MS = 10000;
+
+        const el = {
+            conn: document.getElementById('conn'),
+            worldTime: document.getElementById('world-time'),
+            updated: document.getElementById('updated'),
+            tick: document.getElementById('s-tick'),
+            tickSub: document.getElementById('s-tick-sub'),
+            battle: document.getElementById('s-battle'),
+            battleSub: document.getElementById('s-battle-sub'),
+            evo: document.getElementById('s-evo'),
+            evoSub: document.getElementById('s-evo-sub'),
+            rel: document.getElementById('s-rel'),
+            relSub: document.getElementById('s-rel-sub'),
+            stageBar: document.getElementById('stage-bar'),
+            stageLegend: document.getElementById('stage-legend'),
+            relBar: document.getElementById('rel-bar'),
+            relLegend: document.getElementById('rel-legend'),
+            lbBattle: document.getElementById('lb-battle'),
+            evtTypes: document.getElementById('evt-types'),
+        };
+
+        function esc(s) {
+            return String(s).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[c]));
+        }
+
+        // 阶段中文名 (与后端 EvolutionStage.value 对齐, 兜底原值)
+        const STAGE_LABELS = {
+            baby_i: '幼年期I', baby_ii: '幼年期II', rookie: '成熟期',
+            champion: '完全体', mega: '究极体',
+        };
+        // 阶段配色 (循环取用)
+        const STAGE_COLORS = ['#4ae8c4', '#00d4ff', '#7c3aed', '#b68aff', '#ffd700', '#ff8fa3'];
+
+        function fmtInt(n) {
+            return (typeof n === 'number' && isFinite(n)) ? n.toLocaleString('en-US') : '--';
+        }
+
+        function renderStages(agents) {
+            const counts = {};
+            for (const a of agents) {
+                const s = a.stage || 'unknown';
+                counts[s] = (counts[s] || 0) + 1;
+            }
+            const entries = Object.entries(counts).sort((x, y) => y[1] - x[1]);
+            const total = agents.length || 1;
+
+            if (!entries.length) {
+                el.stageBar.innerHTML = '';
+                el.stageLegend.innerHTML = '<li class="empty">暂无数码兽</li>';
+                return;
+            }
+
+            el.stageBar.innerHTML = entries.map(([s, c], i) => {
+                const color = STAGE_COLORS[i % STAGE_COLORS.length];
+                const pct = (c / total * 100).toFixed(1);
+                return `<span style="width:${pct}%;background:${color}" title="${esc(s)} ${c}"></span>`;
+            }).join('');
+
+            el.stageLegend.innerHTML = entries.map(([s, c], i) => {
+                const color = STAGE_COLORS[i % STAGE_COLORS.length];
+                const label = STAGE_LABELS[s] || s;
+                return `<li>
+                    <span class="swatch" style="background:${color}"></span>
+                    <span class="k">${esc(label)}</span>
+                    <span class="v">${c}</span>
+                </li>`;
+            }).join('');
+        }
+
+        function renderRelationships(pairs) {
+            let friendly = 0, hostile = 0, neutral = 0;
+            for (const p of pairs) {
+                const s = p.score || 0;
+                if (s > 0) friendly++;
+                else if (s < 0) hostile++;
+                else neutral++;
+            }
+            const total = pairs.length;
+
+            el.rel.textContent = fmtInt(total);
+            el.relSub.textContent = `友好 ${friendly} · 敌对 ${hostile}`;
+
+            if (!total) {
+                el.relBar.innerHTML = '';
+                el.relLegend.innerHTML = '<li class="empty">暂无关系数据</li>';
+                return;
+            }
+
+            const segs = [
+                { k: '友好', c: friendly, color: 'var(--positive)' },
+                { k: '中立', c: neutral, color: 'var(--text-muted)' },
+                { k: '敌对', c: hostile, color: 'var(--negative)' },
+            ];
+            el.relBar.innerHTML = segs.map(seg => {
+                const pct = (seg.c / total * 100).toFixed(1);
+                return `<span style="width:${pct}%;background:${seg.color}" title="${seg.k} ${seg.c}"></span>`;
+            }).join('');
+            el.relLegend.innerHTML = segs.map(seg => `<li>
+                <span class="swatch" style="background:${seg.color}"></span>
+                <span class="k">${seg.k}</span>
+                <span class="v">${seg.c}</span>
+            </li>`).join('');
+        }
+
+        function renderBattleBoard(rows) {
+            if (!rows || !rows.length) {
+                el.lbBattle.innerHTML = '<li class="empty">暂无数据</li>';
+                return;
+            }
+            el.lbBattle.innerHTML = rows.slice(0, 5).map((r, i) => `<li>
+                <span class="k">${i + 1}. ${esc(r.name)}</span>
+                <span class="v pos">${fmtInt(r.victories)}</span>
+            </li>`).join('');
+        }
+
+        function renderEventTypes(events) {
+            if (!events || !events.length) {
+                el.evtTypes.innerHTML = '<li class="empty">暂无事件</li>';
+                return;
+            }
+            const counts = {};
+            for (const ev of events) {
+                const t = ev.type || 'event';
+                counts[t] = (counts[t] || 0) + 1;
+            }
+            const entries = Object.entries(counts).sort((x, y) => y[1] - x[1]);
+            el.evtTypes.innerHTML = entries.map(([t, c]) => `<li>
+                <span class="k">${esc(t)}</span>
+                <span class="v">${c}</span>
+            </li>`).join('');
+        }
+
+        function setConn(ok, msg) {
+            el.conn.innerHTML = ok
+                ? '<span class="dot">●</span> 已连接'
+                : `<span class="dot off">●</span> ${esc(msg || '后端不可达')}`;
+        }
+
+        async function fetchJSON(path) {
+            const res = await fetch(`${API_BASE}${path}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status} @ ${path}`);
+            return res.json();
+        }
+
+        async function refresh() {
+            try {
+                // 并行取多个接口; 用 allSettled 让个别接口挂掉不至于整页失败。
+                const [status, state, battles, rels, world, board] = await Promise.allSettled([
+                    fetchJSON('/api/scheduler/status'),
+                    fetchJSON('/api/director/state'),
+                    fetchJSON('/api/battle/recent?limit=20'),
+                    fetchJSON('/api/relationships'),
+                    fetchJSON('/api/world'),
+                    fetchJSON('/api/leaderboard?top=5'),
+                ]);
+
+                // 至少调度器/导演状态之一要成功, 否则视为后端不可达
+                if (status.status === 'rejected' && state.status === 'rejected') {
+                    throw new Error(status.reason?.message || '后端不可达');
+                }
+
+                // 总 tick
+                if (status.status === 'fulfilled') {
+                    const st = status.value;
+                    el.tick.textContent = fmtInt(st.tick_count);
+                    el.tickSub.textContent = `调度器: ${st.running ? '运行中' : '已停止'}`;
+                    if (st.current_world_time) {
+                        el.worldTime.textContent = `世界时间: ${st.current_world_time}`;
+                    }
+                }
+
+                // 累计战斗 (以内存战斗历史 count 为准)
+                if (battles.status === 'fulfilled') {
+                    const b = battles.value;
+                    el.battle.textContent = fmtInt(b.count);
+                    el.battleSub.textContent = `最近记录 ${b.battles ? b.battles.length : 0} 场`;
+                }
+
+                // 世界快照: 阶段分布 + 世界时间兜底
+                if (world.status === 'fulfilled') {
+                    const w = world.value;
+                    renderStages(w.agents || []);
+                    if (!el.worldTime.textContent.includes(':') && w.world_time) {
+                        el.worldTime.textContent = `世界时间: ${w.world_time}`;
+                    }
+                }
+
+                // 导演状态: 最近事件 → 进化次数 + 事件类型分布
+                if (state.status === 'fulfilled') {
+                    const s = state.value;
+                    const events = s.recent_events || [];
+                    const evoCount = events.filter(e => e.type === 'evolution').length;
+                    el.evo.textContent = fmtInt(evoCount);
+                    el.evoSub.textContent = `最近 ${events.length} 条事件中`;
+                    renderEventTypes(events);
+                }
+
+                // 关系分布
+                if (rels.status === 'fulfilled') {
+                    renderRelationships(rels.value.pairs || []);
+                }
+
+                // 战斗胜场榜
+                if (board.status === 'fulfilled') {
+                    renderBattleBoard(board.value.battle || []);
+                }
+
+                const now = new Date();
+                const p = n => String(n).padStart(2, '0');
+                el.updated.textContent = `更新: ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+                setConn(true);
+            } catch (err) {
+                setConn(false, err.message);
+            }
+        }
+
+        refresh();
+        setInterval(refresh, REFRESH_MS);
+    </script>
+</body>
+</html>
