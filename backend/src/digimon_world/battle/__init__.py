@@ -14,6 +14,7 @@ Phase 3 后半:战斗 AI 换成 LLM 决策。
 
 from .damage import DamageCalculator, is_strong_against
 from .engine import BattleEngine
+from .sparring import SparParticipant, SparResult, spar
 from .types import (
     ActionType,
     BattleAction,
@@ -29,4 +30,7 @@ __all__ = [
     "DamageCalculator",
     "is_strong_against",
     "BattleEngine",
+    "spar",
+    "SparResult",
+    "SparParticipant",
 ]

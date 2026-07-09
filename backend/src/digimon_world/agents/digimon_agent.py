@@ -100,6 +100,8 @@ class DigimonStats:
     defense: int = 15
     speed: int = 15
     bond: int = 0          # 羁绊值(0-100),与训练师/被选召孩子
+    happiness: int = 50    # 心情值(0-100),友好切磋/互动会提升
+    experience: int = 0    # 训练经验累计(切磋/训练积累,不封顶)
     # TODO(Phase 3): 战斗技能列表
     skills: list[str] = field(default_factory=list)
 

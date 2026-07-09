@@ -30,7 +30,7 @@ from .pokedex import router as pokedex_router
 from ..agents.badges import Badge, BadgeSystem
 from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
-from ..battle import BattleEngine, BattleResult
+from ..battle import BattleEngine, BattleResult, spar
 from ..llm.client import get_client
 from ..world import (
     WorldClock,
@@ -104,6 +104,13 @@ class BattleStartResponse(BaseModel):
     result: dict[str, Any]
     evolution: Optional[dict[str, Any]] = None
     event_id: int
+
+
+class SparRequest(BaseModel):
+    """发起一场 A vs B 友好切磋。"""
+
+    attacker: str = Field(..., description="发起方名字")
+    defender: str = Field(..., description="陪练方名字")
 
 
 # ---- App ----
@@ -431,6 +438,28 @@ def get_battle_victories(name: str) -> dict[str, Any]:
     if agent is None:
         raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
     return {"name": name, "battle_victories": agent.battle_victories}
+
+
+@app.post("/api/battle/spar")
+def start_spar(req: SparRequest) -> dict[str, Any]:
+    """发起一场友好切磋(不计胜负、不改社交关系)。
+
+    与 /api/battle/start 的区别:
+    - 无胜者、不加 battle_victories、不触发进化、不改社交关系
+    - 双方各自 happiness +5、experience +2
+    """
+    world = get_world()
+    a = world.get(req.attacker)
+    b = world.get(req.defender)
+    if a is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{req.attacker}' not found")
+    if b is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{req.defender}' not found")
+    if a.name == b.name:
+        raise HTTPException(status_code=400, detail="Cannot spar with yourself")
+
+    result = spar(a, b)
+    return result.to_dict()
 
 
 # ---- Phase 4: 社交关系 API ----
