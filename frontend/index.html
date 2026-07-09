@@ -5,8 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🐉 DIGIMON WORLD - 星航开发中</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+        // 早于渲染设置主题, 避免闪烁 (默认 dark)
+        (function () {
+            var saved = localStorage.getItem('theme');
+            if (saved === 'light' || saved === 'dark') {
+                document.documentElement.setAttribute('data-theme', saved);
+            }
+        })();
+    </script>
 </head>
 <body>
+    <button id="theme-toggle" class="theme-toggle" type="button"
+            aria-label="切换明暗主题" title="切换明暗主题">🌙</button>
     <div id="app">
         <header>
             <h1>🐉 DIGIMON WORLD</h1>
@@ -116,6 +127,27 @@
         // 部署到 Cloudflare 时, 后端通过 Cloudflare Tunnel 暴露.
         // 修改下面的 URL 为你的 tunnel 域名 (运行 cloudflared tunnel --url http://127.0.0.1:8000 得到).
         window.API_BASE = 'https://stands-infrared-pottery-promoting.trycloudflare.com';
+    </script>
+    <script>
+        // 暗色/亮色主题切换, 偏好存 localStorage
+        (function () {
+            var root = document.documentElement;
+            var btn = document.getElementById('theme-toggle');
+            function currentTheme() {
+                return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            }
+            function syncIcon() {
+                // 显示切换后将进入的主题图标
+                btn.textContent = currentTheme() === 'light' ? '🌙' : '☀️';
+            }
+            syncIcon();
+            btn.addEventListener('click', function () {
+                var next = currentTheme() === 'light' ? 'dark' : 'light';
+                root.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                syncIcon();
+            });
+        })();
     </script>
     <script src="audio.js"></script>
     <script src="main.js"></script>
