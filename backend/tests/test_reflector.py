@@ -129,6 +129,31 @@ async def test_reflect_writes_to_memory() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reflection_includes_desire() -> None:
+    """反思返回值应带上 desire / desire_strength 字段。"""
+    fake = FakeLlmClient()
+    fake.set_reply(
+        LlmModel.HAIKU,
+        reply=(
+            '{"reflections": ["我一直在独自游荡"], '
+            '"desire": "想交朋友", "desire_strength": 0.8}'
+        ),
+    )
+
+    reflector = Reflector(llm_client=fake)
+    agent = _make_agent_with_memories(4)
+
+    result = await reflector.reflect(agent)
+
+    assert result is not None
+    assert result[0].desire == "想交朋友"
+    assert result[0].desire_strength == pytest.approx(0.8)
+
+
+# ---- test_reflect_bad_json_silent ----
+
+
+@pytest.mark.asyncio
 async def test_reflect_bad_json_silent() -> None:
     """LLM 返回非法 JSON 时静默返回 None。"""
     fake = FakeLlmClient()

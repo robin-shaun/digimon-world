@@ -92,6 +92,10 @@ class DigimonAgent:
     memory: MemoryStream = field(default_factory=MemoryStream)
     current_plan: Optional[str] = None
     mood: str = "calm"  # calm/excited/tired/scared/curious
+    # 隐性目标: 反思时由 LLM 浮现出的一句内心渴望(如"想变强"),
+    # 以及它的强烈度(0-1)。影响 plan_next() 的行动倾向。
+    latent_desire: str = ""
+    desire_strength: float = 0.0
     reflector: Optional["Reflector"] = field(default=None, repr=False)
     planner: Optional["Planner"] = field(default=None, repr=False)
     last_reflection_at: Optional[datetime] = None
@@ -139,6 +143,12 @@ class DigimonAgent:
         result = await self.reflector.reflect(self)
         if result:
             self.last_reflection_at = now
+            # 用最后一条反思浮现出的渴望更新隐性目标(仅当非空时覆盖,
+            # 避免一次没解析出 desire 的反思清掉已有渴望)。
+            latest = result[-1]
+            if latest.desire:
+                self.latent_desire = latest.desire
+                self.desire_strength = latest.desire_strength
 
     async def plan_next(self, world_state_snapshot: dict | None = None) -> str:
         """根据记忆和当前状态,调用 Planner 生成下一段计划。

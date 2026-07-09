@@ -30,11 +30,18 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Reflection:
-    """一次反思的结果。"""
+    """一次反思的结果。
+
+    除高级抽象文本外,还携带本轮反思浮现出的"隐性渴望"
+    (latent desire) —— 一句 10 字以内的内心独白,以及它的强烈度
+    (0-1)。同一次 reflect() 产出的多条 Reflection 共享同一个 desire。
+    """
 
     text: str
     generated_at: datetime
     source_memories: list[int] = field(default_factory=list)
+    desire: str = ""
+    desire_strength: float = 0.0
 
 
 class Reflector:
@@ -72,7 +79,10 @@ class Reflector:
         prompt = (
             f"基于以下{agent.name}的最近记忆,生成 1-3 条高级抽象反思。\n"
             f"记忆列表:\n{memories_text}\n\n"
-            f'请输出 JSON: {{"reflections": ["反思1", "反思2"]}}'
+            f"请也生成一句内心渴望(10字以内, 如 想变强/想交朋友/想探索远方),"
+            f"以及它的强烈度(0-1 之间的小数)。\n"
+            f'请输出 JSON: {{"reflections": ["反思1", "反思2"], '
+            f'"desire": "想变强", "desire_strength": 0.7}}'
         )
 
         try:
@@ -120,9 +130,27 @@ class Reflector:
         if not isinstance(texts, list):
             raise ValueError(f"reflections 字段不是 list: {type(texts)}")
 
+        # 隐性渴望: 可缺省(旧 prompt / 简单回复),缺省时用空串 + 0.0
+        desire = str(data.get("desire", "") or "").strip()
+        desire_strength = self._coerce_strength(data.get("desire_strength", 0.0))
+
         now = datetime.utcnow()
         return [
-            Reflection(text=str(t), generated_at=now, source_memories=source_ids)
+            Reflection(
+                text=str(t),
+                generated_at=now,
+                source_memories=source_ids,
+                desire=desire,
+                desire_strength=desire_strength,
+            )
             for t in texts
             if t  # 跳过空字符串
         ]
+
+    @staticmethod
+    def _coerce_strength(value: object) -> float:
+        """把 LLM 返回的 desire_strength 夹紧到 [0, 1];无法解析则 0.0。"""
+        try:
+            return max(0.0, min(1.0, float(value)))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 0.0

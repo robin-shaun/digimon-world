@@ -23,6 +23,8 @@ from digimon_world.agents.digimon_agent import (
     DigimonStats,
     EvolutionStage,
 )
+from digimon_world.agents.planner import Planner
+from digimon_world.llm.client import FakeLlmClient, LlmModel
 from digimon_world.world.world_state import DEFAULT_REGIONS, Region
 
 
@@ -334,6 +336,39 @@ async def test_step_does_not_raise_with_any_plan(agumon: DigimonAgent) -> None:
         assert "type" in event
         assert "agent" in event
         assert event["agent"] == "亚古兽"
+
+@pytest.mark.asyncio
+async def test_latent_desire_influences_plan(agumon: DigimonAgent) -> None:
+    """agent 有 latent_desire 时,plan_next 的 prompt 应带上内心渴望。"""
+    fake = FakeLlmClient()
+    fake.set_reply(LlmModel.HAIKU, reply="向北方的高山进发, 挑战强敌")
+    agumon.planner = Planner(llm_client=fake)
+    agumon.latent_desire = "想变强"
+    agumon.desire_strength = 0.9
+
+    plan = await agumon.plan_next()
+
+    assert plan == "向北方的高山进发, 挑战强敌"
+    # planner 被调用一次,prompt 里应注入内心渴望
+    assert len(fake.calls) == 1
+    prompt = "\n".join(m.content for m in fake.calls[0].messages)
+    assert "内心渴望" in prompt
+    assert "想变强" in prompt
+
+
+@pytest.mark.asyncio
+async def test_latent_desire_absent_not_in_plan_prompt(agumon: DigimonAgent) -> None:
+    """无 latent_desire 时,prompt 不应出现"内心渴望"一行。"""
+    fake = FakeLlmClient()
+    fake.set_reply(LlmModel.HAIKU, reply="在附近走走")
+    agumon.planner = Planner(llm_client=fake)
+    assert agumon.latent_desire == ""
+
+    await agumon.plan_next()
+
+    prompt = "\n".join(m.content for m in fake.calls[0].messages)
+    assert "内心渴望" not in prompt
+
 
 @pytest.mark.asyncio
 async def test_act_fallback_4_directions_diverse(agumon: DigimonAgent) -> None:

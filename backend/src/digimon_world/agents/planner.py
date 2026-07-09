@@ -65,6 +65,15 @@ class Planner:
             f"- {m.description}" for m in reflections
         ) if reflections else "无"
 
+        # 隐性渴望: 反思时浮现的内心目标,非空时注入 prompt 影响行动倾向。
+        # 强烈度越高越应主导计划,这里把强烈度也一并透传给 LLM 参考。
+        desire_line = ""
+        if agent.latent_desire:
+            desire_line = (
+                f"你的内心渴望: {agent.latent_desire} "
+                f"(强烈度 {agent.desire_strength:.1f})\n"
+            )
+
         # 构造 prompt
         prompt = (
             f"你是{agent.name}({agent.species}), "
@@ -72,6 +81,7 @@ class Planner:
             f"你的状态: HP={agent.stats.hp}/100, "
             f"EP={agent.stats.ep}/50, "
             f"心情={agent.mood}\n"
+            f"{desire_line}"
             f"最近记忆:\n{memories_text}\n"
             f"最近的反思:\n{reflections_text}\n"
             f"当前世界: {world_state_snapshot}\n"
