@@ -172,6 +172,7 @@ def list_digimon() -> dict[str, Any]:
                 "region_id": a.region_id,
                 "position": {"x": a.location[0], "y": a.location[1]},
                 "current_plan": a.current_plan,
+                "mood": a.mood,
             }
             for a in world.all()
         ],

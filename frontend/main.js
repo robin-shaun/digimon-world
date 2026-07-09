@@ -49,6 +49,21 @@
         return '❓';
     }
 
+    // ---- 心情 emoji 映射 ----
+    // 后端 mood 取值: calm/excited/tired/scared/curious (digimon_agent.py)。
+    // 映射到 4 个表情: 开心 😊 / 平静 😐 / 生气(受惊) 😠 / 疲惫 😴。
+    const MOOD_EMOJI = {
+        excited: '😊',
+        curious: '😊',
+        calm: '😐',
+        scared: '😠',
+        angry: '😠',
+        tired: '😴',
+    };
+    function getMoodEmoji(mood) {
+        return MOOD_EMOJI[mood] || '😐';
+    }
+
     // ---- 区域样式 ----
     // 后端两个 region 的 bounds 都是整块 (0,0,960,600) 且重叠,
     // 所以标签位置在前端按语义手动指定,避免堆在左上角。
@@ -216,12 +231,12 @@
             ctx.textBaseline = 'middle';
             ctx.fillText(emoji, x, y);
 
-            // 名字
+            // 名字 + 心情 emoji (心情跟随 mood 字段实时更新)
             ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
             ctx.font = '12px monospace';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
-            ctx.fillText(d.name, x, y - 18);
+            ctx.fillText(d.name + ' ' + getMoodEmoji(d.mood), x, y - 18);
 
             // 选中时画圈
             if (isSelected) {
