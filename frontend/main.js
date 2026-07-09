@@ -990,6 +990,132 @@
     }
 
     // ══════════════════════════════════════════════
+    //  世界事件广播 (左下角系统消息)
+    // ══════════════════════════════════════════════
+    // 独立于导演面板: 面板仅宽屏显示且 10s 刷新, 通知则始终运行、
+    // 每 3s 轮询 /api/director/state 的 recent_events, 只对战斗 / 进化 /
+    // 剧情类事件弹出提示, 3 秒后自动渐隐消失。
+
+    const NOTIFY_STYLE = {
+        battle:         { icon: '⚔️', label: '战斗', color: '#ff6b6b' },
+        battle_victory: { icon: '🏆', label: '战斗', color: '#ffd93d' },
+        evolution:      { icon: '✨', label: '进化', color: '#4ae8c4' },
+        story_event:    { icon: '📖', label: '剧情', color: '#b68aff' },
+    };
+    const NOTIFY_POLL_MS = 3000;   // 轮询间隔
+    const NOTIFY_TTL_MS = 3000;    // 每条通知停留时长
+    const NOTIFY_FADE_MS = 500;    // 渐隐动画时长 (与 CSS transition 对应)
+
+    const notify = {
+        seen: new Set(),   // 已展示过的事件签名, 防重复弹
+        seeded: false,     // 首次拉取只做基线, 不把历史事件一次性全弹出来
+        stack: null,       // DOM 容器 (懒创建)
+    };
+
+    /** 事件签名: recent_events 没有稳定 id, 用 type+描述+时间+event_id 组合去重 */
+    function eventKey(e) {
+        return [e.type || '', e.description || '', e.at || '', e.event_id || ''].join('|');
+    }
+
+    /** 懒创建左下角通知容器 + 注入样式 (保持全部逻辑在 main.js 内) */
+    function ensureNotifyStack() {
+        if (notify.stack) return notify.stack;
+        if (!document.getElementById('notify-style')) {
+            const st = document.createElement('style');
+            st.id = 'notify-style';
+            st.textContent = `
+#notify-stack {
+    position: fixed; left: 16px; bottom: 16px; z-index: 9999;
+    display: flex; flex-direction: column-reverse; gap: 8px;
+    max-width: 320px; pointer-events: none;
+}
+.notify-card {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 10px 12px; border-radius: 8px;
+    background: rgba(12, 18, 40, 0.92);
+    border-left: 3px solid #888;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    color: #e8edf7; font: 12px/1.4 monospace;
+    opacity: 0; transform: translateX(-24px);
+    transition: opacity ${NOTIFY_FADE_MS}ms ease, transform ${NOTIFY_FADE_MS}ms ease;
+}
+.notify-card.show { opacity: 1; transform: translateX(0); }
+.notify-card.hide { opacity: 0; transform: translateX(-24px); }
+.notify-icon { font-size: 16px; line-height: 1.2; flex: 0 0 auto; }
+.notify-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.notify-label { font-weight: bold; font-size: 11px; letter-spacing: 1px; }
+.notify-desc { color: #c7d2e8; word-break: break-word; }
+`;
+            document.head.appendChild(st);
+        }
+        const el = document.createElement('div');
+        el.id = 'notify-stack';
+        document.body.appendChild(el);
+        notify.stack = el;
+        return el;
+    }
+
+    /** 弹出一条系统消息, 3s 后渐隐移除 */
+    function showNotification(e) {
+        const cfg = NOTIFY_STYLE[e.type];
+        if (!cfg) return;
+        const stack = ensureNotifyStack();
+        const desc = e.description || (cfg.label + '事件');
+        const card = document.createElement('div');
+        card.className = 'notify-card';
+        card.style.borderLeftColor = cfg.color;
+        card.innerHTML =
+            `<span class="notify-icon">${cfg.icon}</span>` +
+            `<div class="notify-body">` +
+            `<span class="notify-label" style="color:${cfg.color}">${cfg.label}</span>` +
+            `<span class="notify-desc">${escapeHtml(desc)}</span></div>`;
+        stack.appendChild(card);
+        // 下一帧加 show, 触发进场过渡
+        requestAnimationFrame(() => card.classList.add('show'));
+        // 停留 → 渐隐 → 移除
+        setTimeout(() => {
+            card.classList.remove('show');
+            card.classList.add('hide');
+            setTimeout(() => card.remove(), NOTIFY_FADE_MS);
+        }, NOTIFY_TTL_MS);
+    }
+
+    /** 轮询世界事件, 只对新出现的战斗/进化/剧情事件弹通知 */
+    async function pollNotifications() {
+        try {
+            const resp = await fetch(API_BASE + '/api/director/state', { cache: 'no-store' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const events = data.recent_events || [];
+            // 首次只记录基线, 避免刷新页面时把历史事件全弹出来
+            if (!notify.seeded) {
+                events.forEach((e) => notify.seen.add(eventKey(e)));
+                notify.seeded = true;
+                return;
+            }
+            for (const e of events) {
+                const key = eventKey(e);
+                if (notify.seen.has(key)) continue;
+                notify.seen.add(key);
+                showNotification(e);   // 非关注类型会被 showNotification 内部忽略
+            }
+            // seen 只需覆盖最近窗口, 防止无限增长
+            if (notify.seen.size > 200) {
+                notify.seen = new Set(events.map(eventKey));
+            }
+        } catch (err) {
+            // 通知非关键功能, 后端不可达时静默
+        }
+    }
+
+    /** 启动通知轮询 */
+    function startNotifications() {
+        pollNotifications();   // 立即拉一次做基线
+        setInterval(pollNotifications, NOTIFY_POLL_MS);
+        console.log('[notify] 世界事件广播已启动, 每 ' + (NOTIFY_POLL_MS / 1000) + 's 轮询');
+    }
+
+    // ══════════════════════════════════════════════
     //  启动
     // ══════════════════════════════════════════════
 
@@ -1011,6 +1137,8 @@
         startBattlePolling();
         // 7. 初始化导演面板 (仅宽屏显示, 30s 刷新)
         initDirector();
+        // 8. 启动世界事件广播 (左下角系统消息, 始终运行)
+        startNotifications();
     }
 
     start();
