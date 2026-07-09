@@ -594,6 +594,16 @@
         enabled: false, // 面板是否处于显示状态
         relOk: true,    // GET /api/relationships 最近一次是否成功
         stateOk: true,  // GET /api/director/state 最近一次是否成功
+        leaderboard: { battle: [], bond: [], badges: [] }, // 三维排行榜数据
+        lbTab: 'battle', // 当前选中的排行榜 tab
+        lbOk: true,     // GET /api/leaderboard 最近一次是否成功
+    };
+
+    // 排行榜每个维度的显示配置: 数值字段名 + 单位后缀
+    const LB_METRIC = {
+        battle: { field: 'victories', suffix: '胜' },
+        bond: { field: 'bond', suffix: '' },
+        badges: { field: 'badges', suffix: '枚' },
     };
 
     /** 好感度分数 → 连线颜色 (正=绿, 负=红, 0=灰), alpha 随强度增大 */
@@ -720,6 +730,45 @@
         }).join('');
     }
 
+    /** GET 排行榜三维数据 */
+    async function fetchLeaderboard() {
+        try {
+            const resp = await fetch(API_BASE + '/api/leaderboard');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            director.leaderboard = {
+                battle: data.battle || [],
+                bond: data.bond || [],
+                badges: data.badges || [],
+            };
+            director.lbOk = true;
+        } catch (e) {
+            console.warn('[director] /api/leaderboard 不可达:', e.message);
+            director.lbOk = false;
+        }
+    }
+
+    /** 渲染当前 tab 的排行榜 (前 3 名加奖牌) */
+    function renderLeaderboard() {
+        const ol = document.getElementById('leaderboard-list');
+        if (!ol) return;
+        const cfg = LB_METRIC[director.lbTab] || LB_METRIC.battle;
+        const rows = director.leaderboard[director.lbTab] || [];
+        if (rows.length === 0) {
+            ol.innerHTML = '<li class="dir-hint">暂无数据</li>';
+            return;
+        }
+        const medals = ['🥇', '🥈', '🥉'];
+        ol.innerHTML = rows.map((r, i) => {
+            const rank = medals[i] || `${i + 1}.`;
+            const val = r[cfg.field] != null ? r[cfg.field] : 0;
+            return `<li class="lb-row">` +
+                `<span class="lb-rank">${rank}</span>` +
+                `<span class="lb-name">${escapeHtml(r.name)}</span>` +
+                `<span class="lb-val">${val}${cfg.suffix}</span></li>`;
+        }).join('');
+    }
+
     /** 简单 HTML 转义, 防止事件描述里的字符破坏 DOM */
     function escapeHtml(s) {
         return String(s)
@@ -796,10 +845,11 @@
         }
     }
     async function refreshDirectorInner() {
-        await Promise.all([fetchRelationships(), fetchDirectorState()]);
+        await Promise.all([fetchRelationships(), fetchDirectorState(), fetchLeaderboard()]);
         drawRelationshipGraph();
         renderFactions();
         renderDirectorEvents();
+        renderLeaderboard();
         updateSpeedButtons();
         updateDirectorConn();
     }
@@ -922,6 +972,16 @@
         const loadBtn = document.getElementById('load-btn');
         if (saveBtn) saveBtn.addEventListener('click', saveWorld);
         if (loadBtn) loadBtn.addEventListener('click', loadWorld);
+        // 排行榜 tab 切换 (纯本地重绘, 不重新请求)
+        document.querySelectorAll('.lb-tab').forEach((t) => {
+            t.addEventListener('click', () => {
+                director.lbTab = t.dataset.lb || 'battle';
+                document.querySelectorAll('.lb-tab').forEach((b) => {
+                    b.classList.toggle('active', b === t);
+                });
+                renderLeaderboard();
+            });
+        });
         // 屏宽变化 → 显隐
         window.addEventListener('resize', updateDirectorVisibility);
         updateDirectorVisibility();

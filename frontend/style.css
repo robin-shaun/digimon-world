@@ -333,6 +333,66 @@ footer {
     border-color: transparent;
 }
 
+.lb-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.lb-tab {
+    flex: 1;
+    padding: 5px 0;
+    background: rgba(42, 58, 106, 0.5);
+    color: #e0e6ff;
+    border: 1px solid #2a3a6a;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.lb-tab:hover {
+    background: rgba(124, 58, 237, 0.4);
+}
+
+.lb-tab.active {
+    background: linear-gradient(90deg, #00d4ff, #7c3aed);
+    color: #0a0e27;
+    font-weight: bold;
+    border-color: transparent;
+}
+
+.leaderboard-list {
+    list-style: none;
+    font-size: 12px;
+    font-family: "SF Mono", "Consolas", monospace;
+}
+
+.leaderboard-list li.lb-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(42, 58, 106, 0.4);
+}
+
+.leaderboard-list .lb-rank {
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.leaderboard-list .lb-name {
+    flex: 1;
+    color: #e0e6ff;
+    word-break: break-word;
+}
+
+.leaderboard-list .lb-val {
+    color: #ffd700;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
 .inject-input {
     width: 100%;
     padding: 7px 8px;

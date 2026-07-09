@@ -444,6 +444,42 @@ def get_relationships() -> dict[str, Any]:
     return {"count": len(pairs), "pairs": pairs}
 
 
+# ---- 排行榜 API ----
+@app.get("/api/leaderboard")
+def get_leaderboard(top: int = 10) -> dict[str, Any]:
+    """数码兽排行榜: 战斗胜利 / 羁绊值 / 徽章数三个维度。
+
+    每个维度返回降序 Top-N: {name, <metric>}。给导演面板排行榜 tab 用。
+    """
+    world = get_world()
+    evo = EvolutionSystem()
+    badge_system = BadgeSystem(world=world, tracker=get_tracker())
+    n = max(1, min(top, 50))
+
+    agents = world.all()
+    battle = sorted(
+        ({"name": a.name, "victories": a.battle_victories} for a in agents),
+        key=lambda x: x["victories"],
+        reverse=True,
+    )
+    bond = sorted(
+        ({"name": a.name, "bond": evo.compute_bond(a)} for a in agents),
+        key=lambda x: x["bond"],
+        reverse=True,
+    )
+    badges = sorted(
+        ({"name": a.name, "badges": len(badge_system.evaluate(a))} for a in agents),
+        key=lambda x: x["badges"],
+        reverse=True,
+    )
+
+    return {
+        "battle": battle[:n],
+        "bond": bond[:n],
+        "badges": badges[:n],
+    }
+
+
 # ---- 天气 API ----
 @app.get("/api/weather")
 def get_weather() -> dict[str, Any]:
