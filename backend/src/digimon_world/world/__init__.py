@@ -30,6 +30,12 @@ from .seasons import (
     get_season_system,
     reset_season_system,
 )
+from .weather import (
+    Weather,
+    WeatherSystem,
+    get_weather_system,
+    reset_weather_system,
+)
 from .world_state import (
     DEFAULT_REGIONS,
     FILE_ISLAND,
@@ -56,6 +62,8 @@ __all__ = [
     "SeasonSystem",
     "StoryDirector",
     "StoryEvent",
+    "Weather",
+    "WeatherSystem",
     "WorldClock",
     "WorldScheduler",
     "WorldState",
@@ -65,11 +73,13 @@ __all__ = [
     "get_registry",
     "get_season_system",
     "get_tracker",
+    "get_weather_system",
     "get_world",
     "reset_director",
     "reset_multiverse",
     "reset_registry",
     "reset_season_system",
     "reset_tracker",
+    "reset_weather_system",
     "reset_world",
 ]

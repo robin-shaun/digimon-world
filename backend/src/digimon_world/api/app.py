@@ -38,6 +38,7 @@ from ..world import (
     get_multiverse,
     get_registry,
     get_tracker,
+    get_weather_system,
     get_world,
     persistence,
 )
@@ -435,6 +436,13 @@ def get_relationships() -> dict[str, Any]:
     """
     pairs = get_tracker().all_pairs()
     return {"count": len(pairs), "pairs": pairs}
+
+
+# ---- 天气 API ----
+@app.get("/api/weather")
+def get_weather() -> dict[str, Any]:
+    """当前天气状态(天气类型 + 行为系数)。"""
+    return get_weather_system().to_dict()
 
 
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
