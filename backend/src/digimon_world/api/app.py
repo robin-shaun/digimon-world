@@ -93,6 +93,12 @@ class SpeedRequest(BaseModel):
     ratio: int
 
 
+class BroadcastRequest(BaseModel):
+    """导演向全服所有数码兽发布一条广播通知。"""
+
+    message: str = Field(..., min_length=1, description="广播内容")
+
+
 # ---- Phase 3: 战斗 API 模型 ----
 class BattleStartRequest(BaseModel):
     """发起一场 A vs B 战斗。"""
@@ -323,6 +329,33 @@ def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:
         "id": len(world.events) - 1,
         "type": req.type,
         "description": req.description,
+    }
+
+
+@app.post("/api/broadcast")
+def broadcast_message(req: BroadcastRequest) -> dict[str, Any]:
+    """导演发布全服广播: 所有数码兽收到通知(写入各自 memory)。
+
+    用于全服公告、剧情推进、节日通知等场景。
+    返回收到广播的数码兽数量。
+    """
+    world = get_world()
+    agents = world.all()
+    event = {
+        "type": "broadcast",
+        "message": req.message,
+        "source": "director",
+        "at": datetime.now().isoformat(),
+    }
+    # 每只数码兽写一条记忆
+    for agent in agents:
+        agent.observe(event)
+    # 同时记录为世界事件
+    world.events.append(event)
+    return {
+        "delivered": len(agents),
+        "message": req.message,
+        "event_id": len(world.events) - 1,
     }
 
 
