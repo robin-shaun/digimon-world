@@ -42,6 +42,7 @@ from ..world import (
     get_landmark_system,
     get_multiverse,
     get_registry,
+    get_timeline_system,
     get_tracker,
     get_weather_system,
     get_world,
@@ -550,6 +551,17 @@ def get_digimon_achievements(name: str) -> dict[str, Any]:
         "count": len(achievements),
         "achievements": achievements,
     }
+
+
+# ---- 世界事件时间线 API ----
+@app.get("/api/timeline")
+def get_timeline(limit: int = 50) -> dict[str, Any]:
+    """世界大事记时间线: 从事件流里过滤出重大事件(进化/战斗/天灾/节日/剧情
+    /跨世界之门/初遇/叙事告警),格式化后最新在前返回。
+
+    limit 会夹到 [1, 200]。返回 {count, total_events, events:[...]}。
+    """
+    return get_timeline_system().to_dict(get_world(), limit=limit)
 
 
 # ---- 地标 API ----
