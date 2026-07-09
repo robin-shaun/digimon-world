@@ -16,10 +16,13 @@ from .evolution import (
     is_final_stage,
     next_stage,
 )
+from .badges import Badge, BadgeSystem
 from .planner import Planner
 from .reflector import Reflection, Reflector
 
 __all__ = [
+    "Badge",
+    "BadgeSystem",
     "DigimonAgent",
     "Dialogue",
     "Planner",

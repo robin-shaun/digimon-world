@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .. import __version__
+from ..agents.badges import Badge, BadgeSystem
 from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
 from ..battle import BattleEngine, BattleResult
@@ -443,6 +444,23 @@ def get_relationships() -> dict[str, Any]:
 def get_weather() -> dict[str, Any]:
     """当前天气状态(天气类型 + 行为系数)。"""
     return get_weather_system().to_dict()
+
+
+# ---- 徽章 API ----
+@app.get("/api/digimon/{name}/badges")
+def get_digimon_badges(name: str) -> dict[str, Any]:
+    """某只数码兽已获得的徽章列表(实时计算)。"""
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+    badge_system = BadgeSystem(world=world, tracker=get_tracker())
+    badges = badge_system.evaluate(agent)
+    return {
+        "name": name,
+        "count": len(badges),
+        "badges": badges,
+    }
 
 
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
