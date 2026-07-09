@@ -533,6 +533,7 @@
                 const battles = data.battles || [];
                 for (const b of battles) {
                     if (b.evolution && b.evolution.evolved) {
+                        if (window.SFX) window.SFX.play('evolution');
                         showEvolutionOverlay(
                             b.winner,
                             b.evolution.old_stage,
@@ -1059,6 +1060,16 @@
     function showNotification(e) {
         const cfg = NOTIFY_STYLE[e.type];
         if (!cfg) return;
+        // 音效: 战斗类 → battle, 进化 → evolution, 其余 → notify
+        if (window.SFX) {
+            if (e.type === 'battle' || e.type === 'battle_victory') {
+                window.SFX.play('battle');
+            } else if (e.type === 'evolution') {
+                window.SFX.play('evolution');
+            } else {
+                window.SFX.play('notify');
+            }
+        }
         const stack = ensureNotifyStack();
         const desc = e.description || (cfg.label + '事件');
         const card = document.createElement('div');
