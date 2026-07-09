@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 
@@ -54,6 +54,11 @@ class MemoryStream:
     next_id: int = 0
     # 反思阈值(可调): 累计 importance 和
     reflection_threshold: int = 100
+    # 压缩阈值: entries 超过此数量时自动压缩
+    compress_threshold: int = 1000
+    # 旧记忆判定: importance < 此值 且超过 max_age 天的记忆会被压缩
+    compress_importance_cutoff: int = 3
+    compress_max_age_days: int = 7
 
     def add(
         self,
@@ -85,6 +90,7 @@ class MemoryStream:
         )
         self.entries.append(node)
         self.next_id += 1
+        self._maybe_compress()
         return node
 
     @property
@@ -132,6 +138,59 @@ class MemoryStream:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [node for _, node in scored[:top_k]]
+
+    def _maybe_compress(self) -> None:
+        """在 entries 超过阈值时自动触发压缩。"""
+        if len(self.entries) > self.compress_threshold:
+            self.compress()
+
+    def compress(self, now: datetime | None = None) -> int:
+        """压缩旧的低重要性记忆为摘要。
+
+        规则: importance < compress_importance_cutoff 且超过 compress_max_age_days 天
+        的记忆会被合并为一条摘要记忆。
+
+        Returns:
+            被压缩(移除)的记忆条数
+        """
+        now = now or datetime.utcnow()
+        cutoff = now - timedelta(days=self.compress_max_age_days)
+
+        stale: list[MemoryNode] = []
+        keep: list[MemoryNode] = []
+
+        for node in self.entries:
+            if (
+                node.importance < self.compress_importance_cutoff
+                and node.timestamp < cutoff
+                and node.memory_type != "reflection"
+            ):
+                stale.append(node)
+            else:
+                keep.append(node)
+
+        if not stale:
+            return 0
+
+        # 生成摘要描述
+        descriptions = [n.description for n in stale[:20]]
+        summary_detail = "; ".join(descriptions)
+        if len(stale) > 20:
+            summary_detail += f" ...等共{len(stale)}条"
+        summary_desc = f"过去一周的日常记忆: {summary_detail}"
+
+        # 创建摘要节点
+        summary_node = MemoryNode(
+            timestamp=stale[-1].timestamp,  # 使用最后一条旧记忆的时间戳
+            description=summary_desc,
+            importance=3,
+            memory_type="reflection",
+            node_id=self.next_id,
+        )
+        self.next_id += 1
+
+        self.entries = keep + [summary_node]
+        return len(stale)
 
     def to_dict(self) -> list[dict[str, Any]]:
         return [m.to_dict() for m in self.entries]
