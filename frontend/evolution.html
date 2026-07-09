@@ -74,9 +74,18 @@
             color: #8b95c7;
             font-size: 13px;
             letter-spacing: 1px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             line-height: 1.7;
         }
+
+        /* ---- 连接状态 ---- */
+        .conn {
+            font-size: 12px;
+            color: #8b95c7;
+            margin-bottom: 20px;
+        }
+        .conn .dot { color: #4ae87a; }
+        .conn .dot.off { color: #ff5470; }
 
         /* ---- 进化链卡片 ---- */
         .chain {
@@ -91,7 +100,7 @@
             display: flex;
             align-items: baseline;
             gap: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 8px;
             flex-wrap: wrap;
         }
         .chain-head .cname {
@@ -104,10 +113,47 @@
             color: #8b95c7;
         }
 
-        /* 每条链一个主题色 */
-        .chain.fire  .cname { color: #ff9a3c; }
-        .chain.ice   .cname { color: #4ae8c4; }
-        .chain.bird  .cname { color: #ff8ac4; }
+        /* 每条链一个主题色 (按 element 着色) */
+        .chain.fire    .cname { color: #ff9a3c; }
+        .chain.ice     .cname { color: #4ae8c4; }
+        .chain.bird    .cname { color: #ff8ac4; }
+        .chain.thunder .cname { color: #ffd94a; }
+        .chain.grass   .cname { color: #7ee87a; }
+        .chain.water   .cname { color: #4aa8ff; }
+        .chain.holy    .cname { color: #ffe89a; }
+        .chain.light   .cname { color: #d4b0ff; }
+
+        /* 描述 + 属性克制条 */
+        .chain-desc {
+            font-size: 13px;
+            color: #b6bde8;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+        .matchup {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 11px;
+            margin-bottom: 18px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            border: 1px solid #2a3a6a;
+            letter-spacing: 1px;
+        }
+        .badge.attr   { color: #00d4ff; border-color: rgba(0, 212, 255, 0.5); }
+        .badge.strong { color: #4ae87a; border-color: rgba(74, 232, 122, 0.5); }
+        .badge.weak   { color: #ff8a8a; border-color: rgba(255, 138, 138, 0.5); }
+        .badge.crest  { color: #ffd700; border-color: rgba(255, 215, 0, 0.5); }
+        .matchup .note {
+            color: #6b74a0;
+            align-self: center;
+        }
 
         .stages {
             display: flex;
@@ -187,6 +233,14 @@
             .arrow { flex-basis: 100%; padding: 4px 0; transform: rotate(90deg); }
         }
 
+        .state-msg {
+            text-align: center;
+            color: #8b95c7;
+            font-size: 14px;
+            padding: 40px 0;
+        }
+        .state-msg.error { color: #ff8a8a; }
+
         footer {
             text-align: center;
             margin-top: 24px;
@@ -210,164 +264,126 @@
         </nav>
 
         <p class="intro">
-            数码兽通过战斗胜利与羁绊累积逐阶进化。以下为三条经典进化链,
-            每阶段标注了代表招式。将鼠标悬停在卡片上可高亮查看。
+            数码兽通过战斗胜利与羁绊累积逐阶进化。图鉴数据来自后端 API,
+            每条进化线标注了属性克制、纹章象征与各阶段代表招式。
         </p>
 
-        <!-- 亚古兽线 (火焰) -->
-        <section class="chain fire">
-            <div class="chain-head">
-                <span class="cname">🦖 亚古兽 进化线</span>
-                <span class="cdesc">火焰系 · 勇气的象征</span>
-            </div>
-            <div class="stages">
-                <div class="stage">
-                    <span class="emoji">🦖</span>
-                    <div class="sname">亚古兽</div>
-                    <div class="en">Agumon</div>
-                    <div class="tier">成长期 ROOKIE</div>
-                    <ul class="skills">
-                        <li>小型火焰</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">🐲</span>
-                    <div class="sname">暴龙兽</div>
-                    <div class="en">Greymon</div>
-                    <div class="tier">成熟期 CHAMPION</div>
-                    <ul class="skills">
-                        <li>超级火焰</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">🤖</span>
-                    <div class="sname">机械暴龙兽</div>
-                    <div class="en">MetalGreymon</div>
-                    <div class="tier">完全体 ULTIMATE</div>
-                    <ul class="skills">
-                        <li>超究极火焰</li>
-                        <li>大地破坏炮</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">🐉</span>
-                    <div class="sname">战斗暴龙兽</div>
-                    <div class="en">WarGreymon</div>
-                    <div class="tier">究极体 MEGA</div>
-                    <ul class="skills">
-                        <li>盖亚能量炮</li>
-                        <li>战斗龙卷风</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
+        <div class="conn" id="conn">加载中…</div>
 
-        <!-- 加布兽线 (冰) -->
-        <section class="chain ice">
-            <div class="chain-head">
-                <span class="cname">🐺 加布兽 进化线</span>
-                <span class="cdesc">冰雪系 · 友情的象征</span>
-            </div>
-            <div class="stages">
-                <div class="stage">
-                    <span class="emoji">🦊</span>
-                    <div class="sname">加布兽</div>
-                    <div class="en">Gabumon</div>
-                    <div class="tier">成长期 ROOKIE</div>
-                    <ul class="skills">
-                        <li>爆炎火焰弹</li>
-                        <li>妖狐火焰</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">🐺</span>
-                    <div class="sname">加鲁鲁兽</div>
-                    <div class="en">Garurumon</div>
-                    <div class="tier">成熟期 CHAMPION</div>
-                    <ul class="skills">
-                        <li>绝对冷冻气</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">🥋</span>
-                    <div class="sname">银河卡机狼</div>
-                    <div class="en">WereGarurumon</div>
-                    <div class="tier">完全体 ULTIMATE</div>
-                    <ul class="skills">
-                        <li>狼爪拳</li>
-                        <li>疾风踢</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">❄️</span>
-                    <div class="sname">钢铁加鲁鲁兽</div>
-                    <div class="en">MetalGarurumon</div>
-                    <div class="tier">究极体 MEGA</div>
-                    <ul class="skills">
-                        <li>战斧斯坦纳</li>
-                        <li>绝对零度爆</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
+        <div id="pokedex">
+            <div class="state-msg">正在从图鉴 API 拉取数据…</div>
+        </div>
 
-        <!-- 比丘兽线 (鸟/风) -->
-        <section class="chain bird">
-            <div class="chain-head">
-                <span class="cname">🐦 比丘兽 进化线</span>
-                <span class="cdesc">风焰系 · 爱心的象征</span>
-            </div>
-            <div class="stages">
-                <div class="stage">
-                    <span class="emoji">🐦</span>
-                    <div class="sname">比丘兽</div>
-                    <div class="en">Biyomon</div>
-                    <div class="tier">成长期 ROOKIE</div>
-                    <ul class="skills">
-                        <li>魔法之火</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">🦅</span>
-                    <div class="sname">鸟龙兽</div>
-                    <div class="en">Birdramon</div>
-                    <div class="tier">成熟期 CHAMPION</div>
-                    <ul class="skills">
-                        <li>火焰之翼</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">🦉</span>
-                    <div class="sname">大鸟兽</div>
-                    <div class="en">Garudamon</div>
-                    <div class="tier">完全体 ULTIMATE</div>
-                    <ul class="skills">
-                        <li>神鸟冲击波</li>
-                    </ul>
-                </div>
-                <div class="arrow">➜</div>
-                <div class="stage">
-                    <span class="emoji">🔥</span>
-                    <div class="sname">凤凰兽</div>
-                    <div class="en">Phoenixmon</div>
-                    <div class="tier">究极体 MEGA</div>
-                    <ul class="skills">
-                        <li>星辰之火</li>
-                        <li>苍炎烈焰</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <footer>DIGIMON WORLD · Phase 5 · 进化图鉴 · 经典 Adventure 进化线</footer>
+        <footer>DIGIMON WORLD · Phase 5 · 进化图鉴 · 数据源: /api/pokedex</footer>
     </div>
+
+    <script>
+        // API_BASE: 与 main.js / battle.html / log.html 一致
+        const API_BASE = (() => {
+            if (typeof window.API_BASE === 'string') return window.API_BASE;
+            if (window.location.origin.includes('workers.dev')) return '';
+            return 'http://localhost:8000';
+        })();
+
+        // 属性中文名
+        const ATTR_CN = {
+            vaccine: '疫苗种', data: '数据种', virus: '病毒种', free: '自由种',
+        };
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function setConn(ok, text) {
+            const el = document.getElementById('conn');
+            el.innerHTML = ok
+                ? `${esc(text)} <span class="dot">●</span>`
+                : `${esc(text)} <span class="dot off">●</span>`;
+        }
+
+        function attrCn(a) { return ATTR_CN[a] || a || '—'; }
+
+        // 渲染一条进化链
+        function renderChain(entry) {
+            const stagesHtml = entry.evolution_chain.map((form, i) => {
+                const skills = (form.skills || [])
+                    .map(s => `<li>${esc(s)}</li>`).join('');
+                const stage = `
+                    <div class="stage">
+                        <span class="emoji">${esc(form.emoji)}</span>
+                        <div class="sname">${esc(form.name)}</div>
+                        <div class="en">${esc(form.en)}</div>
+                        <div class="tier">${esc(form.tier)} ${esc((form.stage || '').toUpperCase())}</div>
+                        <ul class="skills">${skills}</ul>
+                    </div>`;
+                const arrow = i < entry.evolution_chain.length - 1
+                    ? '<div class="arrow">➜</div>' : '';
+                return stage + arrow;
+            }).join('');
+
+            const tm = entry.type_matchup || {};
+            const matchupHtml = `
+                <div class="matchup">
+                    <span class="badge crest">🏅 ${esc(entry.crest)}</span>
+                    <span class="badge attr">属性 · ${esc(attrCn(tm.attribute || entry.attribute))}</span>
+                    ${tm.strong_against
+                        ? `<span class="badge strong">克制 · ${esc(attrCn(tm.strong_against))} ×1.5</span>` : ''}
+                    ${tm.weak_against
+                        ? `<span class="badge weak">被克 · ${esc(attrCn(tm.weak_against))}</span>` : ''}
+                    ${tm.note ? `<span class="note">${esc(tm.note)}</span>` : ''}
+                </div>`;
+
+            const rookie = entry.evolution_chain[0] || {};
+            return `
+                <section class="chain ${esc(entry.element)}">
+                    <div class="chain-head">
+                        <span class="cname">${esc(rookie.emoji)} ${esc(entry.name)} 进化线</span>
+                        <span class="cdesc">${esc(entry.element)} 系 · ${esc(entry.crest)}的象征</span>
+                    </div>
+                    <div class="chain-desc">${esc(entry.description)}</div>
+                    ${matchupHtml}
+                    <div class="stages">${stagesHtml}</div>
+                </section>`;
+        }
+
+        async function load() {
+            const container = document.getElementById('pokedex');
+            try {
+                // 1. 拉列表拿到所有 species
+                const listRes = await fetch(`${API_BASE}/api/pokedex`);
+                if (!listRes.ok) throw new Error(`列表 ${listRes.status}`);
+                const list = await listRes.json();
+                const entries = list.entries || [];
+
+                // 2. 并发拉每条完整详情 (含进化链 + 属性克制)
+                const details = await Promise.all(
+                    entries.map(e =>
+                        fetch(`${API_BASE}/api/pokedex/${encodeURIComponent(e.species)}`)
+                            .then(r => r.ok ? r.json() : null)
+                            .catch(() => null)
+                    )
+                );
+
+                const valid = details.filter(Boolean);
+                if (!valid.length) {
+                    container.innerHTML =
+                        '<div class="state-msg error">图鉴为空,后端未返回数据。</div>';
+                    setConn(false, '无数据');
+                    return;
+                }
+
+                container.innerHTML = valid.map(renderChain).join('');
+                setConn(true, `已连接 · ${valid.length} 条进化线`);
+            } catch (err) {
+                container.innerHTML =
+                    `<div class="state-msg error">无法连接图鉴 API (${esc(err.message)})。<br>
+                     请确认后端已在 ${esc(API_BASE || '当前源')} 启动。</div>`;
+                setConn(false, '离线');
+            }
+        }
+
+        load();
+    </script>
 </body>
 </html>

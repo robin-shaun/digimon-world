@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .. import __version__
+from .pokedex import router as pokedex_router
 from ..agents.badges import Badge, BadgeSystem
 from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
@@ -119,6 +120,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 数码兽图鉴 (静态资料库) 路由
+app.include_router(pokedex_router)
 
 
 # ---- Routes ----
