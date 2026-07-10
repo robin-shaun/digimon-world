@@ -190,3 +190,118 @@ def test_node_to_dict_includes_all_fields() -> None:
     assert d["memory_type"] == "plan"
     assert d["embedding_id"] == "emb-1"
     assert d["timestamp"] == "2026-01-01T12:00:00"
+
+
+# ---- Phase 7: 记忆压缩 ----
+
+def test_compress_memories_dedup_moved_events() -> None:
+    """相似 moved 事件在 5 tick 窗口内应被去重合并。"""
+    ms = MemoryStream(compress_threshold=5)
+    # 添加 5 条 moved 事件，tick 连续
+    for i in range(5):
+        ms.add({"description": f"亚古兽向{(i%4)}方向移动"}, importance=3, tick_index=i)
+    ms.add({"description": "遇到太一"}, importance=7, tick_index=6)
+
+    ms.compress_memories(current_tick=10)
+    # moved 应该被合并,high imp 保留
+    assert len(ms.entries) < 6
+    # 至少有一条 merged 描述 + 一条 high imp
+    has_merged = any("游荡" in e.description for e in ms.entries)
+    has_high = any(e.importance >= 7 for e in ms.entries)
+    assert has_merged
+    assert has_high
+
+
+def test_compress_memories_prunes_low_importance() -> None:
+    """低重要性(imp<3)只保留最近 50 条。"""
+    ms = MemoryStream(low_imp_keep=5, compress_threshold=100)
+    for i in range(20):
+        ms.add(f"low {i}", importance=2, tick_index=i)
+
+    result = ms.compress_memories(current_tick=30)
+    assert result["pruned"] == 15  # 20 - 5
+    assert len(ms.entries) == 5
+    # 保留的是最新的 5 条
+    assert any("low 15" in e.description for e in ms.entries)
+    assert any("low 19" in e.description for e in ms.entries)
+
+
+def test_compress_memories_preserves_high_importance() -> None:
+    """高重要性(imp>=7)永久保留。"""
+    ms = MemoryStream(low_imp_keep=1, compress_threshold=100)
+    ms.add("high event", importance=9, tick_index=1)
+    for i in range(10):
+        ms.add(f"low {i}", importance=2, tick_index=i + 2)
+
+    ms.compress_memories(current_tick=20)
+    assert any(e.importance == 9 for e in ms.entries)
+
+
+def test_compress_memories_summarizes_mid_importance() -> None:
+    """中等重要性(3-6)旧记忆转为摘要。"""
+    ms = MemoryStream(mid_imp_keep=5, mid_imp_summary_tick_age=10, compress_threshold=100)
+    for i in range(20):
+        ms.add(f"mid {i}", importance=4, tick_index=i)
+
+    result = ms.compress_memories(current_tick=50)
+    # 应该产生摘要
+    has_summary = any(e.memory_type == "summary" for e in ms.entries)
+    assert has_summary
+    assert result["summarized"] > 0
+
+
+def test_generate_summary_creates_summary_node() -> None:
+    """generate_summary 生成合法的摘要节点。"""
+    ms = MemoryStream()
+    nodes = [
+        MemoryNode(timestamp=datetime.utcnow(), description="移动", importance=4, tick_index=1),
+        MemoryNode(timestamp=datetime.utcnow(), description="休息", importance=4, tick_index=2),
+        MemoryNode(timestamp=datetime.utcnow(), description="移动", importance=4, tick_index=3),
+    ]
+    summary = ms.generate_summary(nodes, current_tick=10)
+    assert summary.memory_type == "summary"
+    assert summary.importance == 3
+    assert "摘要" in summary.description
+    assert summary.tick_index == 10
+
+
+def test_compress_memories_returns_stats() -> None:
+    """compress_memories 返回 deduped/summarized/pruned 统计。"""
+    ms = MemoryStream(low_imp_keep=3, compress_threshold=100)
+    for i in range(10):
+        ms.add(f"low {i}", importance=2, tick_index=i)
+
+    result = ms.compress_memories(current_tick=20)
+    assert "deduped" in result
+    assert "summarized" in result
+    assert "pruned" in result
+    assert result["pruned"] == 7  # 10 - 3
+
+
+def test_tick_index_in_memory_node() -> None:
+    """MemoryNode 支持 tick_index 字段。"""
+    node = MemoryNode(
+        timestamp=datetime.utcnow(),
+        description="test",
+        importance=5,
+        tick_index=42,
+    )
+    assert node.tick_index == 42
+    d = node.to_dict()
+    assert d["tick_index"] == 42
+
+
+def test_memory_stream_stats_accumulate() -> None:
+    """压缩统计(total_deduped 等)跨多次调用累加。"""
+    ms = MemoryStream(low_imp_keep=3, compress_threshold=100)
+    for i in range(10):
+        ms.add(f"low {i}", importance=2, tick_index=i)
+    ms.compress_memories(current_tick=20)
+    assert ms.total_pruned == 7
+
+    for i in range(10):
+        ms.add(f"low2 {i}", importance=2, tick_index=i + 100)
+    ms.compress_memories(current_tick=120)
+    # 第二次压缩: 之前保留了 3 条 + 新增 10 条 = 13, 保留 3, 剪掉 10
+    # 总共 7 + 10 = 17
+    assert ms.total_pruned == 17

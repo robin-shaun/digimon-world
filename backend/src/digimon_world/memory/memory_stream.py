@@ -27,9 +27,10 @@ class MemoryNode:
     timestamp: datetime
     description: str
     importance: int  # 1-10
-    memory_type: str = "observation"  # observation / reflection / plan
+    memory_type: str = "observation"  # observation / reflection / plan / summary
     embedding_id: str | None = None  # 预留向量检索
     node_id: int | None = None
+    tick_index: int = 0  # 记录产生时的世界 tick 序号，用于去重和摘要
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,6 +40,7 @@ class MemoryNode:
             "importance": self.importance,
             "memory_type": self.memory_type,
             "embedding_id": self.embedding_id,
+            "tick_index": self.tick_index,
         }
 
 
@@ -48,6 +50,7 @@ class MemoryStream:
 
     Phase 0: list 存储,简单 add
     Phase 2: 触发反思,生成 reflection 类型记忆
+    Phase 7: 记忆压缩（去重 + 分级保留 + 摘要）
     """
 
     entries: list[MemoryNode] = field(default_factory=list)
@@ -59,12 +62,26 @@ class MemoryStream:
     # 旧记忆判定: importance < 此值 且超过 max_age 天的记忆会被压缩
     compress_importance_cutoff: int = 3
     compress_max_age_days: int = 7
+    # Phase 7: 压缩配置
+    # 低重要性(imp<3)保留最近条数
+    low_imp_keep: int = 50
+    # 中等重要性(3-6)保留最近条数
+    mid_imp_keep: int = 200
+    # 中等重要性旧于多少 tick 后转为摘要
+    mid_imp_summary_tick_age: int = 100
+    # 相似移动去重窗口(tick 差)
+    moved_dedup_tick_window: int = 5
+    # 压缩统计
+    total_deduped: int = 0
+    total_summarized: int = 0
+    total_pruned: int = 0
 
     def add(
         self,
         event: dict[str, Any] | str,
         importance: int = 5,
         memory_type: str = "observation",
+        tick_index: int = 0,
     ) -> MemoryNode:
         """添加一条记忆。
 
@@ -72,6 +89,7 @@ class MemoryStream:
             event: 事件 dict(由 DigimonAgent.observe 传入)或字符串描述
             importance: 1-10 的重要性评分
             memory_type: 记忆类型
+            tick_index: 世界 tick 序号(用于去重)
 
         Returns:
             新建的 MemoryNode
@@ -87,6 +105,7 @@ class MemoryStream:
             importance=importance,
             memory_type=memory_type,
             node_id=self.next_id,
+            tick_index=tick_index,
         )
         self.entries.append(node)
         self.next_id += 1
@@ -142,55 +161,185 @@ class MemoryStream:
     def _maybe_compress(self) -> None:
         """在 entries 超过阈值时自动触发压缩。"""
         if len(self.entries) > self.compress_threshold:
-            self.compress()
+            self.compress_memories()
 
-    def compress(self, now: datetime | None = None) -> int:
-        """压缩旧的低重要性记忆为摘要。
+    def compress_memories(self, current_tick: int | None = None) -> dict[str, int]:
+        """Phase 7: 三级记忆压缩。
 
-        规则: importance < compress_importance_cutoff 且超过 compress_max_age_days 天
-        的记忆会被合并为一条摘要记忆。
+        1. 相似移动去重: 同一 tick 窗口内同 agent 的同类型 moved 事件合并
+        2. 重要性分级保留:
+           - imp >= 7: 永久保留
+           - imp 3-6: 保留最近 mid_imp_keep 条,旧于 mid_imp_summary_tick_age 的转为摘要
+           - imp < 3: 保留最近 low_imp_keep 条,其余丢弃
+        3. 摘要生成: 将一批中等重要性旧记忆压缩为一条摘要节点
 
         Returns:
-            被压缩(移除)的记忆条数
+            {"deduped": N, "summarized": N, "pruned": N}
         """
-        now = now or datetime.utcnow()
-        cutoff = now - timedelta(days=self.compress_max_age_days)
+        deduped = 0
+        summarized = 0
+        pruned = 0
 
-        stale: list[MemoryNode] = []
-        keep: list[MemoryNode] = []
+        # ---- 步骤1: 相似移动去重 ----
+        # 在 5 tick 内、同类型 moved 的记忆合并
+        dedup_window = self.moved_dedup_tick_window
+        seen_groups: dict[tuple, list[int]] = {}  # (memory_type, desc_hash) -> [indices]
+
+        for i, node in enumerate(self.entries):
+            if node.memory_type in ("observation",) and node.importance < 5:
+                # 提取类型关键词(如 moved、rested 等)
+                key = (node.memory_type, self._event_type_key(node))
+                seen_groups.setdefault(key, []).append(i)
+
+        # 合并组内邻近的记忆
+        to_remove: set[int] = set()
+        for key, indices in seen_groups.items():
+            if len(indices) < 2:
+                continue
+            # 按 tick_index 排序
+            indices.sort(key=lambda i: self.entries[i].tick_index)
+            group_start = 0
+            for group_end in range(1, len(indices)):
+                prev_idx = indices[group_start]
+                curr_idx = indices[group_end]
+                prev_node = self.entries[prev_idx]
+                curr_node = self.entries[curr_idx]
+                if curr_node.tick_index - prev_node.tick_index <= dedup_window:
+                    # 合并: 标记 curr 删除，更新 prev 描述
+                    prev_node.description = self._merge_descriptions(
+                        prev_node.description, curr_node.description
+                    )
+                    to_remove.add(curr_idx)
+                    deduped += 1
+                else:
+                    group_start = group_end
+
+        # 移除重复项
+        if to_remove:
+            self.entries = [n for i, n in enumerate(self.entries) if i not in to_remove]
+
+        # ---- 步骤2: 重要性分级保留 ----
+        high: list[MemoryNode] = []
+        mid: list[MemoryNode] = []
+        low: list[MemoryNode] = []
 
         for node in self.entries:
-            if (
-                node.importance < self.compress_importance_cutoff
-                and node.timestamp < cutoff
-                and node.memory_type != "reflection"
-            ):
-                stale.append(node)
+            if node.importance >= 7 or node.memory_type in ("reflection", "diary", "summary"):
+                high.append(node)
+            elif node.importance >= 3:
+                mid.append(node)
             else:
-                keep.append(node)
+                low.append(node)
 
-        if not stale:
-            return 0
+        # 低重要性: 保留最近 low_imp_keep 条
+        kept_low = low[-self.low_imp_keep:] if len(low) > self.low_imp_keep else low
+        pruned += max(0, len(low) - self.low_imp_keep)
 
-        # 生成摘要描述
-        descriptions = [n.description for n in stale[:20]]
-        summary_detail = "; ".join(descriptions)
-        if len(stale) > 20:
-            summary_detail += f" ...等共{len(stale)}条"
-        summary_desc = f"过去一周的日常记忆: {summary_detail}"
+        # 中等重要性: 保留最近 mid_imp_keep 条,旧于 mid_imp_summary_tick_age 的转摘要
+        if mid and current_tick is not None:
+            kept_mid: list[MemoryNode] = []
+            stale_mid: list[MemoryNode] = []
+            for node in mid:
+                if current_tick - node.tick_index > self.mid_imp_summary_tick_age:
+                    stale_mid.append(node)
+                else:
+                    kept_mid.append(node)
+            # 保留最近 mid_imp_keep 条(按 tick 排序)
+            kept_mid.sort(key=lambda n: n.tick_index)
+            if len(kept_mid) > self.mid_imp_keep:
+                overflow = kept_mid[: len(kept_mid) - self.mid_imp_keep]
+                stale_mid.extend(overflow)
+                kept_mid = kept_mid[-self.mid_imp_keep:]
 
-        # 创建摘要节点
+            # 旧的中等记忆转为摘要
+            if stale_mid:
+                summary_node = self.generate_summary(stale_mid, current_tick)
+                kept_mid = [summary_node] + kept_mid  # 摘要放前面
+                summarized += len(stale_mid)
+            mid = kept_mid
+        elif mid and len(mid) > self.mid_imp_keep:
+            # 没有 current_tick: 只按数量裁剪
+            mid = mid[-self.mid_imp_keep:]
+            pruned += max(0, len(mid) - self.mid_imp_keep)
+
+        # 重建 entries
+        self.entries = high + mid + kept_low
+        self.total_deduped += deduped
+        self.total_summarized += summarized
+        self.total_pruned += pruned
+        return {"deduped": deduped, "summarized": summarized, "pruned": pruned}
+
+    @staticmethod
+    def _event_type_key(node: MemoryNode) -> str:
+        """从 memory description 提取事件类型关键词。"""
+        desc = node.description
+        if "移动" in desc or "走" in desc or "跑" in desc or "飞" in desc:
+            return "moved"
+        if "休息" in desc or "睡觉" in desc:
+            return "rested"
+        if "观察" in desc or "巡视" in desc:
+            return "observed"
+        if "对话" in desc or "聊天" in desc:
+            return "dialogue"
+        if "战斗" in desc:
+            return "battle"
+        if "吃饭" in desc or "进食" in desc:
+            return "ate"
+        return desc[:8]  # 用描述前8字符做分组，避免不同事件被错误合并
+
+    @staticmethod
+    def _merge_descriptions(prev: str, curr: str) -> str:
+        """合并相邻相似事件的描述。"""
+        # 如果 prev 已经是合并过的
+        if "在区域游荡" in prev:
+            return prev  # 不变
+        # 提取移动区域关键词
+        for kw in ["文件岛", "无限山", "沙滩", "神殿", "商店", "祭坛", "空地", "森林"]:
+            if kw in prev or kw in curr:
+                return f"在{kw}附近游荡"
+        return "在区域游荡"
+
+    def generate_summary(
+        self, nodes: list[MemoryNode], current_tick: int
+    ) -> MemoryNode:
+        """Phase 7: 将一批旧记忆压缩为一条摘要节点。
+
+        Args:
+            nodes: 待合并的记忆列表
+            current_tick: 当前世界 tick
+
+        Returns:
+            摘要 MemoryNode
+        """
+        if not nodes:
+            raise ValueError("Cannot generate summary from empty node list")
+
+        # 统计
+        type_counts: dict[str, int] = {}
+        for n in nodes:
+            ek = self._event_type_key(n)
+            type_counts[ek] = type_counts.get(ek, 0) + 1
+
+        parts = [f"{v}次{k}" for k, v in sorted(type_counts.items())]
+        count_part = "、".join(parts) if parts else "各种活动"
+
+        # 取时间范围
+        ticks = sorted(n.tick_index for n in nodes)
+        tick_range = f"tick {ticks[0]}-{ticks[-1]}" if len(ticks) > 1 else f"tick {ticks[0]}"
+
+        summary_desc = f"摘要({tick_range}): 期间经历了{count_part},共{len(nodes)}条记忆"
+
         summary_node = MemoryNode(
-            timestamp=stale[-1].timestamp,  # 使用最后一条旧记忆的时间戳
+            timestamp=nodes[-1].timestamp,
             description=summary_desc,
             importance=3,
-            memory_type="reflection",
+            memory_type="summary",
             node_id=self.next_id,
+            tick_index=current_tick,
         )
         self.next_id += 1
-
-        self.entries = keep + [summary_node]
-        return len(stale)
+        self.total_summarized += len(nodes)
+        return summary_node
 
     def to_dict(self) -> list[dict[str, Any]]:
         return [m.to_dict() for m in self.entries]

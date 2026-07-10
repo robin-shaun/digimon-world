@@ -61,6 +61,7 @@ from .timeline import (
     get_timeline_system,
     reset_timeline_system,
 )
+from .vitality import VitalitySnapshot, compute_vitality
 from .weather import (
     Weather,
     WeatherSystem,
@@ -102,11 +103,13 @@ __all__ = [
     "StoryDirector",
     "StoryEvent",
     "TimelineSystem",
+    "VitalitySnapshot",
     "Weather",
     "WeatherSystem",
     "WorldClock",
     "WorldScheduler",
     "WorldState",
+    "compute_vitality",
     "persistence",
     "get_director",
     "get_economy_system",

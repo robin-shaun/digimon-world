@@ -92,6 +92,7 @@
         selectedName: null,
         connected: false,
         error: null,          // 后端不可达时的错误信息
+        vitality: null,       // Phase 7: 世界活力分数 (0-100)
     };
 
     let pollTimer = null;
@@ -334,11 +335,13 @@
         const timeEl = document.getElementById('world-time');
         const countEl = document.getElementById('digimon-count');
         const battleEl = document.getElementById('battle-count');
+        const vitalityEl = document.getElementById('vitality-score');
         const phaseEl = document.getElementById('phase');
 
         if (timeEl) timeEl.textContent = '世界时间: ' + new Date().toLocaleTimeString('zh-CN');
         if (countEl) countEl.textContent = '数码兽: ' + state.digimon.length;
         if (battleEl) battleEl.textContent = '战斗: ' + battleCount24h;
+        if (vitalityEl) vitalityEl.textContent = '活力: ' + (state.vitality != null ? state.vitality.toFixed(0) : '--');
 
         const connStatus = state.connected ? '🟢 在线' : '🔴 离线';
         if (phaseEl) phaseEl.textContent = `Phase 3 · ${connStatus}`;
@@ -1202,6 +1205,21 @@
         console.log('[notify] 世界事件广播已启动, 每 ' + (NOTIFY_POLL_MS / 1000) + 's 轮询');
     }
 
+    const VITALITY_POLL_MS = 5000;  // Phase 7: 活力指标 5s 轮询
+
+    async function pollVitality() {
+        try {
+            const resp = await fetchWithTimeout(API_BASE + '/api/world/vitality', { cache: 'no-store' });
+            if (resp.ok) {
+                const data = await resp.json();
+                state.vitality = data.overall_vitality;
+                updateStatusBar();
+            }
+        } catch (err) {
+            // 静默 — 活力不是关键功能
+        }
+    }
+
     // ══════════════════════════════════════════════
     //  启动
     // ══════════════════════════════════════════════
@@ -1226,6 +1244,9 @@
         initDirector();
         // 8. 启动世界事件广播 (左下角系统消息, 始终运行)
         startNotifications();
+        // 9. Phase 7: 世界活力指标 5s 轮询
+        pollVitality();
+        setInterval(pollVitality, VITALITY_POLL_MS);
     }
 
     start();

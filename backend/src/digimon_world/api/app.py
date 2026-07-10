@@ -36,9 +36,11 @@ from ..agents.healing import get_healing_system
 from ..battle import BattleEngine, BattleResult, spar
 from ..llm.client import get_client
 from ..world import (
+    VitalitySnapshot,
     WorldClock,
     WorldScheduler,
     WorldState,
+    compute_vitality,
     get_director,
     get_festival_system,
     get_landmark_system,
@@ -276,6 +278,29 @@ def heal_digimon(name: str, req: HealRequest) -> dict[str, Any]:
 def get_world_snapshot() -> dict[str, Any]:
     """整个世界快照(前端 canvas 渲染用)。"""
     return get_world().to_dict()
+
+
+# ---- Phase 7: 因果链 & 世界活力 API ----
+@app.get("/api/causality/{event_id}")
+def get_causality_chain(event_id: int) -> dict[str, Any]:
+    """回溯任意事件的完整因果链。
+
+    从指定 event_id 向上追溯 cause_event_id,直到根因。
+    返回 {event, chain, root_cause, depth}。
+    """
+    world = get_world()
+    return world.build_causality_chain(event_id)
+
+
+@app.get("/api/world/vitality")
+def get_world_vitality() -> dict[str, Any]:
+    """世界活力指标: entropy / social_density / event_diversity / interaction_rate / mood_variance。
+
+    综合活力分数 (0-100),前端 stats 面板展示。
+    """
+    world = get_world()
+    vitality = compute_vitality(world)
+    return vitality.to_dict()
 
 
 @app.post("/api/world/save")

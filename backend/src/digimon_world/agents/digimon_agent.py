@@ -166,13 +166,13 @@ class DigimonAgent:
             lines.append(f"- {trait}({val}/10): {desc}")
         return "你的性格:\n" + "\n".join(lines)
 
-    def observe(self, event: dict[str, Any]) -> None:
+    def observe(self, event: dict[str, Any], tick_index: int = 0) -> None:
         """观察一个世界事件,写入记忆流并触发 CPM 情绪评估。
 
         重要程度评分: TODO(Phase 2) 接入 LLM 评估,先用启发式。
         """
         importance = self._heuristic_importance(event)
-        self.memory.add(event=event, importance=importance)
+        self.memory.add(event=event, importance=importance, tick_index=tick_index)
         # CPM 情绪评估: 事件影响情绪向量
         self._cpm_appraisal(event)
 
@@ -279,11 +279,12 @@ class DigimonAgent:
             return "calm"
         return self._MOOD_DIMENSION_MAP.get(max_dim, "calm")
 
-    async def reflect_if_needed(self) -> None:
+    async def reflect_if_needed(self, tick_index: int = 0) -> None:
         """如果记忆累积到阈值,触发反思。
 
         反思频率: 30 分钟世界时间内最多一次。
         需要 self.reflector 已设置,否则静默跳过。
+        反思后自动触发记忆压缩。
         """
         if self.reflector is None:
             return

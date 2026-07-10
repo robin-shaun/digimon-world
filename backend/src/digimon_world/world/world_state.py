@@ -73,13 +73,100 @@ class WorldState:
     """
 
     def __init__(self, regions: Optional[dict[str, Region]] = None) -> None:
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.regions: dict[str, Region] = regions or dict(DEFAULT_REGIONS)
         self.agents: dict[str, DigimonAgent] = {}
         self.events: list[dict[str, Any]] = []
         self.created_at: datetime = datetime.now()
         # 世界时间(独立于现实时间): 现实 1 秒 = 世界 1 分钟 (默认)
         self.real_to_world_ratio: int = 60
+        # Phase 7: 因果链 —— 事件 ID 自增计数器
+        self._next_event_id: int = 0
+
+    # ---- Phase 7: 因果链支持 ----
+    def _next_id(self) -> int:
+        """分配下一个事件 ID(线程安全)。"""
+        with self._lock:
+            eid = self._next_event_id
+            self._next_event_id += 1
+            return eid
+
+    def append_event(
+        self,
+        event: dict[str, Any],
+        cause_event_id: int | None = None,
+        cause_type: str | None = None,
+    ) -> int:
+        """添加一条世界事件,自动注入因果链字段和事件 ID。
+
+        Args:
+            event: 事件 dict
+            cause_event_id: 触发此事件的上游事件 ID (None 为根因事件)
+            cause_type: 因果类型: proximity/dialogue/battle/disaster/festival/story/agent
+
+        Returns:
+            分配的事件 ID
+        """
+        eid = self._next_id()
+        event["event_id"] = eid
+        event["causality"] = {
+            "cause_event_id": cause_event_id,
+            "cause_type": cause_type,
+        }
+        with self._lock:
+            self.events.append(event)
+        return eid
+
+    def build_causality_chain(self, event_id: int) -> dict[str, Any]:
+        """Phase 7: 回溯任意事件的因果链。
+
+        从 event_id 开始向上追溯 cause_event_id,直到根因(None)。
+        返回 {"event": 目标事件, "chain": [...], "root_cause": 根因事件}。
+
+        Args:
+            event_id: 要追溯的事件 ID
+
+        Returns:
+            因果链字典; 如果 event_id 不存在则返回 {"error": "not found"}
+        """
+        with self._lock:
+            # 建立 event_id -> event 索引
+            index: dict[int, dict[str, Any]] = {}
+            for ev in self.events:
+                eid = ev.get("event_id")
+                if eid is not None:
+                    index[eid] = ev
+
+        target = index.get(event_id)
+        if target is None:
+            return {"error": f"Event {event_id} not found"}
+
+        chain: list[dict[str, Any]] = []
+        current = target
+        visited: set[int] = set()
+
+        while current is not None:
+            eid = current.get("event_id")
+            if eid is None or eid in visited:
+                break
+            visited.add(eid)
+            chain.append({
+                "event_id": eid,
+                "type": current.get("type", ""),
+                "description": current.get("description", current.get("line", "")),
+                "at": current.get("at", ""),
+                "causality": current.get("causality", {}),
+            })
+            # 向上追溯
+            cause_id = current.get("causality", {}).get("cause_event_id")
+            current = index.get(cause_id) if cause_id is not None else None
+
+        return {
+            "event": chain[0] if chain else {},
+            "chain": chain,
+            "root_cause": chain[-1] if chain else {},
+            "depth": len(chain),
+        }
 
     # ---- 注册数码兽 ----
     def spawn(self, agent: DigimonAgent) -> None:
@@ -113,14 +200,51 @@ class WorldState:
             new_x = max(min_x, min(max_x, x + dx))
             new_y = max(min_y, min(max_y, y + dy))
             agent.location = (new_x, new_y)
-            self.events.append({
+            event = {
                 "type": "moved",
                 "agent": name,
                 "from": [x, y],
                 "to": [new_x, new_y],
                 "at": datetime.now().isoformat(),
-            })
+            }
+            # Phase 7: 使用 append_event 注入 event_id + causality
+            eid = self._next_id()
+            event["event_id"] = eid
+            event["causality"] = {
+                "cause_event_id": None,
+                "cause_type": "agent",
+            }
+            self.events.append(event)
             return (new_x, new_y)
+
+    @property
+    def memory_stats(self) -> dict[str, Any]:
+        """Phase 7: 所有 agent 记忆压缩统计汇总。"""
+        total = 0
+        total_deduped = 0
+        total_summarized = 0
+        total_pruned = 0
+        per_agent: list[dict[str, Any]] = []
+        for agent in self.all():
+            ms = agent.memory
+            total += len(ms.entries)
+            total_deduped += ms.total_deduped
+            total_summarized += ms.total_summarized
+            total_pruned += ms.total_pruned
+            per_agent.append({
+                "name": agent.name,
+                "entries": len(ms.entries),
+                "deduped": ms.total_deduped,
+                "summarized": ms.total_summarized,
+                "pruned": ms.total_pruned,
+            })
+        return {
+            "total_entries": total,
+            "total_deduped": total_deduped,
+            "total_summarized": total_summarized,
+            "total_pruned": total_pruned,
+            "per_agent": per_agent,
+        }
 
     # ---- 序列化 ----
     def to_dict(self) -> dict[str, Any]:
@@ -139,6 +263,7 @@ class WorldState:
                 "agents": [a.to_dict() for a in self.agents.values()],
                 "world_time": datetime.now().isoformat(),
                 "real_to_world_ratio": self.real_to_world_ratio,
+                "memory_stats": self.memory_stats,
             }
 
 
