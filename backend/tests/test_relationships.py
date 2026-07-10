@@ -136,11 +136,16 @@ def test_battle_api_updates_relationship() -> None:
 
 @pytest.mark.asyncio
 async def test_dialogue_auto_adjusts_relationship() -> None:
-    """scheduler 相遇生成对话后,双方关系 += DIALOGUE_DELTA。"""
+    """scheduler 相遇生成对话后,双方关系 += DIALOGUE_DELTA。
+
+    首次 tick 恰逢世界第 0 天(节日日),节日系统会额外给所有关系对
+    +RELATIONSHIP_BOOST,因此期望值 = DIALOGUE_DELTA + RELATIONSHIP_BOOST。
+    """
     from digimon_world.agents.digimon_agent import DigimonAgent
     from digimon_world.llm.client import FakeLlmClient, LlmModel
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.world.clock import WorldClock
+    from digimon_world.world.festivals import FestivalSystem, RELATIONSHIP_BOOST
     from digimon_world.world.scheduler import WorldScheduler
     from digimon_world.world.world_state import WorldState
 
@@ -155,13 +160,16 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
 
     tracker = RelationshipTracker()
     clock = WorldClock()
+    # 使用独立 FestivalSystem 实例,避免进程级单例的状态污染
+    festivals = FestivalSystem()
     sched = WorldScheduler(
-        world=world, clock=clock, dialogue=dialogue, relationships=tracker
+        world=world, clock=clock, dialogue=dialogue,
+        relationships=tracker, festivals=festivals,
     )
 
     assert tracker.get_relationship("甲兽", "乙兽") == 0.0
     await sched.tick_once()
-    assert tracker.get_relationship("甲兽", "乙兽") == DIALOGUE_DELTA
+    assert tracker.get_relationship("甲兽", "乙兽") == DIALOGUE_DELTA + RELATIONSHIP_BOOST
 
 
 # ---- 6. 隐性欲望(latent desire)测试 ----
