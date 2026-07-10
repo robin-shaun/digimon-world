@@ -21,9 +21,12 @@ import pytest
 
 from digimon_world.agents.achievements import (
     AchievementSystem,
+    EXPLORER_CORE_LANDMARKS,
     FIVE_HUNDRED_TICKS_MEMORY_COUNT,
+    FIFTY_BATTLES_VICTORIES,
     FIRST_BATTLE_VICTORIES,
     HUNDRED_TICKS_MEMORY_COUNT,
+    SOCIAL_BUTTERFLY_MIN_UNIQUE,
     TEN_BATTLES_VICTORIES,
     Milestone,
 )
@@ -253,6 +256,187 @@ def test_five_hundred_ticks_earned_at_500(system: AchievementSystem, rookie_agen
     milestone_values = [a["milestone"] for a in achievements]
     assert Milestone.FIVE_HUNDRED_TICKS.value in milestone_values
     assert Milestone.HUNDRED_TICKS.value in milestone_values  # 递进
+
+
+# ----------------------------------------------------------------------------
+# FIFTY_BATTLES
+# ----------------------------------------------------------------------------
+
+def test_fifty_battles_not_earned_30_victories(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """30 胜不达成 FIFTY_BATTLES。"""
+    rookie_agent.battle_victories = 30
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.FIFTY_BATTLES.value not in milestone_values
+    assert Milestone.FIRST_BATTLE.value in milestone_values
+    assert Milestone.TEN_BATTLES.value in milestone_values
+
+
+def test_fifty_battles_not_earned_49_victories(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """49 胜不达成 FIFTY_BATTLES(边界)。"""
+    rookie_agent.battle_victories = 49
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.FIFTY_BATTLES.value not in milestone_values
+
+
+def test_fifty_battles_earned_50_victories(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """刚好 50 胜达成 FIFTY_BATTLES。"""
+    rookie_agent.battle_victories = FIFTY_BATTLES_VICTORIES
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.FIFTY_BATTLES.value in milestone_values
+    assert Milestone.TEN_BATTLES.value in milestone_values  # 递进
+
+
+def test_fifty_battles_earned_100_victories(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """100 胜也达成 FIFTY_BATTLES。"""
+    rookie_agent.battle_victories = 100
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.FIFTY_BATTLES.value in milestone_values
+
+
+# ----------------------------------------------------------------------------
+# SOCIAL_BUTTERFLY
+# ----------------------------------------------------------------------------
+
+def test_social_butterfly_not_earned_3_partners(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """3 个不同对话对象不达成 SOCIAL_BUTTERFLY。"""
+    for partner in ["加布兽", "比丘兽", "巴达兽"]:
+        rookie_agent.memory.add(
+            event={"description": f"遇到{partner},向它打了个招呼", "type": "first_meet", "partner": partner},
+            importance=5,
+        )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.FIRST_DIALOGUE.value in milestone_values
+    assert Milestone.SOCIAL_BUTTERFLY.value not in milestone_values
+
+
+def test_social_butterfly_earned_5_partners(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """5 个不同对话对象达成 SOCIAL_BUTTERFLY。"""
+    partners = ["加布兽", "比丘兽", "巴达兽", "甲虫兽", "迪路兽"]
+    for p in partners:
+        rookie_agent.memory.add(
+            event={"description": f"遇到{p},和它进行了一段对话", "type": "dialogue", "partner": p},
+            importance=6,
+        )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.SOCIAL_BUTTERFLY.value in milestone_values
+
+
+def test_social_butterfly_earned_7_partners(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """7 个不同对话对象也达成 SOCIAL_BUTTERFLY。"""
+    for partner in ["加布兽", "比丘兽", "巴达兽", "甲虫兽", "迪路兽", "哥玛兽", "巴鲁兽"]:
+        rookie_agent.memory.add(
+            event={"description": f"和{partner}相遇并聊了一会", "type": "first_meet", "partner": partner},
+            importance=4,
+        )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.SOCIAL_BUTTERFLY.value in milestone_values
+
+
+# ----------------------------------------------------------------------------
+# EXPLORER
+# ----------------------------------------------------------------------------
+
+def test_explorer_not_earned_empty_memory(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """无记忆时不达成 EXPLORER。"""
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.EXPLORER.value not in milestone_values
+
+
+def test_explorer_not_earned_partial_landmarks(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """只访问部分地标不达成 EXPLORER。"""
+    for region in ["创始村", "无限山"]:
+        rookie_agent.memory.add(
+            event={"description": f"在{region}闲逛", "type": "movement", "region_id": region},
+            importance=4,
+        )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.EXPLORER.value not in milestone_values
+
+
+def test_explorer_earned_all_landmarks(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """访问所有核心地标达成 EXPLORER。"""
+    for region in EXPLORER_CORE_LANDMARKS:
+        rookie_agent.memory.add(
+            event={"description": f"探索{region}", "type": "movement", "region_id": region},
+            importance=5,
+        )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.EXPLORER.value in milestone_values
+
+
+def test_explorer_earned_with_extra_regions(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """访问所有核心地标 + 额外区域也达成 EXPLORER。"""
+    for region in list(EXPLORER_CORE_LANDMARKS) + ["玩具城"]:
+        rookie_agent.memory.add(
+            event={"description": f"到达{region}", "type": "movement", "region_id": region},
+            importance=4,
+        )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.EXPLORER.value in milestone_values
+
+
+# ----------------------------------------------------------------------------
+# BREEDER
+# ----------------------------------------------------------------------------
+
+def test_breeder_not_earned_no_memory(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """无记忆时不达成 BREEDER。"""
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.BREEDER.value not in milestone_values
+
+
+def test_breeder_not_earned_normal_events(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """普通事件不触发 BREEDER。"""
+    rookie_agent.memory.add(event={"description": "在草原上奔跑"}, importance=3)
+    rookie_agent.memory.add(event={"description": "与加布兽战斗"}, importance=6)
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.BREEDER.value not in milestone_values
+
+
+def test_breeder_earned_gave_birth(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """记忆中有 'gave birth' 记录达成 BREEDER。"""
+    rookie_agent.memory.add(
+        event={"description": "gave birth to a new DigiEgg after bonding with Gabumon", "type": "breeding"},
+        importance=10,
+    )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.BREEDER.value in milestone_values
+
+
+def test_breeder_earned_produced_egg(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """记忆中有产蛋记录达成 BREEDER。"""
+    rookie_agent.memory.add(
+        event={"description": "produced an egg with Biyomon", "type": "breeding"},
+        importance=9,
+    )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.BREEDER.value in milestone_values
+
+
+def test_breeder_earned_chinese_description(system: AchievementSystem, rookie_agent: DigimonAgent):
+    """中文描述的繁衍记录达成 BREEDER。"""
+    rookie_agent.memory.add(
+        event={"description": "与加布兽成功繁衍,产下了一颗数码蛋", "type": "breeding"},
+        importance=8,
+    )
+    achievements = system.evaluate(rookie_agent)
+    milestone_values = [a["milestone"] for a in achievements]
+    assert Milestone.BREEDER.value in milestone_values
 
 
 # ----------------------------------------------------------------------------

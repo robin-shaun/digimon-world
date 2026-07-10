@@ -494,11 +494,15 @@
         // 成就图标映射
         const ACHIEVEMENT_ICONS = {
             first_dialogue: '💬',
+            social_butterfly: '🦋',
             first_battle: '⚔️',
             '10_battles': '🏆',
-            first_evolution: '🦋',
+            '50_battles': '👑',
+            first_evolution: '🦖',
             '100ticks': '🕐',
             '500ticks': '⏳',
+            explorer: '🗺️',
+            breeder: '🥚',
         };
 
         const achievementsHtml = achievements.length === 0
@@ -516,7 +520,7 @@
             </div>
             <p class="meta">🏆 战斗胜利: ${detail.battle_victories || 0}</p>
             <div class="detail-block">
-                <h4>🏅 成就 <span class="achieve-count">${achievements.length}/6</span></h4>
+                <h4>🏅 成就 <span class="achieve-count">${achievements.length}/10</span></h4>
                 ${achievementsHtml}
             </div>
             <div class="detail-block">
