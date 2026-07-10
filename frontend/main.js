@@ -443,13 +443,16 @@
     async function loadSidebarDetail(name) {
         let detail = null;
         let pairs = [];
+        let achievements = [];
         try {
-            const [dResp, rResp] = await Promise.all([
+            const [dResp, rResp, aResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
+            if (aResp.ok) achievements = (await aResp.json()).achievements || [];
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -476,6 +479,23 @@
         // 最近记忆: 最多 5 条 (最新在前), importance >= 7 高亮
         const mems = (detail.memory || []).slice(-5).reverse();
 
+        // 成就图标映射
+        const ACHIEVEMENT_ICONS = {
+            first_dialogue: '💬',
+            first_battle: '⚔️',
+            '10_battles': '🏆',
+            first_evolution: '🦋',
+            '100ticks': '🕐',
+            '500ticks': '⏳',
+        };
+
+        const achievementsHtml = achievements.length === 0
+            ? '<p class="dir-hint">暂无成就</p>'
+            : '<div class="achieve-list">' + achievements.map((a) => {
+                const icon = ACHIEVEMENT_ICONS[a.milestone] || '✨';
+                return `<span class="achieve-badge" title="${escapeHtml(a.reason || '')}">${icon}</span>`;
+            }).join('') + '</div>';
+
         const detailHtml = `
             <div class="hp-row">
                 <span class="hp-label">HP</span>
@@ -483,6 +503,10 @@
                 <span class="hp-num">${hp}/${maxHp}</span>
             </div>
             <p class="meta">🏆 战斗胜利: ${detail.battle_victories || 0}</p>
+            <div class="detail-block">
+                <h4>🏅 成就 <span class="achieve-count">${achievements.length}/6</span></h4>
+                ${achievementsHtml}
+            </div>
             <div class="detail-block">
                 <h4>关系</h4>
                 ${rels.length === 0

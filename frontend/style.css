@@ -603,6 +603,40 @@ footer {
     padding-bottom: 3px;
 }
 
+/* ---- 成就徽章 (Phase 5) ---- */
+.achieve-count {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: normal;
+    margin-left: 4px;
+}
+
+.achieve-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.achieve-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: rgba(42, 58, 106, 0.5);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: default;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.achieve-badge:hover {
+    transform: scale(1.15);
+    border-color: var(--accent-cyan);
+}
+
 .rel-list,
 .mem-list {
     list-style: none;
