@@ -49,6 +49,11 @@ DIALOGUE_RADIUS = 100
 # 互动冷却(世界分钟): 同一对数码兽在此窗口内最多互动一次
 DIALOGUE_COOLDOWN_MINUTES = 30
 
+# ---- 显著性阈值(Phase 6) ----
+# 事件分级: trivial(0-2) / routine(3-5) / significant(6-8) / critical(9-10)
+# 只有 significance >= SIGNIFICANCE_LLM_THRESHOLD 的事件才触发 LLM 反思
+SIGNIFICANCE_LLM_THRESHOLD = 6
+
 # 事件回调签名: async def cb(event: dict, agent: DigimonAgent) -> None
 EventCallback = Callable[[dict[str, Any], DigimonAgent], Awaitable[None]]
 
@@ -94,6 +99,8 @@ class WorldScheduler:
         self._tick_count = 0
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
         self._last_world_day: Optional[int] = None
+        # Phase 6: 监控指标 — 跳过 LLM 的事件计数
+        self.skipped_llm_events: int = 0
 
     @property
     def tick_count(self) -> int:
@@ -262,6 +269,25 @@ class WorldScheduler:
                 self._relationships.record_proximity_with_desire(
                     a.name, a.latent_desire, b.name, b.latent_desire,
                 )
+                # Phase 6: 冷却中的相遇是 routine 事件,跳过 LLM
+                self.skipped_llm_events += 1
+                continue
+
+            # Phase 6: 显著性阈值 — 评估事件上下文
+            # proximity 相遇本身是 routine(4),不足以触发 LLM 对话生成
+            # 但如果双方有强烈的 desire 兼容(affinity >= 0.6),则提升为 significant
+            event_context = {"type": "proximity", "agent": a.name, "importance": 5}
+            sig = self._score_event_significance(event_context)
+            desire_bonus = RelationshipTracker.desire_affinity(a.latent_desire, b.latent_desire)
+            if desire_bonus >= 0.6:
+                sig = max(sig, 7)  # 欲望兼容提升为 significant
+
+            if sig < SIGNIFICANCE_LLM_THRESHOLD:
+                # routine 事件: 仅记录亲近度,不调 LLM
+                self._relationships.record_proximity_with_desire(
+                    a.name, a.latent_desire, b.name, b.latent_desire,
+                )
+                self.skipped_llm_events += 1
                 continue
 
             try:
@@ -291,6 +317,34 @@ class WorldScheduler:
             # 刷新双方冷却时间戳
             a.last_interaction_at = now
             b.last_interaction_at = now
+
+    @staticmethod
+    def _score_event_significance(event: dict[str, Any]) -> int:
+        """评估事件显著性: 0-10。
+
+        分级:
+        - critical (9-10): battle_victory, evolution, near_death, disaster
+        - significant (6-8): first_meet, gift_received, threat, dialogue, faction_create
+        - routine (3-5): moved, rested, observed, ate
+        - trivial (0-2): proximity, step_error
+
+        只有 significance >= SIGNIFICANCE_LLM_THRESHOLD(6) 的事件才触发 LLM 反思。
+        """
+        et = event.get("type", "")
+        if et in {"battle_victory", "evolution", "near_death", "disaster"}:
+            return 9
+        if et in {"first_meet", "gift_received", "threat"}:
+            return 7
+        if et in {"dialogue", "faction_create", "festival"}:
+            return 7
+        if et in {"broadcast"}:
+            imp = event.get("importance", 5)
+            return max(6, min(10, int(imp)))
+        if et in {"moved", "rested", "observed", "ate", "heal"}:
+            return 4
+        if et in {"proximity", "step_error"}:
+            return 3
+        return 5  # 未知事件默认 routine
 
     def _in_cooldown(self, agent: DigimonAgent, now: Any, cooldown_minutes: float | None = None) -> bool:
         """判断 agent 是否仍在互动冷却窗口内。"""

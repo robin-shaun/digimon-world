@@ -132,6 +132,9 @@ class DigimonAgent:
     memory: MemoryStream = field(default_factory=MemoryStream)
     current_plan: Optional[str] = None
     mood: str = "calm"  # calm/excited/tired/scared/curious
+    # CPM 情绪演化管道: 连续情绪向量,每次 tick 积累+衰减
+    # 维度: joy, sadness, anger, fear (均为 0.0~1.0)
+    mood_state: dict[str, float] = field(default_factory=lambda: {"joy": 0.0, "sadness": 0.0, "anger": 0.0, "fear": 0.0})
     # 隐性目标: 反思时由 LLM 浮现出的一句内心渴望(如"想变强"),
     # 以及它的强烈度(0-1)。影响 plan_next() 的行动倾向。
     latent_desire: str = ""
@@ -164,12 +167,14 @@ class DigimonAgent:
         return "你的性格:\n" + "\n".join(lines)
 
     def observe(self, event: dict[str, Any]) -> None:
-        """观察一个世界事件,写入记忆流。
+        """观察一个世界事件,写入记忆流并触发 CPM 情绪评估。
 
         重要程度评分: TODO(Phase 2) 接入 LLM 评估,先用启发式。
         """
         importance = self._heuristic_importance(event)
         self.memory.add(event=event, importance=importance)
+        # CPM 情绪评估: 事件影响情绪向量
+        self._cpm_appraisal(event)
 
     def _heuristic_importance(self, event: dict[str, Any]) -> int:
         """启发式重要性评分(1-10),Phase 2 替换为 LLM。"""
@@ -181,6 +186,98 @@ class DigimonAgent:
         if et in {"moved", "ate", "rested"}:
             return 3
         return 5
+
+    # ---- CPM 情绪演化管道 ----
+
+    # 情绪衰减率: 每次 tick 自然消退 5%
+    MOOD_DECAY_RATE: ClassVar[float] = 0.05
+
+    # mood_state 维度 → 显示 mood 字符串的映射表
+    _MOOD_DIMENSION_MAP: ClassVar[dict[str, str]] = {
+        "joy": "excited",
+        "sadness": "tired",
+        "anger": "scared",  # anger → 紧张状态
+        "fear": "scared",
+    }
+
+    def _cpm_appraisal(self, event: dict[str, Any]) -> None:
+        """CPM (Component Process Model) 四维事件评估。
+
+        参考 arXiv 2607.07824 的 appraisal 理论:
+        - Relevance: 这件事跟我有关吗？
+        - Implication: 对我有利/有害？→ +joy 或 +sadness
+        - Coping: 我能应对吗？→ 能=fear↓, 不能=fear↑
+        - Normative: 符合规则吗？→ 被偷袭=anger↑, 公平对战=respect
+
+        修改 self.mood_state (累积情绪向量)。
+        """
+        et = event.get("type", "")
+
+        # 默认增量(每次触发)
+        deltas: dict[str, float] = {"joy": 0.0, "sadness": 0.0, "anger": 0.0, "fear": 0.0}
+
+        # Relevance: 与我有关的事件才评估
+        agent_name = event.get("agent", "")
+        if agent_name and agent_name != self.name:
+            # 事件涉及其他 agent,可能仍然影响我（如附近发生战斗）
+            if et in {"battle", "dialogue", "threat"}:
+                pass  # 继续评估
+            else:
+                return  # 与我无关，跳过
+
+        # Implication: 有利/有害
+        if et in {"battle_victory", "evolution", "gift_received"}:
+            deltas["joy"] += 0.3
+            deltas["fear"] -= 0.1  # 胜利降恐惧
+        elif et in {"near_death", "threat", "step_error"}:
+            deltas["sadness"] += 0.2
+            deltas["fear"] += 0.3
+        elif et == "battle":
+            # 战斗: 刺激(joy↑) + 紧张(fear↑)
+            deltas["joy"] += 0.1
+            deltas["fear"] += 0.15
+        elif et == "first_meet":
+            deltas["joy"] += 0.15
+        elif et == "moved":
+            deltas["joy"] += 0.05  # 移动有轻微新鲜感
+        elif et == "rested":
+            deltas["joy"] += 0.08  # 休息恢复
+
+        # Coping: 能否应对
+        if et in {"near_death", "threat"}:
+            deltas["fear"] += 0.2
+        elif et in {"battle_victory", "evolution"}:
+            deltas["fear"] -= 0.15  # 胜利增强自信
+
+        # Normative: 是否符合规则预期
+        if et in {"threat", "battle"}:
+            # 被攻击→anger↑
+            is_defender = event.get("defender", "") == self.name or event.get("target", "") == self.name
+            if is_defender:
+                deltas["anger"] += 0.25
+
+        # 应用增量(夹紧到 [0, 1])
+        for dim in deltas:
+            self.mood_state[dim] = max(0.0, min(1.0, self.mood_state.get(dim, 0.0) + deltas[dim]))
+
+    def _decay_mood(self) -> None:
+        """自然情绪衰减: 每次 tick 各维度衰减 MOOD_DECAY_RATE。"""
+        for dim in self.mood_state:
+            current = self.mood_state[dim]
+            self.mood_state[dim] = max(0.0, current - self.MOOD_DECAY_RATE)
+
+    def _derive_mood_label(self) -> str:
+        """从 mood_state 推导显示用 mood 字符串。
+
+        优先取最大维度映射;全是零则返回 'calm'。
+        """
+        if not self.mood_state:
+            return "calm"
+        max_dim = max(self.mood_state, key=self.mood_state.get)  # type: ignore[arg-type]
+        max_val = self.mood_state.get(max_dim, 0.0)
+        if max_val <= 0.01:
+            return "calm"
+        return self._MOOD_DIMENSION_MAP.get(max_dim, "calm")
 
     async def reflect_if_needed(self) -> None:
         """如果记忆累积到阈值,触发反思。
@@ -426,14 +523,18 @@ class DigimonAgent:
         Returns:
             act() 产出的世界事件。
         """
+        # 0. CPM 情绪衰减(每次 tick 自然消退 5%)
+        self._decay_mood()
         # 1. 触发反思(无副作用失败时静默)
         await self.reflect_if_needed()
         # 2. 重新生成计划
         await self.plan_next()
         # 3. 执行并落事件到自身记忆
         event = self.act(regions)
-        # 把事件写回记忆流(importance 由启发式决定)
+        # 把事件写回记忆流(importance 由启发式决定) + CPM 情绪评估
         self.observe(event)
+        # 4. 从 mood_state 更新 mood 标签
+        self.mood = self._derive_mood_label()
         return event
 
     # ---- 日记系统 ----
@@ -547,4 +648,5 @@ class DigimonAgent:
             "personality_traits": self.personality_traits,
             "latent_desire": self.latent_desire,
             "desire_strength": self.desire_strength,
+            "mood_state": dict(self.mood_state),
         }

@@ -40,6 +40,7 @@ from ..agents.digimon_agent import (
     EvolutionStage,
 )
 from ..memory.memory_stream import MemoryNode, MemoryStream
+from .relationships import RelationshipVector, _key
 
 if TYPE_CHECKING:
     from .relationships import RelationshipTracker
@@ -67,6 +68,7 @@ CREATE TABLE IF NOT EXISTS digimons (
     speed            INTEGER NOT NULL,
     bond             INTEGER NOT NULL,
     mood             TEXT NOT NULL,
+    mood_state       TEXT NOT NULL DEFAULT '{}',
     battle_victories INTEGER NOT NULL,
     current_plan     TEXT,
     latent_desire    TEXT NOT NULL DEFAULT '',
@@ -85,7 +87,11 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE TABLE IF NOT EXISTS relationships (
     agent_a TEXT NOT NULL,
     agent_b TEXT NOT NULL,
-    score   REAL NOT NULL,
+    score   REAL NOT NULL,          -- 综合倾向分(向后兼容)
+    affinity REAL NOT NULL DEFAULT 0.0,
+    rivalry  REAL NOT NULL DEFAULT 0.0,
+    respect  REAL NOT NULL DEFAULT 0.0,
+    fear     REAL NOT NULL DEFAULT 0.0,
     PRIMARY KEY (agent_a, agent_b)
 );
 
@@ -140,9 +146,9 @@ async def save(
                 """
                 INSERT INTO digimons (
                     name, species, stage, attribute, region_id, x, y,
-                    hp, ep, attack, defense, speed, bond, mood,
+                    hp, ep, attack, defense, speed, bond, mood, mood_state,
                     battle_victories, current_plan, latent_desire, desire_strength
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     agent.name,
@@ -159,6 +165,7 @@ async def save(
                     st.speed,
                     st.bond,
                     agent.mood,
+                    json.dumps(agent.mood_state, ensure_ascii=False),
                     agent.battle_victories,
                     agent.current_plan,
                     agent.latent_desire,
@@ -185,9 +192,17 @@ async def save(
 
         # ---- 关系 ----
         for pair in tracker.all_pairs():
+            vec = pair.get("vector", {})
             await db.execute(
-                "INSERT INTO relationships (agent_a, agent_b, score) VALUES (?,?,?)",
-                (pair["a"], pair["b"], pair["score"]),
+                "INSERT INTO relationships (agent_a, agent_b, score, affinity, rivalry, respect, fear) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (
+                    pair["a"], pair["b"], pair["score"],
+                    vec.get("affinity", 0.0),
+                    vec.get("rivalry", 0.0),
+                    vec.get("respect", 0.0),
+                    vec.get("fear", 0.0),
+                ),
             )
 
         # ---- 事件 ----
@@ -257,7 +272,7 @@ async def load(
         new_agents: dict[str, DigimonAgent] = {}
         async with db.execute(
             "SELECT name, species, stage, attribute, region_id, x, y, hp, ep, "
-            "attack, defense, speed, bond, mood, battle_victories, current_plan, "
+            "attack, defense, speed, bond, mood, mood_state, battle_victories, current_plan, "
             "latent_desire, desire_strength "
             "FROM digimons"
         ) as cur:
@@ -266,12 +281,12 @@ async def load(
                 new_agents[agent.name] = agent
 
         # ---- 关系 ----
-        rel_rows: list[tuple[str, str, float]] = []
+        rel_rows: list[dict[str, Any]] = []
         async with db.execute(
-            "SELECT agent_a, agent_b, score FROM relationships"
+            "SELECT agent_a, agent_b, score, affinity, rivalry, respect, fear FROM relationships"
         ) as cur:
             async for row in cur:
-                rel_rows.append((row["agent_a"], row["agent_b"], row["score"]))
+                rel_rows.append(dict(row))
 
         # ---- 事件 ----
         new_events: list[dict] = []
@@ -299,9 +314,17 @@ async def load(
             pass
 
     # 关系表: 清空后重灌
-    tracker._scores.clear()
-    for a, b, score in rel_rows:
-        tracker.update(a, b, score)
+    tracker._vectors.clear()
+    for row in rel_rows:
+        a, b = row["agent_a"], row["agent_b"]
+        # 尝试恢复四维向量(旧库可能没有这些列)
+        vec = RelationshipVector(
+            affinity=float(row.get("affinity", row.get("score", 0.0))),
+            rivalry=float(row.get("rivalry", 0.0)),
+            respect=float(row.get("respect", 0.0)),
+            fear=float(row.get("fear", 0.0)),
+        )
+        tracker._vectors[_key(a, b)] = vec
 
     logger.info("world loaded from %s (%d digimons)", db_path, len(new_agents))
     return True
@@ -343,7 +366,24 @@ def _row_to_agent(row: aiosqlite.Row, memories: list[MemoryNode]) -> DigimonAgen
         memory=stream,
         current_plan=row["current_plan"],
         mood=row["mood"],
+        mood_state=_parse_mood_state(row["mood_state"]),
         battle_victories=row["battle_victories"],
         latent_desire=row["latent_desire"] if row["latent_desire"] else "",
         desire_strength=row["desire_strength"] if row["desire_strength"] is not None else 0.0,
     )
+
+
+def _parse_mood_state(value: str | None) -> dict[str, float]:
+    """从 JSON 字符串还原 mood_state;解析失败返回默认零向量。"""
+    if not value:
+        return {"joy": 0.0, "sadness": 0.0, "anger": 0.0, "fear": 0.0}
+    try:
+        data = json.loads(value)
+        return {
+            "joy": float(data.get("joy", 0.0)),
+            "sadness": float(data.get("sadness", 0.0)),
+            "anger": float(data.get("anger", 0.0)),
+            "fear": float(data.get("fear", 0.0)),
+        }
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return {"joy": 0.0, "sadness": 0.0, "anger": 0.0, "fear": 0.0}

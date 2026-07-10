@@ -103,10 +103,16 @@ async def test_dialogue_failure_silent() -> None:
 
 @pytest.mark.asyncio
 async def test_scheduler_triggers_dialogue_on_proximity() -> None:
-    """两只靠近的数码兽,tick 后双方记忆里出现对话。"""
+    """两只靠近的数码兽,tick 后双方记忆里出现对话。
+
+    Phase 6: 欲望兼容的 agents 触发对话(显著性 >= 6),否则跳过 LLM。
+    """
     world = WorldState()
     a = _agent("亚古兽", 100, 100)
     b = _agent("加布兽", 120, 110)  # 距离 ~22 < 100
+    # Phase 6: 设置兼容欲望以通过显著性阈值(>=6)
+    a.latent_desire = "想交朋友"
+    b.latent_desire = "想交朋友"
     world.spawn(a)
     world.spawn(b)
 
@@ -136,6 +142,9 @@ async def test_scheduler_dialogue_cooldown() -> None:
     world = WorldState()
     a = _agent("亚古兽", 100, 100)
     b = _agent("加布兽", 120, 110)
+    # Phase 6: 设置兼容欲望以通过显著性阈值
+    a.latent_desire = "想交朋友"
+    b.latent_desire = "想交朋友"
     world.spawn(a)
     world.spawn(b)
 

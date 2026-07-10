@@ -23,6 +23,7 @@ from digimon_world.world.relationships import (
     DIALOGUE_DELTA,
     MAX_SCORE,
     MIN_SCORE,
+    PROXIMITY_DELTA,
     RelationshipTracker,
     reset_tracker,
 )
@@ -95,15 +96,15 @@ def test_get_faction_returns_ally_and_rival() -> None:
 
 
 def test_battle_auto_adjusts_relationship() -> None:
-    """record_battle: 双方 -10 敌对, 输方对赢方 +5 敬畏 → 净 -5。"""
+    """record_battle: affinity 下降, rivalry/respect/fear 分别上升。"""
     rt = RelationshipTracker()
     rt.record_battle(winner="亚古兽", loser="加布兽")
-    expected = BATTLE_DELTA + BATTLE_AWE_DELTA  # -10 + 5 = -5
-    assert rt.get_relationship("亚古兽", "加布兽") == expected
+    # get_relationship() 返回纯亲和度 (BATTLE_DELTA = -10)
+    assert rt.get_relationship("亚古兽", "加布兽") == -10.0
 
     # 平局 / None 不改变关系
     rt.record_battle(winner=None, loser="加布兽")
-    assert rt.get_relationship("亚古兽", "加布兽") == expected
+    assert rt.get_relationship("亚古兽", "加布兽") == -10.0
 
 
 def test_battle_api_updates_relationship() -> None:
@@ -136,10 +137,10 @@ def test_battle_api_updates_relationship() -> None:
 
 @pytest.mark.asyncio
 async def test_dialogue_auto_adjusts_relationship() -> None:
-    """scheduler 相遇生成对话后,双方关系 += DIALOGUE_DELTA。
+    """Phase 6 显著性阈值: routine proximity 只加基础亲近,不触发 LLM 对话。
 
-    首次 tick 恰逢世界第 0 天(节日日),节日系统会额外给所有关系对
-    +RELATIONSHIP_BOOST,因此期望值 = DIALOGUE_DELTA + RELATIONSHIP_BOOST。
+    首次 tick: 相遇 → PROXIMITY_DELTA + 节日 RELATIONSHIP_BOOST。
+    LLM 对话需 significance >= 6,普通相遇仅 5,被拦截。
     """
     from digimon_world.agents.digimon_agent import DigimonAgent
     from digimon_world.llm.client import FakeLlmClient, LlmModel
@@ -150,7 +151,6 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
     from digimon_world.world.world_state import WorldState
 
     world = WorldState()
-    # 两只放得足够近(距离 < DIALOGUE_RADIUS=100),同一 region
     world.spawn(DigimonAgent(name="甲兽", species="a", region_id="file_island", location=(100, 100)))
     world.spawn(DigimonAgent(name="乙兽", species="b", region_id="file_island", location=(120, 100)))
 
@@ -160,7 +160,6 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
 
     tracker = RelationshipTracker()
     clock = WorldClock()
-    # 使用独立 FestivalSystem 实例,避免进程级单例的状态污染
     festivals = FestivalSystem()
     sched = WorldScheduler(
         world=world, clock=clock, dialogue=dialogue,
@@ -169,7 +168,8 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
 
     assert tracker.get_relationship("甲兽", "乙兽") == 0.0
     await sched.tick_once()
-    assert tracker.get_relationship("甲兽", "乙兽") == DIALOGUE_DELTA + RELATIONSHIP_BOOST
+    # Phase 6: 相遇 → PROXIMITY_DELTA(1.0) + RELATIONSHIP_BOOST(5.0)
+    assert tracker.get_relationship("甲兽", "乙兽") == PROXIMITY_DELTA + RELATIONSHIP_BOOST
 
 
 # ---- 6. 隐性欲望(latent desire)测试 ----

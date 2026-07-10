@@ -578,37 +578,85 @@ def get_relationships() -> dict[str, Any]:
 
 # ---- 排行榜 API ----
 @app.get("/api/leaderboard")
-def get_leaderboard(top: int = 10) -> dict[str, Any]:
-    """数码兽排行榜: 战斗胜利 / 羁绊值 / 徽章数三个维度。
+def get_leaderboard(
+    type: str = "battle",
+    top: int = 10,
+) -> dict[str, Any]:
+    """数码兽排行榜: 按 type 维度返回降序 Top-N。
 
-    每个维度返回降序 Top-N: {name, <metric>}。给导演面板排行榜 tab 用。
+    type:
+        battle  — 按战斗胜利数排名
+        bond    — 按羁绊值(bond)排名
+        badges  — 按徽章数排名
+        all     — 返回全部三个维度(兼容旧版)
+
+    返回 JSON: {"type": "battle", "leaders": [{"name": "亚古兽", "score": 5, "detail": "..."}]}
     """
     world = get_world()
     evo = EvolutionSystem()
     badge_system = BadgeSystem(world=world, tracker=get_tracker())
     n = max(1, min(top, 50))
-
     agents = world.all()
-    battle = sorted(
-        ({"name": a.name, "victories": a.battle_victories} for a in agents),
-        key=lambda x: x["victories"],
-        reverse=True,
-    )
-    bond = sorted(
-        ({"name": a.name, "bond": evo.compute_bond(a)} for a in agents),
-        key=lambda x: x["bond"],
-        reverse=True,
-    )
-    badges = sorted(
-        ({"name": a.name, "badges": len(badge_system.evaluate(a))} for a in agents),
-        key=lambda x: x["badges"],
-        reverse=True,
-    )
+
+    # 如果请求 all,返回旧格式兼容
+    if type == "all":
+        battle = sorted(
+            ({"name": a.name, "victories": a.battle_victories} for a in agents),
+            key=lambda x: x["victories"],
+            reverse=True,
+        )
+        bond = sorted(
+            ({"name": a.name, "bond": evo.compute_bond(a)} for a in agents),
+            key=lambda x: x["bond"],
+            reverse=True,
+        )
+        badges = sorted(
+            ({"name": a.name, "badges": len(badge_system.evaluate(a))} for a in agents),
+            key=lambda x: x["badges"],
+            reverse=True,
+        )
+        return {
+            "battle": battle[:n],
+            "bond": bond[:n],
+            "badges": badges[:n],
+        }
+
+    # 单维度排行榜
+    leaders: list[dict[str, Any]] = []
+    if type == "battle":
+        leaders = sorted(
+            ({"name": a.name, "score": a.battle_victories, "detail": f"{a.battle_victories} 胜"} for a in agents),
+            key=lambda x: x["score"],
+            reverse=True,
+        )
+    elif type == "bond":
+        # 计算关系总和: 该 agent 与其他所有 agent 的关系值之和
+        tracker = get_tracker()
+        for agent in agents:
+            total_bond = sum(
+                tracker.get_relationship(agent.name, other.name)
+                for other in agents
+                if other.name != agent.name
+            )
+            leaders.append({"name": agent.name, "score": round(total_bond, 1), "detail": f"关系总和 {total_bond:.1f}"})
+        leaders.sort(key=lambda x: x["score"], reverse=True)
+    elif type == "badges":
+        leaders = sorted(
+            ({"name": a.name, "score": len(badge_system.evaluate(a)), "detail": f"{len(badge_system.evaluate(a))} 枚徽章"} for a in agents),
+            key=lambda x: x["score"],
+            reverse=True,
+        )
+    else:
+        # 未知 type 回退到 battle
+        leaders = sorted(
+            ({"name": a.name, "score": a.battle_victories, "detail": f"{a.battle_victories} 胜"} for a in agents),
+            key=lambda x: x["score"],
+            reverse=True,
+        )
 
     return {
-        "battle": battle[:n],
-        "bond": bond[:n],
-        "badges": badges[:n],
+        "type": type,
+        "leaders": leaders[:n],
     }
 
 

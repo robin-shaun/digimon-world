@@ -76,9 +76,16 @@ class Reflector:
         memories_text = "\n".join(
             f"- [{m.memory_type}] {m.description}" for m in recent
         )
+        # 加入当前情绪状态
+        mood_context = ""
+        if agent.mood_state:
+            mood_dims = ", ".join(
+                f"{dim}={val:.2f}" for dim, val in sorted(agent.mood_state.items())
+            )
+            mood_context = f"\n当前情绪状态: {{{mood_dims}}}"
         prompt = (
             f"基于以下{agent.name}的最近记忆,生成 1-3 条高级抽象反思。\n"
-            f"记忆列表:\n{memories_text}\n\n"
+            f"记忆列表:\n{memories_text}{mood_context}\n\n"
             f"请也生成一句内心渴望(10字以内, 如 想变强/想交朋友/想探索远方),"
             f"以及它的强烈度(0-1 之间的小数)。\n"
             f'请输出 JSON: {{"reflections": ["反思1", "反思2"], '
