@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
 
@@ -129,11 +130,46 @@ class HealRequest(BaseModel):
     item_name: str = Field(default="治疗道具", description="治疗道具名(仅用于事件展示)")
 
 
+# ---- Lifespan (replaces deprecated on_event) ----
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """启动/关闭时管理后台任务(调度器/广播器)。"""
+    # startup
+    world = get_world()
+    _app.state.broadcaster = asyncio.create_task(_position_broadcaster())
+
+    clock = WorldClock(real_to_world_ratio=world.real_to_world_ratio)
+    dialogue = Dialogue(llm_client=get_client())
+    scheduler = WorldScheduler(
+        world=world,
+        clock=clock,
+        dialogue=dialogue,
+        relationships=get_tracker(),
+        factions=get_registry(),
+        story_director=get_director(),
+        auto_save=True,
+    )
+    _app.state.world_clock = clock
+    _app.state.scheduler = scheduler
+    _app.state.scheduler_task = asyncio.create_task(scheduler.run_forever())
+
+    yield  # app runs here
+
+    # shutdown
+    for attr in ("broadcaster", "scheduler_task"):
+        task: Optional[asyncio.Task] = getattr(_app.state, attr, None)
+        if task is not None:
+            task.cancel()
+
+
 # ---- App ----
 app = FastAPI(
     title="DIGIMON WORLD API",
     description="数码宝贝虚拟世界后端 (Phase 1)",
     version=__version__,
+    lifespan=lifespan,
 )
 
 # 开发期 CORS 全开(前端可能在 8080 端口)
@@ -697,39 +733,6 @@ async def _position_broadcaster() -> None:
             ],
         }
         await manager.broadcast(payload)
-
-
-@app.on_event("startup")
-async def _startup() -> None:
-    # 触发单例创建 + 启动广播任务
-    world = get_world()
-    app.state.broadcaster = asyncio.create_task(_position_broadcaster())
-
-    # 启动世界调度器: 用 WorldClock 周期性驱动所有 agent 自主生活。
-    # 相遇时通过 Dialogue(Haiku 4.5)生成对话。
-    clock = WorldClock(real_to_world_ratio=world.real_to_world_ratio)
-    dialogue = Dialogue(llm_client=get_client())
-    # 派系 / 剧情用进程级单例,让调度器与 director API 共享同一份状态
-    scheduler = WorldScheduler(
-        world=world,
-        clock=clock,
-        dialogue=dialogue,
-        relationships=get_tracker(),
-        factions=get_registry(),
-        story_director=get_director(),
-        auto_save=True,  # 每 100 tick 自动落盘到 data/world.db
-    )
-    app.state.world_clock = clock
-    app.state.scheduler = scheduler
-    app.state.scheduler_task = asyncio.create_task(scheduler.run_forever())
-
-
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    for attr in ("broadcaster", "scheduler_task"):
-        task: Optional[asyncio.Task] = getattr(app.state, attr, None)
-        if task is not None:
-            task.cancel()
 
 
 @app.websocket("/ws/world")
