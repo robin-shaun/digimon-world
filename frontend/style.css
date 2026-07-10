@@ -254,39 +254,155 @@ footer {
     filter: brightness(1.2);
 }
 
-/* ---- Phase 3 追加: 进化全屏 overlay ---- */
+/* ---- Phase 3 追加: 进化全屏动画 (多阶段) ---- */
 .evo-overlay {
     position: absolute;
     inset: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
     padding: 24px;
     background: radial-gradient(ellipse at center,
         rgba(124, 58, 237, 0.45) 0%,
-        rgba(10, 14, 39, 0.82) 70%);
-    color: #ffd700;
-    font-size: 30px;
-    font-weight: bold;
-    letter-spacing: 2px;
-    font-family: "SF Mono", "Consolas", monospace;
-    text-shadow: 0 0 18px rgba(255, 215, 0, 0.8),
-        0 0 40px rgba(124, 58, 237, 0.9);
+        rgba(10, 14, 39, 0.88) 70%);
     border-radius: 8px;
-    backdrop-filter: blur(3px);
+    backdrop-filter: blur(6px);
     z-index: 20;
-    animation: evo-pop 0.4s ease-out;
+    overflow: hidden;
+    animation: evo-stage-enter 0.35s ease-out forwards;
+}
+
+/* 全屏闪白入场效果 */
+@keyframes evo-stage-enter {
+    0% { opacity: 0; background: rgba(255, 255, 255, 0.9); }
+    20% { opacity: 1; background: rgba(255, 255, 255, 0.7); }
+    100% { opacity: 1; }
 }
 
 .evo-overlay.fade-out {
     opacity: 0;
-    transition: opacity 0.4s ease-in;
+    transition: opacity 0.5s ease-in;
 }
 
-@keyframes evo-pop {
-    0% { opacity: 0; transform: scale(0.85); }
-    100% { opacity: 1; transform: scale(1); }
+/* 扫描线动画层 (::before) */
+.evo-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(255, 255, 255, 0.03) 3px,
+        rgba(255, 255, 255, 0.03) 6px
+    );
+    animation: evo-scanlines 2s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes evo-scanlines {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 12px; }
+}
+
+/* 粒子光点层 (::after) */
+.evo-overlay::after {
+    content: '';
+    position: absolute;
+    inset: -20%;
+    background:
+        radial-gradient(2px 2px at 20% 30%, rgba(255, 215, 0, 0.8), transparent),
+        radial-gradient(2px 2px at 40% 70%, rgba(124, 58, 237, 0.7), transparent),
+        radial-gradient(3px 3px at 60% 20%, rgba(0, 212, 255, 0.8), transparent),
+        radial-gradient(2px 2px at 80% 60%, rgba(255, 215, 0, 0.6), transparent),
+        radial-gradient(1px 1px at 50% 40%, rgba(124, 58, 237, 0.9), transparent),
+        radial-gradient(2px 2px at 70% 80%, rgba(0, 212, 255, 0.5), transparent),
+        radial-gradient(3px 3px at 30% 50%, rgba(255, 215, 0, 0.7), transparent),
+        radial-gradient(1px 1px at 90% 10%, rgba(124, 58, 237, 0.8), transparent);
+    animation: evo-particles 1.5s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes evo-particles {
+    0% { opacity: 0.4; transform: scale(1) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1.15) rotate(2deg); }
+    100% { opacity: 0.5; transform: scale(1.05) rotate(-1deg); }
+}
+
+/* 进化图标 (大尺寸 emoji + 脉冲) */
+.evo-icon {
+    font-size: 72px;
+    line-height: 1;
+    z-index: 2;
+    animation: evo-icon-pulse 1.2s ease-in-out infinite;
+    filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.7));
+}
+
+@keyframes evo-icon-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.18); }
+}
+
+/* 进化文字行 */
+.evo-text {
+    font-family: "SF Mono", "Consolas", monospace;
+    font-weight: bold;
+    color: #ffd700;
+    z-index: 2;
+    margin-top: 12px;
+}
+
+.evo-text .evo-name {
+    font-size: 28px;
+    letter-spacing: 3px;
+    text-shadow: 0 0 18px rgba(255, 215, 0, 0.8),
+        0 0 40px rgba(124, 58, 237, 0.9),
+        0 0 80px rgba(255, 215, 0, 0.3);
+    animation: evo-text-glow 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes evo-text-glow {
+    0% { text-shadow: 0 0 18px rgba(255, 215, 0, 0.8), 0 0 40px rgba(124, 58, 237, 0.9); }
+    100% { text-shadow: 0 0 30px rgba(255, 215, 0, 1), 0 0 60px rgba(124, 58, 237, 1), 0 0 100px rgba(255, 215, 0, 0.5); }
+}
+
+.evo-text .evo-stage {
+    display: block;
+    font-size: 14px;
+    font-weight: normal;
+    color: rgba(255, 215, 0, 0.7);
+    letter-spacing: 2px;
+    margin-top: 6px;
+    animation: evo-stage-fade 2.5s ease-in-out infinite;
+}
+
+@keyframes evo-stage-fade {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* 粒子飞升 - 金色光点从底部升起 */
+.evo-sparkle {
+    position: absolute;
+    bottom: -10px;
+    width: 3px;
+    height: 3px;
+    background: #ffd700;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #ffd700, 0 0 12px rgba(255, 215, 0, 0.6);
+    animation: evo-ascend var(--dur, 2s) var(--delay, 0s) ease-out infinite;
+    pointer-events: none;
+    z-index: 2;
+}
+
+@keyframes evo-ascend {
+    0% { transform: translateY(0) scale(1); opacity: 0; }
+    20% { opacity: 1; }
+    100% { transform: translateY(-640px) scale(0.3); opacity: 0; }
 }
 
 /* ---- Phase 4 追加: 导演面板 (右侧固定 sidebar, 仅宽屏显示) ---- */

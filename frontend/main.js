@@ -589,7 +589,7 @@
         setInterval(poll, 30000);
     }
 
-    /** 全屏半透明 overlay: 进化通知,3 秒后消失 */
+    /** 全屏进化动画 — 多阶段: 闪白入场 → 扫描线+粒子+图标脉冲 → 4.5 秒后淡出 */
     function showEvolutionOverlay(name, oldStage, newStage) {
         // 防止重复弹出同一事件
         if (document.getElementById('evo-overlay')) return;
@@ -597,8 +597,28 @@
         const overlay = document.createElement('div');
         overlay.id = 'evo-overlay';
         overlay.className = 'evo-overlay';
+
         const newEmoji = getDigimonEmoji(name, null, newStage);
-        overlay.textContent = `⚡ ${name} 进化了! ${oldStage} → ${newStage} ${newEmoji} ⚡`;
+        const stageLabel = STAGE_LABEL[newStage] || newStage;
+
+        // 构建内层 HTML: 进化图标 + 文字
+        overlay.innerHTML = `
+            <span class="evo-icon">${newEmoji}</span>
+            <div class="evo-text">
+                <span class="evo-name">${escapeHtml(name)}</span>
+                <span class="evo-stage">${escapeHtml(oldStage)} → ${escapeHtml(stageLabel)} ⚡</span>
+            </div>
+        `;
+
+        // 添加飞升粒子 (8 个金色光点, 随机水平位置 + 随机延迟)
+        for (let i = 0; i < 8; i++) {
+            const sparkle = document.createElement('span');
+            sparkle.className = 'evo-sparkle';
+            sparkle.style.left = (10 + Math.random() * 80) + '%';
+            sparkle.style.setProperty('--dur', (1.8 + Math.random() * 2.2).toFixed(2) + 's');
+            sparkle.style.setProperty('--delay', (Math.random() * 1.5).toFixed(2) + 's');
+            overlay.appendChild(sparkle);
+        }
 
         const wrap = document.querySelector('.canvas-wrap');
         if (wrap) {
@@ -607,10 +627,11 @@
             document.body.appendChild(overlay);
         }
 
+        // 4.5 秒后淡出, 0.5s 过渡后移除
         setTimeout(() => {
             overlay.classList.add('fade-out');
-            setTimeout(() => overlay.remove(), 400);
-        }, 3000);
+            setTimeout(() => overlay.remove(), 500);
+        }, 4500);
     }
 
     // ══════════════════════════════════════════════
