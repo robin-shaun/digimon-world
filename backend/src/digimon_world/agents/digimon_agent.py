@@ -545,4 +545,6 @@ class DigimonAgent:
             "current_plan": self.current_plan,
             "battle_victories": self.battle_victories,
             "personality_traits": self.personality_traits,
+            "latent_desire": self.latent_desire,
+            "desire_strength": self.desire_strength,
         }

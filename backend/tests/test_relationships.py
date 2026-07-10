@@ -162,3 +162,57 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
     assert tracker.get_relationship("甲兽", "乙兽") == 0.0
     await sched.tick_once()
     assert tracker.get_relationship("甲兽", "乙兽") == DIALOGUE_DELTA
+
+
+# ---- 6. 隐性欲望(latent desire)测试 ----
+
+
+def test_desire_affinity_exact_match() -> None:
+    """完全相同的欲望 → 兼容度 1.0。"""
+    assert RelationshipTracker.desire_affinity("想变强", "想变强") == 1.0
+
+
+def test_desire_affinity_same_category() -> None:
+    """同一类别(不同措辞)的欲望 → 兼容度 0.6。"""
+    # "变强" 和 "想变强" 都在 strength 类别
+    result = RelationshipTracker.desire_affinity("变强", "想变强")
+    assert result == 0.6
+
+
+def test_desire_affinity_empty() -> None:
+    """空欲望不影响 → 兼容度 0.0。"""
+    assert RelationshipTracker.desire_affinity("", "想变强") == 0.0
+    assert RelationshipTracker.desire_affinity("想变强", "") == 0.0
+    assert RelationshipTracker.desire_affinity("", "") == 0.0
+
+
+def test_desire_affinity_different_category() -> None:
+    """不同类别欲望 → 兼容度 0.0。"""
+    assert RelationshipTracker.desire_affinity("想变强", "想交朋友") == 0.0
+
+
+def test_record_dialogue_with_matching_desires() -> None:
+    """欲望相同 → 对话关系增量包含 bonus。"""
+    rt = RelationshipTracker()
+    base = DIALOGUE_DELTA
+    # 欲望完全匹配: affinity=1.0, bonus=min(4.0*1.0, 6.0)=4.0
+    expected = base + 4.0
+    got = rt.record_dialogue_with_desire("亚古兽", "想变强", "暴龙兽", "想变强")
+    assert got == expected
+    assert rt.get_relationship("亚古兽", "暴龙兽") == expected
+
+
+def test_record_dialogue_with_empty_desires() -> None:
+    """欲望为空 → 无加成,与旧 record_dialogue 行为一致。"""
+    rt = RelationshipTracker()
+    got = rt.record_dialogue_with_desire("亚古兽", "", "加布兽", "")
+    assert got == DIALOGUE_DELTA
+
+
+def test_record_dialogue_with_same_category_desires() -> None:
+    """欲望同类别 → 部分加成。"""
+    rt = RelationshipTracker()
+    # affinity=0.6, bonus=min(4.0*0.6, 6.0)=2.4
+    expected = DIALOGUE_DELTA + 2.4
+    got = rt.record_dialogue_with_desire("亚古兽", "变强", "暴龙兽", "想变强")
+    assert got == expected

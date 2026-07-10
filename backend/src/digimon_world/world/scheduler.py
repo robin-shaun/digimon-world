@@ -234,7 +234,10 @@ class WorldScheduler:
         - 欧氏距离 < DIALOGUE_RADIUS
         - 双方都在冷却窗口(DIALOGUE_COOLDOWN_MINUTES 世界分钟)之外
 
-        未挂 dialogue 生成器时直接跳过整个互动阶段。
+        隐性欲望(latent desire)影响:
+        - 两方欲望兼容 → 关系增量更大(record_dialogue_with_desire)
+        - 有"想交朋友"欲望的 agent 冷却更短(更容易发起对话)
+        - 未挂 dialogue 生成器时直接跳过整个互动阶段。
         """
         if self._dialogue is None:
             return
@@ -245,9 +248,20 @@ class WorldScheduler:
             # 只在同一地区相遇
             if a.region_id != b.region_id:
                 continue
-            # 任一方仍在冷却期 → 不生成对话,但相遇本身也拉近一点关系
-            if self._in_cooldown(a, now) or self._in_cooldown(b, now):
-                self._relationships.record_proximity(a.name, b.name)
+
+            # 隐性欲望冷却减免: 有"想交朋友"类欲望的 agent 冷却窗口减半
+            a_cooldown_minutes = DIALOGUE_COOLDOWN_MINUTES
+            b_cooldown_minutes = DIALOGUE_COOLDOWN_MINUTES
+            if a.latent_desire and ("交朋友" in a.latent_desire or "朋友" in a.latent_desire):
+                a_cooldown_minutes = DIALOGUE_COOLDOWN_MINUTES // 2
+            if b.latent_desire and ("交朋友" in b.latent_desire or "朋友" in b.latent_desire):
+                b_cooldown_minutes = DIALOGUE_COOLDOWN_MINUTES // 2
+
+            # 任一方仍在冷却期 → 不生成对话,但相遇本身也拉近一点关系(含欲望加成)
+            if self._in_cooldown(a, now, a_cooldown_minutes) or self._in_cooldown(b, now, b_cooldown_minutes):
+                self._relationships.record_proximity_with_desire(
+                    a.name, a.latent_desire, b.name, b.latent_desire,
+                )
                 continue
 
             try:
@@ -269,19 +283,22 @@ class WorldScheduler:
                 "at": now.isoformat() if now is not None else None,
             })
 
-            # 一次成功对话 → 双方关系变友好
-            self._relationships.record_dialogue(a.name, b.name)
+            # 一次成功对话 → 双方关系变友好(含欲望兼容加成)
+            self._relationships.record_dialogue_with_desire(
+                a.name, a.latent_desire, b.name, b.latent_desire,
+            )
 
             # 刷新双方冷却时间戳
             a.last_interaction_at = now
             b.last_interaction_at = now
 
-    def _in_cooldown(self, agent: DigimonAgent, now: Any) -> bool:
+    def _in_cooldown(self, agent: DigimonAgent, now: Any, cooldown_minutes: float | None = None) -> bool:
         """判断 agent 是否仍在互动冷却窗口内。"""
         if agent.last_interaction_at is None or now is None:
             return False
         elapsed_minutes = (now - agent.last_interaction_at).total_seconds() / 60
-        return elapsed_minutes < DIALOGUE_COOLDOWN_MINUTES
+        threshold = cooldown_minutes if cooldown_minutes is not None else DIALOGUE_COOLDOWN_MINUTES
+        return elapsed_minutes < threshold
 
     async def _step_agent(self, agent: DigimonAgent) -> dict[str, Any]:
         """调用单个 agent.step(),捕获异常不让一只炸了拖死整个 tick。"""

@@ -68,7 +68,9 @@ CREATE TABLE IF NOT EXISTS digimons (
     bond             INTEGER NOT NULL,
     mood             TEXT NOT NULL,
     battle_victories INTEGER NOT NULL,
-    current_plan     TEXT
+    current_plan     TEXT,
+    latent_desire    TEXT NOT NULL DEFAULT '',
+    desire_strength  REAL NOT NULL DEFAULT 0.0
 );
 
 CREATE TABLE IF NOT EXISTS memories (
@@ -139,8 +141,8 @@ async def save(
                 INSERT INTO digimons (
                     name, species, stage, attribute, region_id, x, y,
                     hp, ep, attack, defense, speed, bond, mood,
-                    battle_victories, current_plan
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    battle_victories, current_plan, latent_desire, desire_strength
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     agent.name,
@@ -159,6 +161,8 @@ async def save(
                     agent.mood,
                     agent.battle_victories,
                     agent.current_plan,
+                    agent.latent_desire,
+                    agent.desire_strength,
                 ),
             )
             for node in agent.memory.entries:
@@ -253,7 +257,8 @@ async def load(
         new_agents: dict[str, DigimonAgent] = {}
         async with db.execute(
             "SELECT name, species, stage, attribute, region_id, x, y, hp, ep, "
-            "attack, defense, speed, bond, mood, battle_victories, current_plan "
+            "attack, defense, speed, bond, mood, battle_victories, current_plan, "
+            "latent_desire, desire_strength "
             "FROM digimons"
         ) as cur:
             async for row in cur:
@@ -339,4 +344,6 @@ def _row_to_agent(row: aiosqlite.Row, memories: list[MemoryNode]) -> DigimonAgen
         current_plan=row["current_plan"],
         mood=row["mood"],
         battle_victories=row["battle_victories"],
+        latent_desire=row["latent_desire"] if row["latent_desire"] else "",
+        desire_strength=row["desire_strength"] if row["desire_strength"] is not None else 0.0,
     )

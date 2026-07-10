@@ -38,6 +38,10 @@ PROXIMITY_DELTA: float = 1.0      # 相遇但没对话(冷却中) → +1 友好
 BATTLE_DELTA: float = -10.0       # 战斗 → 双方 -10 敌对
 BATTLE_AWE_DELTA: float = 5.0     # 输方对赢方额外 +5 敬畏(抵消部分敌对)
 
+# 隐性欲望社交加成
+DESIRE_BONUS_FACTOR: float = 4.0   # 欲望兼容时额外加成的系数
+DESIRE_BONUS_CAP: float = 6.0      # 欲望加成上限(一次互动最多加 6 分)
+
 
 def _key(a: str, b: str) -> tuple[str, str]:
     """把一对名字规范成排序后的 key,保证 (a,b) 与 (b,a) 命中同一条记录。"""
@@ -110,6 +114,63 @@ class RelationshipTracker:
     def record_proximity(self, a: str, b: str) -> float:
         """相遇但没对话(冷却中)后调用:双方 +PROXIMITY_DELTA 友好。"""
         return self.update(a, b, PROXIMITY_DELTA)
+
+    # ---- 隐性欲望(latent desire)驱动的社交倾向 ----
+
+    # 欲望关键词匹配映射: 相同类别欲望 → 高兼容度
+    _DESIRE_CATEGORIES: dict[str, set[str]] = {
+        "strength": {"想变强", "渴望力量", "变强", "想成为最强", "力量"},
+        "social": {"想交朋友", "想交到朋友", "交朋友", "想要朋友", "想有同伴"},
+        "explore": {"想探索远方", "想冒险", "探索", "想出去看看", "想去远方"},
+        "territory": {"想守护领土", "守护", "保护家园", "想保护", "领土"},
+        "food": {"想吃东西", "好饿", "想吃", "找食物", "觅食"},
+    }
+
+    @staticmethod
+    def desire_affinity(desire_a: str, desire_b: str) -> float:
+        """计算两个隐性欲望的兼容度(0-1)。
+
+        规则:
+        - 完全相同 → 1.0
+        - 同一类别(如都在 strength 族) → 0.6
+        - 有一方为空 → 0.0(还没有欲望,不影响)
+        - 其他 → 0.0
+
+        兼容度高意味着两只数码兽更聊得来、更愿意一起行动。
+        """
+        if not desire_a or not desire_b:
+            return 0.0
+        if desire_a == desire_b:
+            return 1.0
+        # 检查是否属于同一语义类别
+        for keywords in RelationshipTracker._DESIRE_CATEGORIES.values():
+            in_a = any(kw in desire_a for kw in keywords)
+            in_b = any(kw in desire_b for kw in keywords)
+            if in_a and in_b:
+                return 0.6
+        return 0.0
+
+    def record_dialogue_with_desire(
+        self, a_name: str, a_desire: str, b_name: str, b_desire: str,
+    ) -> float:
+        """一次对话后调用: 基础友好 + 欲望兼容加成。
+
+        欲望兼容加成 = DESIRE_BONUS_FACTOR * affinity(a_desire, b_desire)
+        上限 DESIRE_BONUS_CAP,防止一次对话涨太多。
+        """
+        affinity = self.desire_affinity(a_desire, b_desire)
+        bonus = min(DESIRE_BONUS_FACTOR * affinity, DESIRE_BONUS_CAP)
+        return self.update(a_name, b_name, DIALOGUE_DELTA + bonus)
+
+    def record_proximity_with_desire(
+        self, a_name: str, a_desire: str, b_name: str, b_desire: str,
+    ) -> float:
+        """相遇(未对话)后调用: 基础友好 + 欲望兼容加成(打折)。"""
+        affinity = self.desire_affinity(a_desire, b_desire)
+        bonus = min(DESIRE_BONUS_FACTOR * affinity * 0.5, DESIRE_BONUS_CAP * 0.5)
+        return self.update(a_name, b_name, PROXIMITY_DELTA + bonus)
+
+    # ---- 战斗 / 重置 ----
 
     def record_battle(self, winner: Optional[str], loser: Optional[str]) -> None:
         """一场战斗后调用:双方 -BATTLE_DELTA 敌对,输方对赢方 +BATTLE_AWE_DELTA 敬畏。

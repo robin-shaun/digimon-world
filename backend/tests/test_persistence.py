@@ -84,6 +84,9 @@ async def test_digimon_roundtrip(db_path: str) -> None:
     assert loaded.mood == "excited"
     assert loaded.battle_victories == 3
     assert loaded.current_plan == "去进化神殿看看"
+    # 隐性欲望 / 渴望强度持久化
+    assert loaded.latent_desire == ""
+    assert loaded.desire_strength == 0.0
 
 
 # ---- 2. 记忆 roundtrip ----
@@ -165,3 +168,26 @@ async def test_load_missing_db_returns_false(db_path: str) -> None:
     assert not os.path.exists(db_path)
     ok = await persistence.load(WorldState(), RelationshipTracker(), db_path)
     assert ok is False
+
+
+async def test_latent_desire_roundtrip(db_path: str) -> None:
+    """隐性欲望字段(save/load)完整保留。"""
+    src = WorldState()
+    agent = DigimonAgent(
+        name="暴龙兽",
+        species="greymon",
+        latent_desire="想守护领土",
+        desire_strength=0.85,
+    )
+    src.spawn(agent)
+    tracker = RelationshipTracker()
+
+    await persistence.save(src, tracker, db_path)
+
+    dst = WorldState()
+    await persistence.load(dst, RelationshipTracker(), db_path)
+
+    loaded = dst.get("暴龙兽")
+    assert loaded is not None
+    assert loaded.latent_desire == "想守护领土"
+    assert loaded.desire_strength == 0.85
