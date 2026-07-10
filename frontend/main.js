@@ -28,6 +28,18 @@
         return 'http://localhost:8000';
     })();
 
+    /** fetch with timeout — prevents indefinite hanging on unresponsive backends */
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const resp = await fetch(url, { ...options, signal: controller.signal });
+            return resp;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
     // ---- 数码兽 emoji 映射 ----
     // 进化后 species 会变成 'champion_form' 等占位值,所以优先用中文名匹配,
     // 名字匹配不到时退回到 stage 匹配,保证进化后不会掉成 ❓。
@@ -339,7 +351,7 @@
     /** 拉取地图数据 (regions + POIs) */
     async function fetchWorld() {
         try {
-            const resp = await fetch(API_BASE + '/api/world', { cache: 'no-store' });
+            const resp = await fetchWithTimeout(API_BASE + '/api/world', { cache: 'no-store' });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
             state.regions = data.regions || [];
@@ -362,7 +374,7 @@
         const ctrl = new AbortController();
         digimonAbort = ctrl;
         try {
-            const resp = await fetch(API_BASE + '/api/digimon', { cache: 'no-store', signal: ctrl.signal });
+            const resp = await fetchWithTimeout(API_BASE + '/api/digimon', { cache: 'no-store', signal: ctrl.signal });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
             state.digimon = data.digimon || [];
