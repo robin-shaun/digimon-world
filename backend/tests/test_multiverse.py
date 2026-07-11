@@ -765,3 +765,110 @@ class TestMultiverseStats:
         for w in data["worlds"]:
             assert "region_count" in w
             assert w["region_count"] > 0  # 默认至少有 file_island 和 infinity_mountain
+
+
+# ========== Phase 9: List World Digimon API ==========
+
+
+class TestListWorldDigimon:
+    def test_list_prime_digimon(self):
+        """GET /api/multiverse/prime/digimon 返回主世界所有数码兽。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/prime/digimon")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "prime"
+        assert data["count"] > 0
+        assert len(data["digimon"]) == data["count"]
+        # 验证字段完整性
+        d = data["digimon"][0]
+        assert "name" in d
+        assert "species" in d
+        assert "stage" in d
+        assert "attribute" in d
+        assert "region_id" in d
+        assert "position" in d
+        assert "current_plan" in d
+        assert "mood" in d
+
+    def test_list_digimon_in_seeded_world(self):
+        """GET /api/multiverse/{id}/digimon 返回种子世界数码兽列表。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post(
+            "/api/multiverse/create",
+            json={"world_id": "with_digis", "seed_digimon": True},
+        )
+        resp = client.get("/api/multiverse/with_digis/digimon")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "with_digis"
+        assert data["count"] == 10
+        names = [d["name"] for d in data["digimon"]]
+        assert "亚古兽" in names
+        assert "迪路兽" in names
+
+    def test_list_digimon_empty_world(self):
+        """GET /api/multiverse/{id}/digimon 对空世界返回 count=0。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={"world_id": "empty_w"})
+        resp = client.get("/api/multiverse/empty_w/digimon")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["count"] == 0
+        assert data["digimon"] == []
+
+    def test_list_digimon_nonexistent_world(self):
+        """GET /api/multiverse/{id}/digimon 对不存在的世界返回 404。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/ghost/digimon")
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"]
+
+    def test_list_digimon_after_gate(self):
+        """数码之门迁移后,源世界和目标世界的数码兽列表正确更新。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        from digimon_world.agents.digimon_agent import DigimonAgent, DigimonStats
+        client = TestClient(app)
+        # 目标世界(空)
+        client.post("/api/multiverse/create", json={
+            "world_id": "after_gate_dest", "seed_digimon": False,
+        })
+        # 主世界注入一只独特数码兽
+        mv = get_multiverse()
+        prime = mv.get_world("prime")
+        assert prime is not None
+        custom = DigimonAgent(
+            name="测试兽X",
+            species="testmon",
+            region_id="file_island",
+            stats=DigimonStats(hp=100, ep=50, attack=20, defense=15, speed=15),
+        )
+        prime.spawn(custom)
+
+        # 迁移前: prime 有测试兽X, dest 空
+        r1 = client.get("/api/multiverse/prime/digimon")
+        r2 = client.get("/api/multiverse/after_gate_dest/digimon")
+        assert any(d["name"] == "测试兽X" for d in r1.json()["digimon"])
+        assert r2.json()["count"] == 0
+
+        # 执行数码之门
+        client.post("/api/multiverse/gate", json={
+            "agent_name": "测试兽X",
+            "from_world": "prime",
+            "to_world": "after_gate_dest",
+        })
+
+        # 迁移后: prime 不再有, dest 有
+        r3 = client.get("/api/multiverse/prime/digimon")
+        r4 = client.get("/api/multiverse/after_gate_dest/digimon")
+        assert not any(d["name"] == "测试兽X" for d in r3.json()["digimon"])
+        assert any(d["name"] == "测试兽X" for d in r4.json()["digimon"])

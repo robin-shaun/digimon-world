@@ -1033,6 +1033,38 @@ def seed_world(world_id: str) -> dict[str, Any]:
     }
 
 
+@app.get("/api/multiverse/{world_id}/digimon")
+def list_world_digimon(world_id: str) -> dict[str, Any]:
+    """列出指定世界所有数码兽的精简列表(前端友好)。
+
+    与 GET /api/digimon 格式相同,但作用域限定到指定世界。
+    """
+    mv = get_multiverse()
+    world = mv.get_world(world_id)
+    if world is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"World '{world_id}' not found",
+        )
+    return {
+        "world_id": world_id,
+        "count": world.count(),
+        "digimon": [
+            {
+                "name": a.name,
+                "species": a.species,
+                "stage": a.stage.value,
+                "attribute": a.attribute.value,
+                "region_id": a.region_id,
+                "position": {"x": a.location[0], "y": a.location[1]},
+                "current_plan": a.current_plan,
+                "mood": a.mood,
+            }
+            for a in world.all()
+        ],
+    }
+
+
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
 class ConnectionManager:
     def __init__(self) -> None:
