@@ -64,18 +64,18 @@ class TestDamageCalculator:
         assert dmg == 1
 
     def test_damage_attribute_vaccine_beats_virus(self) -> None:
-        """疫苗种攻击病毒种,伤害 x1.5。"""
+        """疫苗种攻击病毒种,伤害 x1.5。逆克制 x0.75。"""
         a = _agent("疫苗兽", attack=20, defense=10, attribute=DigimonAttribute.VACCINE)
         b = _agent("病毒兽", attack=20, defense=10, attribute=DigimonAttribute.VIRUS)
         dmg_strong = DamageCalculator.calc_damage(a, b)
         # base = 20 - 10//2 = 15, * 1.5 = 22
         assert dmg_strong == 22
 
-        # 反过来:virus 打 vaccine 无加成
-        dmg_normal = DamageCalculator.calc_damage(b, a)
-        # base = 20 - 10//2 = 15, * 1.0 = 15
-        assert dmg_normal == 15
-        assert dmg_strong > dmg_normal
+        # Phase 8: 反过来:virus 打 vaccine 是逆克制, x0.75
+        dmg_weak = DamageCalculator.calc_damage(b, a)
+        # base = 20 - 10//2 = 15, * 0.75 = 11
+        assert dmg_weak == 11
+        assert dmg_strong > dmg_weak
 
     def test_damage_attribute_free_no_modifier(self) -> None:
         """自由种攻击任何属性,乘数为 1.0(无加成)。"""
