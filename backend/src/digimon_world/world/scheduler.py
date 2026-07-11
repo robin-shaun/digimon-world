@@ -272,7 +272,7 @@ class WorldScheduler:
                 continue
 
             # Phase 6: 显著性阈值 — 评估事件上下文
-            # proximity 相遇本身是 routine(4),不足以触发 LLM 对话生成
+            # proximity 相遇本身是 routine(5), >= SIGNIFICANCE_LLM_THRESHOLD(4)→触发 LLM 对话
             # 但如果双方有强烈的 desire 兼容(affinity >= 0.6),则提升为 significant
             event_context = {"type": "proximity", "agent": a.name, "importance": 5}
             sig = self._score_event_significance(event_context)

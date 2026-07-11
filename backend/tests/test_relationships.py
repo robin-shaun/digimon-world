@@ -168,8 +168,10 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
 
     assert tracker.get_relationship("甲兽", "乙兽") == 0.0
     await sched.tick_once()
-    # Phase 6: 相遇 → PROXIMITY_DELTA(1.0) + RELATIONSHIP_BOOST(5.0)
-    assert tracker.get_relationship("甲兽", "乙兽") == PROXIMITY_DELTA + RELATIONSHIP_BOOST
+    # Phase 6: proximity 显著性 5 ≥ 阈值 4 → 触发 LLM 对话
+    # → record_dialogue_with_desire(DIALOGUE_DELTA=3.0) + 节日 RELATIONSHIP_BOOST(5.0)
+    from digimon_world.world.relationships import DIALOGUE_DELTA
+    assert tracker.get_relationship("甲兽", "乙兽") == DIALOGUE_DELTA + RELATIONSHIP_BOOST
 
 
 # ---- 6. 隐性欲望(latent desire)测试 ----
