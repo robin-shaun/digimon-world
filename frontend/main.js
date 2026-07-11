@@ -17,8 +17,14 @@
 
     const canvas = document.getElementById('world-map');
     const ctx = canvas.getContext('2d');
-    const W = canvas.width;   // 960
-    const H = canvas.height;  // 600
+    const W = canvas.width;   // 1200 (Phase 11 expanded)
+    const H = canvas.height;  // 800
+
+    // Phase 11: 密度模式阈值 — 超过此数只画圆点
+    const DENSITY_MODE_THRESHOLD = 15;
+
+    // Phase 11: hover 状态(用于密度模式下查看详情)
+    let hoveredDigimon = null;
 
     // ---- API 配置 ----
     // 优先级: window.API_BASE (Workers 注入) > 自动检测
@@ -44,16 +50,17 @@
     // 进化后 species 会变成 'champion_form' 等占位值,所以优先用中文名匹配,
     // 名字匹配不到时退回到 stage 匹配,保证进化后不会掉成 ❓。
     const NAME_EMOJI = {
-        '亚古兽': '🦖',
-        '加布兽': '🐺',
-        '比丘兽': '🦅',
-        '甲虫兽': '🪲',
-        '巴鲁兽': '🌿',
-        '哥玛兽': '🦭',
-        '巴达兽': '🦇',
-        '迪路兽': '🐱',
-        '小狗兽': '🐶',
-        '艾力兽': '⚡',
+        '亚古兽': '🦖', '加布兽': '🐺', '比丘兽': '🦅', '甲虫兽': '🪲',
+        '巴鲁兽': '🌿', '哥玛兽': '🦭', '巴达兽': '🦇', '迪路兽': '🐱',
+        '小狗兽': '🐶', '艾力兽': '⚡',
+        // Phase 11: 新增数码兽
+        '妖狐兽': '🦊', '小妖兽': '😈', '多路兽': '🐉',
+        '小恶魔兽': '🦇', '黑加布兽': '🐺',
+        '齿轮兽': '⚙️', '守卫兽': '🤖', '时钟兽': '⏰', '坦克兽': '🔫', '溜溜球兽': '🔧',
+        '恶魔兽': '👿', '邪龙兽': '🐲', '吸血魔兽': '🧛',
+        '死神兽': '💀', '猛鬼兽': '👻',
+        '安杜路兽': '🦾', '守卫兽S': '🛡️',
+        '巫师兽': '🧙', '狮子兽': '🦁', '独角兽': '🦄',
     };
     const STAGE_EMOJI = {
         rookie: '🦖',
@@ -87,10 +94,10 @@
     // 后端两个 region 的 bounds 都是整块 (0,0,960,600) 且重叠,
     // 所以标签位置在前端按语义手动指定,避免堆在左上角。
     const REGION_STYLE = {
-        file_island: { label: '#4ae8c4', labelAt: { x: 24, y: 560 } },
-        infinity_mountain: { label: '#b68aff', labelAt: { x: 24, y: 30 } },
+        file_island: { label: '#4ae8c4', labelAt: { x: 32, y: 740 } },
+        infinity_mountain: { label: '#b68aff', labelAt: { x: 32, y: 40 } },
     };
-    const DEFAULT_STYLE = { label: '#aabbcc', labelAt: { x: 24, y: 30 } };
+    const DEFAULT_STYLE = { label: '#aabbcc', labelAt: { x: 32, y: 40 } };
 
     // ---- 状态 ----
     const state = {
@@ -134,10 +141,10 @@
     }
 
     function drawStars() {
-        // 简单伪随机星空
-        for (let i = 0; i < 40; i++) {
+        // 简单伪随机星空 (1200×800 比例)
+        for (let i = 0; i < 60; i++) {
             const x = (i * 73 + 50) % W;
-            const y = ((i * 41) % (H * 0.55)) + 10;
+            const y = ((i * 41) % (H * 0.5)) + 10;
             const alpha = 0.2 + (i % 5) * 0.12;
             ctx.fillStyle = `rgba(200, 220, 255, ${alpha})`;
             ctx.beginPath();
@@ -184,8 +191,7 @@
 
     /** 根据后端 regions 数据画地图 */
     function drawRegions() {
-        // 先画通用场景元素(两个 region bounds 相同, 都覆盖全 canvas)
-        // 无限山
+        // 无限山 (1200×800 比例调整)
         ctx.fillStyle = '#2a1f4a';
         ctx.beginPath();
         ctx.moveTo(W * 0.35, H * 0.55);
@@ -195,12 +201,12 @@
         ctx.fill();
 
         // 山顶光晕
-        const peakGrad = ctx.createRadialGradient(W * 0.5, H * 0.15, 5, W * 0.5, H * 0.15, 80);
+        const peakGrad = ctx.createRadialGradient(W * 0.5, H * 0.15, 8, W * 0.5, H * 0.15, 100);
         peakGrad.addColorStop(0, 'rgba(124, 58, 237, 0.5)');
         peakGrad.addColorStop(1, 'rgba(124, 58, 237, 0)');
         ctx.fillStyle = peakGrad;
         ctx.beginPath();
-        ctx.arc(W * 0.5, H * 0.15, 80, 0, Math.PI * 2);
+        ctx.arc(W * 0.5, H * 0.15, 100, 0, Math.PI * 2);
         ctx.fill();
 
         // 远山
@@ -223,13 +229,13 @@
         // 岛屿地面
         ctx.fillStyle = '#1a4a3a';
         ctx.beginPath();
-        ctx.ellipse(W * 0.5, H * 0.78, W * 0.42, 60, 0, 0, Math.PI * 2);
+        ctx.ellipse(W * 0.5, H * 0.78, W * 0.42, 80, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // 沙滩
         ctx.fillStyle = '#5a4a2a';
         ctx.beginPath();
-        ctx.ellipse(W * 0.2, H * 0.8, 80, 25, -0.2, 0, Math.PI * 2);
+        ctx.ellipse(W * 0.2, H * 0.8, 100, 32, -0.2, 0, Math.PI * 2);
         ctx.fill();
 
         // 区域名称标签
@@ -281,45 +287,86 @@
         }
     }
 
-    /** 画数码兽 */
+    /** Phase 11: 画数码兽 — 支持密度模式(>15只→圆点, hover看详情) */
     function drawDigimon() {
+        const count = state.digimon.length;
+        const densityMode = count > DENSITY_MODE_THRESHOLD;
+
         for (const d of state.digimon) {
             const { x, y } = d.position;
             const isSelected = d.name === state.selectedName;
+            const isHovered = d.name === hoveredDigimon;
             const emoji = getDigimonEmoji(d.name, d.species, d.stage);
+            const nameShort = d.name.charAt(0); // 取名字首字
 
-            // 光晕
-            const aura = ctx.createRadialGradient(x, y, 4, x, y, 24);
-            aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.8)' : 'rgba(0, 212, 255, 0.5)');
-            aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = aura;
-            ctx.beginPath();
-            ctx.arc(x, y, 24, 0, Math.PI * 2);
-            ctx.fill();
+            if (densityMode) {
+                // ═══ 密度模式: 只画小圆点 + 首字 ═══
+                const dotSize = isSelected ? 7 : (isHovered ? 6 : 4);
+                const dotAlpha = isSelected ? 1.0 : (isHovered ? 0.85 : 0.5);
 
-            // Emoji
-            ctx.font = '24px serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(emoji, x, y);
+                // 属性颜色: vaccine=蓝, data=绿, virus=红, free=紫
+                const attrColors = { vaccine: '#4ae8c4', data: '#4ae84a', virus: '#e84a4a', free: '#b86aff' };
+                const dotColor = attrColors[d.attribute] || '#aabbcc';
 
-            // 名字 + 心情 emoji (心情跟随 mood 字段实时更新)
-            ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
-            ctx.font = '12px monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(d.name + ' ' + getMoodEmoji(d.mood), x, y - 18);
-
-            // 选中时画圈
-            if (isSelected) {
-                ctx.strokeStyle = '#ffd700';
-                ctx.lineWidth = 2;
+                ctx.fillStyle = dotColor.replace(')', `, ${dotAlpha})`).replace('rgb', 'rgba');
+                if (dotColor.startsWith('#')) {
+                    ctx.globalAlpha = dotAlpha;
+                    ctx.fillStyle = dotColor;
+                }
                 ctx.beginPath();
-                ctx.arc(x, y, 20, 0, Math.PI * 2);
-                ctx.stroke();
+                ctx.arc(x, y, dotSize, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+
+                // 选中/hover 时才画名字首字
+                if (isSelected || isHovered) {
+                    ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
+                    ctx.font = '10px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(nameShort + ' ' + emoji, x, y - 6);
+                    ctx.textBaseline = 'alphabetic';
+                }
+
+                if (isSelected) {
+                    ctx.strokeStyle = '#ffd700';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 10, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            } else {
+                // ═══ 普通模式: 小emoji + 首字 ═══
+                const aura = ctx.createRadialGradient(x, y, 3, x, y, 18);
+                aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.8)' : 'rgba(0, 212, 255, 0.5)');
+                aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = aura;
+                ctx.beginPath();
+                ctx.arc(x, y, 18, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Emoji 缩小
+                ctx.font = '18px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(emoji, x, y);
+
+                // 首字 + 心情
+                ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, y - 14);
+
+                if (isSelected) {
+                    ctx.strokeStyle = '#ffd700';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 15, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
             }
         }
-        // 重置 baseline
         ctx.textBaseline = 'alphabetic';
     }
 
@@ -410,7 +457,7 @@
 
         const connStatus = state.connected ? '\ud83d\udfe2 \u5728\u7ebf' : '\ud83d\udd34 \u79bb\u7ebf';
         // Phase 10: 状态栏显示天气+季节
-        if (phaseEl) phaseEl.textContent = `${wxIcon} ${snLabel} \u00b7 Phase 3 \u00b7 ${connStatus}`;
+        if (phaseEl) phaseEl.textContent = `${wxIcon} ${snLabel} · Phase 11 · ${connStatus}`;
     }
 
     // ══════════════════════════════════════════════
@@ -482,6 +529,29 @@
         state.selectedName = null;
         hideSidebar();
         render();
+    });
+
+    // Phase 11: hover 支持 — 密度模式下鼠标悬停显示详情
+    canvas.addEventListener('mousemove', (ev) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = (ev.clientX - rect.left) * (W / rect.width);
+        const my = (ev.clientY - rect.top) * (H / rect.height);
+
+        const prevHovered = hoveredDigimon;
+        hoveredDigimon = null;
+
+        for (const d of state.digimon) {
+            const dx = mx - d.position.x;
+            const dy = my - d.position.y;
+            if (dx * dx + dy * dy < 18 * 18) {
+                hoveredDigimon = d.name;
+                break;
+            }
+        }
+
+        if (hoveredDigimon !== prevHovered) {
+            render();
+        }
     });
 
     // ══════════════════════════════════════════════
