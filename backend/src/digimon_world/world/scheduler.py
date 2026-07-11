@@ -44,15 +44,13 @@ DEFAULT_TICK_SECONDS = 1.0
 SAVE_INTERVAL_TICKS = 100
 
 # 相遇半径(像素): 距离小于此值才可能触发对话
-DIALOGUE_RADIUS = 100
-
-# 互动冷却(世界分钟): 同一对数码兽在此窗口内最多互动一次
-DIALOGUE_COOLDOWN_MINUTES = 30
+DIALOGUE_RADIUS = 200                     # 相遇触发距离(px),10只数码兽需更宽范围
+DIALOGUE_COOLDOWN_MINUTES = 10            # 对话冷却(世界分钟)
 
 # ---- 显著性阈值(Phase 6) ----
 # 事件分级: trivial(0-2) / routine(3-5) / significant(6-8) / critical(9-10)
 # 只有 significance >= SIGNIFICANCE_LLM_THRESHOLD 的事件才触发 LLM 反思
-SIGNIFICANCE_LLM_THRESHOLD = 6
+SIGNIFICANCE_LLM_THRESHOLD = 4  # 阈值: routine(3-5)即可触发 LLM
 
 # 事件回调签名: async def cb(event: dict, agent: DigimonAgent) -> None
 EventCallback = Callable[[dict[str, Any], DigimonAgent], Awaitable[None]]
@@ -343,7 +341,7 @@ class WorldScheduler:
         if et in {"moved", "rested", "observed", "ate", "heal"}:
             return 4
         if et in {"proximity", "step_error"}:
-            return 3
+            return 5  # proximity 提到 routine，让对话触发
         return 5  # 未知事件默认 routine
 
     def _in_cooldown(self, agent: DigimonAgent, now: Any, cooldown_minutes: float | None = None) -> bool:
