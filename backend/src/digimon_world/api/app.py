@@ -525,6 +525,29 @@ async def start_battle(req: BattleStartRequest) -> BattleStartResponse:
         "evolution": evo_result_dict,
         "at": datetime.now().isoformat(),
     }
+
+    # 黑色齿轮交互: 战斗发生在感染子区域时,自动尝试摧毁齿轮 (Phase 8)
+    dgs = get_dark_gear_system()
+    for agent in (a, b):
+        sr = world.get_sub_region(agent)
+        if sr and dgs.is_sub_region_infected(sr["id"]):
+            stage_multiplier = {
+                "FRESH": 0.5, "IN_TRAINING": 0.75, "ROOKIE": 1.0,
+                "CHAMPION": 1.5, "ULTIMATE": 2.0, "MEGA": 3.0,
+            }.get(agent.stage.value, 1.0) if agent.stage else 1.0
+            gear_destroyed, gear_msg = dgs.try_destroy_gear(
+                sr["id"], damage_multiplier=stage_multiplier
+            )
+            if gear_destroyed:
+                event["gear_destroyed"] = True
+                event["gear_destroyed_by"] = agent.name
+                event["gear_msg"] = gear_msg
+                # 摧毁齿轮的数码兽也获得记忆
+                agent.observe({
+                    "type": "gear_destroyed",
+                    "description": f"在战斗中摧毁了{sr['name']}的黑色齿轮! {gear_msg}",
+                    "sub_region_id": sr["id"],
+                })
     world.events.append(event)
     event_id = len(world.events) - 1
 

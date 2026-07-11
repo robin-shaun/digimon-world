@@ -259,3 +259,24 @@ class TestDarkGearSystem:
             "vending_machine_area", "toy_town",
         }
         assert target in valid
+
+    def test_try_destroy_gear_with_multiplier(self):
+        """进化阶段倍率: MEGA(3x) 应造成 60 点伤害 (20*3), 一击摧毁齿轮。"""
+        gear = self.system.force_place_gear(sub_region_id="dark_cave")
+        destroyed, msg = self.system.try_destroy_gear(
+            "dark_cave", damage_multiplier=3.0
+        )
+        assert destroyed
+        assert "被战斗余波摧毁" in msg
+        assert gear.destroyed
+        assert len(self.system.active_gears) == 0  # 清理后应为0
+
+    def test_try_destroy_gear_with_multiplier_partial(self):
+        """FRESH(0.5x) 应只造成 10 点伤害, 不够摧毁。"""
+        gear = self.system.force_place_gear(sub_region_id="confusion_forest")
+        destroyed, msg = self.system.try_destroy_gear(
+            "confusion_forest", damage_multiplier=0.5
+        )
+        assert not destroyed
+        assert "剩余 HP" in msg
+        assert gear.hp == GEAR_DEFAULT_HP - int(GEAR_DAMAGE_PER_BATTLE * 0.5)

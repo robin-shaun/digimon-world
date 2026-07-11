@@ -44,7 +44,7 @@ digimon-world/
 │   │   ├── world/           # 世界状态 + 关系 + 经济 + 灾难 + 节日 + 活力
 │   │   ├── llm/             # LLM 客户端
 │   │   └── api/             # FastAPI 接口
-│   └── tests/               # 308 测试
+│   └── tests/               # 355 测试
 └── src/index.js             # Cloudflare Worker (API反代)
 ```
 
@@ -73,7 +73,7 @@ digimon-world/
 | 后端 | Python 3.11 + FastAPI + SQLite |
 | AI | Anthropic Claude (Opus 4.8 + Haiku 4.5) via 中转 |
 | 部署 | Cloudflare Workers (前端) + Cloudflare Tunnel (后端) |
-| 测试 | pytest (308 tests) |
+- **测试**: pytest (355 passed)
 
 ## 🚀 本地启动
 
