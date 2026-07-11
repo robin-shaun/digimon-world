@@ -67,6 +67,7 @@ class Disaster(Enum):
     BLIZZARD = "blizzard"        # 暴风雪
     EARTHQUAKE = "earthquake"    # 地震
     DARK_TOWER = "dark_tower"    # 黑暗塔波动
+    DARK_WAVE = "dark_wave"      # Phase 8: 黑暗波动
 
 
 # 所有灾难(用于等概率随机选取)
@@ -77,6 +78,7 @@ _DISASTER_MODIFIERS: dict[Disaster, dict[str, float]] = {
     Disaster.BLIZZARD: {"movement": 0.50},   # 移动 -50%
     Disaster.EARTHQUAKE: {},                  # 无持续系数(伤害是一次性 HP)
     Disaster.DARK_TOWER: {},                  # 无持续系数(一次性抹平关系)
+    Disaster.DARK_WAVE: {"movement": 0.70, "battle": 1.30},  # Phase 8: 移速-30%, 战斗+30%
 }
 
 # 灾难显示名(前端 / 日志用)
@@ -84,6 +86,7 @@ DISASTER_LABELS: dict[Disaster, str] = {
     Disaster.BLIZZARD: "暴风雪",
     Disaster.EARTHQUAKE: "地震",
     Disaster.DARK_TOWER: "黑暗塔波动",
+    Disaster.DARK_WAVE: "黑暗波动",
 }
 
 # 灾难文案(点火时写进世界事件的 description)
@@ -91,6 +94,7 @@ DISASTER_DESCRIPTIONS: dict[Disaster, str] = {
     Disaster.BLIZZARD: "暴风雪!漫天风雪封住了所有道路,数码兽举步维艰。",
     Disaster.EARTHQUAKE: "地震!大地剧烈撕裂,全员受创失血。",
     Disaster.DARK_TOWER: "黑暗塔波动!释放出的乱流冲刷记忆,数码兽间的羁绊被尽数抹去。",
+    Disaster.DARK_WAVE: "黑暗波动!从黑暗龙卷山释放出的负面能量横扫大陆,所有数码兽感到生命力在流逝,同时变得格外好斗。",
 }
 
 
@@ -203,6 +207,14 @@ class DisasterSystem:
                 if hp is not None:
                     agent.hp = max(HP_FLOOR, hp - HP_DAMAGE)
                     affected.append(agent.name)
+
+        # Phase 8: 黑暗波动 — 全体 HP -10% (按当前 max_hp 计算)
+        if disaster is Disaster.DARK_WAVE and world is not None:
+            for agent in world.all():
+                stats = agent.stats
+                dmg = max(1, int(stats.max_hp * 0.10))
+                stats.hp = max(HP_FLOOR, stats.hp - dmg)
+                affected.append(agent.name)
 
         # 黑暗塔波动: 抹平所有社交关系
         if disaster is Disaster.DARK_TOWER and tracker is not None:
