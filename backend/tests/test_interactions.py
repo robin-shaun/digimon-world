@@ -60,7 +60,7 @@ def test_distance_euclidean() -> None:
 async def test_generate_dialogue() -> None:
     """FakeLlm 返回 '你好!',验证返回值 + 调用了 HAIKU。"""
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.MINIMAX_M3, reply="你好!")
+    fake.set_reply(LlmModel.MINIMAX_TEXT_01, reply="你好!")
     dialogue = Dialogue(llm_client=fake)
 
     a = _agent("亚古兽", 100, 100)
@@ -72,7 +72,7 @@ async def test_generate_dialogue() -> None:
 
     assert line == "你好!"
     assert len(fake.calls) == 1
-    assert fake.calls[0].model == LlmModel.MINIMAX_M3
+    assert fake.calls[0].model == LlmModel.MINIMAX_TEXT_01
     # prompt 里应带上双方信息
     prompt = "\n".join(m.content for m in fake.calls[0].messages)
     assert "亚古兽" in prompt and "加布兽" in prompt
@@ -117,7 +117,7 @@ async def test_scheduler_triggers_dialogue_on_proximity() -> None:
     world.spawn(b)
 
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.MINIMAX_M3, reply="嗨,你也在这儿呀!")
+    fake.set_reply(LlmModel.MINIMAX_TEXT_01, reply="嗨,你也在这儿呀!")
     dialogue = Dialogue(llm_client=fake)
 
     clock = WorldClock()
