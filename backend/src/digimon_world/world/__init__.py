@@ -13,6 +13,12 @@
 """
 from . import persistence
 from .clock import WorldClock
+from .dark_gears import (
+    DarkGear,
+    DarkGearSystem,
+    get_dark_gear_system,
+    reset_dark_gear_system,
+)
 from .disasters import (
     Disaster,
     DisasterSystem,
@@ -85,6 +91,8 @@ __all__ = [
     "DEFAULT_REGIONS",
     "DEFAULT_TICK_SECONDS",
     "DEFAULT_LANDMARKS",
+    "DarkGear",
+    "DarkGearSystem",
     "EconomySystem",
     "FILE_ISLAND",
     "INFINITY_MOUNTAIN",
@@ -113,6 +121,7 @@ __all__ = [
     "WorldState",
     "compute_vitality",
     "persistence",
+    "get_dark_gear_system",
     "get_director",
     "get_economy_system",
     "get_festival_system",
@@ -124,6 +133,7 @@ __all__ = [
     "get_tracker",
     "get_weather_system",
     "get_world",
+    "reset_dark_gear_system",
     "reset_director",
     "reset_festival_system",
     "reset_landmark_system",
