@@ -498,6 +498,55 @@ def get_world() -> WorldState:
             location=(480, 180),
             current_plan="从空中巡视",
         ))
+        _state.spawn(DigimonAgent(
+            name="甲虫兽",
+            species="tentomon",
+            region_id="file_island",
+            location=(350, 300),
+            current_plan="在树林里找食物",
+        ))
+        _state.spawn(DigimonAgent(
+            name="巴鲁兽",
+            species="palmon",
+            region_id="file_island",
+            location=(600, 250),
+            current_plan="晒太阳光合作用",
+        ))
+        _state.spawn(DigimonAgent(
+            name="哥玛兽",
+            species="gomamon",
+            region_id="file_island",
+            location=(150, 500),
+            current_plan="在海边玩水",
+        ))
+        _state.spawn(DigimonAgent(
+            name="巴达兽",
+            species="patamon",
+            region_id="file_island",
+            location=(400, 100),
+            current_plan="在空中飞行",
+        ))
+        _state.spawn(DigimonAgent(
+            name="迪路兽",
+            species="tailmon",
+            region_id="infinity_mountain",
+            location=(500, 150),
+            current_plan="守护创世者祭坛",
+        ))
+        _state.spawn(DigimonAgent(
+            name="小狗兽",
+            species="plotmon",
+            region_id="file_island",
+            location=(300, 450),
+            current_plan="在草地上玩耍",
+        ))
+        _state.spawn(DigimonAgent(
+            name="艾力兽",
+            species="elecmon",
+            region_id="file_island",
+            location=(750, 400),
+            current_plan="在发电站附近巡逻",
+        ))
     return _state
 
 
