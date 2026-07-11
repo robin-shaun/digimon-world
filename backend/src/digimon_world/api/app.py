@@ -846,6 +846,75 @@ def attack_dark_gear(
     }
 
 
+# ---- Phase 9: 多元宇宙 API ----
+
+
+class CreateWorldRequest(BaseModel):
+    """创建平行世界请求。"""
+
+    world_id: str | None = None
+    seasons: bool = True  # 是否启用季节系统
+
+
+class OpenGateRequest(BaseModel):
+    """数码之门跨世界迁移请求。"""
+
+    agent_name: str = Field(..., description="要迁移的数码兽名字")
+    from_world: str = Field(..., description="源世界 id")
+    to_world: str = Field(..., description="目标世界 id")
+
+
+@app.get("/api/multiverse")
+def get_multiverse_overview() -> dict[str, Any]:
+    """多元宇宙概览: 所有世界列表、agent 数、事件数。"""
+    mv = get_multiverse()
+    return mv.to_dict()
+
+
+@app.post("/api/multiverse/create")
+def create_world(req: CreateWorldRequest) -> dict[str, Any]:
+    """创建一个新的平行世界,返回新世界 ID 和状态。"""
+    mv = get_multiverse()
+    world = mv.create_world(world_id=req.world_id)
+    # 找到新创建世界的 id(create_world 返回的 WorldState 不带 id; 从管理器反查)
+    world_id = next(
+        (wid for wid, ws in mv.worlds.items() if ws is world),
+        list(mv.worlds.keys())[-1],
+    )
+    return {
+        "world_id": world_id,
+        "agent_count": world.count(),
+        "event_count": len(world.events),
+        "total_worlds": mv.count(),
+    }
+
+
+@app.post("/api/multiverse/gate")
+def open_digital_gate(req: OpenGateRequest) -> dict[str, Any]:
+    """打开数码之门,将一只数码兽从一个世界迁移到另一个。"""
+    mv = get_multiverse()
+    agent = mv.open_gate(
+        agent_name=req.agent_name,
+        from_world_id=req.from_world,
+        to_world_id=req.to_world,
+    )
+    if agent is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Gate failed: check that worlds '{req.from_world}' and "
+                f"'{req.to_world}' exist and agent '{req.agent_name}' is "
+                f"in '{req.from_world}'"
+            ),
+        )
+    return {
+        "agent": agent.name,
+        "from_world": req.from_world,
+        "to_world": req.to_world,
+        "message": f"{agent.name} 穿过了数码之门,从 {req.from_world} 到达 {req.to_world}! 🌌",
+    }
+
+
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
 class ConnectionManager:
     def __init__(self) -> None:

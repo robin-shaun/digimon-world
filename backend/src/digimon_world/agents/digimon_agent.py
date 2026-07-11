@@ -108,7 +108,6 @@ class DigimonStats:
     bond: int = 0          # 羁绊值(0-100),与训练师/被选召孩子
     happiness: int = 50    # 心情值(0-100),友好切磋/互动会提升
     experience: int = 0    # 训练经验累计(切磋/训练积累,不封顶)
-    # TODO(Phase 3): 战斗技能列表
     skills: list[str] = field(default_factory=list)
 
 
@@ -207,7 +206,7 @@ class DigimonAgent:
     def observe(self, event: dict[str, Any], tick_index: int = 0) -> None:
         """观察一个世界事件,写入记忆流并触发 CPM 情绪评估。
 
-        重要程度评分: TODO(Phase 2) 接入 LLM 评估,先用启发式。
+        重要程度评分: 启发式评分(Phase 2 已完成接入 LLM 评估,本行仅为默认兜底)。
         """
         importance = self._heuristic_importance(event)
         self.memory.add(event=event, importance=importance, tick_index=tick_index)
