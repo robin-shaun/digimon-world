@@ -108,8 +108,52 @@ def _cond_creators_return(world_state: Any, tracker: Any) -> bool:
     return total > RELATIONSHIP_SUM_THRESHOLD
 
 
+# ---- 黑暗四天王事件触发条件 (Phase 8) ----
+
+# 黑暗四天王触发 tick: 基于世界推进程度
+DARK_MASTERS_TRIGGERS: dict[str, int] = {
+    "piemon_arrival": 200,       # 小丑皇降临
+    "pinocchimon_forest": 300,   # 木偶兽的森林
+    "metal_seadramon_sea": 400,  # 金属海龙兽之海
+    "mugendramon_fortress": 500, # 无限龙兽要塞
+}
+
+# 当前世界 tick (由 scheduler 在每次 check_trigger 时更新)
+_current_world_tick: int = 0
+
+
+def set_world_tick(tick: int) -> None:
+    """由 scheduler 调用,更新当前世界 tick (用于天王事件判定)。"""
+    global _current_world_tick
+    _current_world_tick = tick
+
+
+def get_world_tick() -> int:
+    return _current_world_tick
+
+
+def _cond_piemon_arrival(world_state: Any, tracker: Any) -> bool:
+    """tick ≥ 200: 小丑皇降临。"""
+    return _current_world_tick >= DARK_MASTERS_TRIGGERS["piemon_arrival"]
+
+
+def _cond_pinocchimon_forest(world_state: Any, tracker: Any) -> bool:
+    """tick ≥ 300: 木偶兽控制玩具城。"""
+    return _current_world_tick >= DARK_MASTERS_TRIGGERS["pinocchimon_forest"]
+
+
+def _cond_metal_seadramon_sea(world_state: Any, tracker: Any) -> bool:
+    """tick ≥ 400: 金属海龙兽出现于海岸。"""
+    return _current_world_tick >= DARK_MASTERS_TRIGGERS["metal_seadramon_sea"]
+
+
+def _cond_mugendramon_fortress(world_state: Any, tracker: Any) -> bool:
+    """tick ≥ 500: 无限山变身机械要塞。"""
+    return _current_world_tick >= DARK_MASTERS_TRIGGERS["mugendramon_fortress"]
+
+
 def _default_events() -> list[StoryEvent]:
-    """构造内置初始事件列表。"""
+    """构造内置初始事件列表 (含黑暗四天王剧情线)。"""
     return [
         StoryEvent(
             event_id="dark_tower_awakening",
@@ -123,11 +167,44 @@ def _default_events() -> list[StoryEvent]:
             condition=_cond_creators_return,
             importance=10,
         ),
+        # ── 黑暗四天王剧情线 (Phase 8) ──
+        StoryEvent(
+            event_id="piemon_arrival",
+            description="黑暗笼罩文件岛,小丑皇降临!皇牌飞刀划破天空,数码世界陷入前所未有的恐慌。",
+            condition=_cond_piemon_arrival,
+            importance=10,
+        ),
+        StoryEvent(
+            event_id="pinocchimon_forest",
+            description="玩具城被木偶兽控制!布偶屋变成致命陷阱,所有经过的数码兽都被迫玩他的「游戏」。",
+            condition=_cond_pinocchimon_forest,
+            importance=10,
+        ),
+        StoryEvent(
+            event_id="metal_seadramon_sea",
+            description="海岸出现金属海龙兽!钢铁巨浪吞没渔船,龙眼湖的水位开始异常上涨。",
+            condition=_cond_metal_seadramon_sea,
+            importance=10,
+        ),
+        StoryEvent(
+            event_id="mugendramon_fortress",
+            description="无限山变身为机械要塞!无限龙兽的钢铁军团从地底涌出,两门无限大炮对准了文件岛的每一个角落。",
+            condition=_cond_mugendramon_fortress,
+            importance=10,
+        ),
     ]
 
 
 class StoryDirector:
     """剧情导演: 扫描世界状态,满足条件的剧情事件自动点火。"""
+
+    # 黑暗四天王事件 ID 集合
+    DARK_MASTER_EVENT_IDS: frozenset[str] = frozenset({
+        "piemon_arrival",
+        "pinocchimon_forest",
+        "metal_seadramon_sea",
+        "mugendramon_fortress",
+    })
 
     def __init__(
         self,
@@ -138,30 +215,37 @@ class StoryDirector:
         self._events: list[StoryEvent] = events if events is not None else _default_events()
         # 注入回调: 默认在 check_trigger 时直接 append 到 world_state.events
         self._inject_fn = inject_fn
+        # Phase 8: 记录本轮新触发的 Dark Masters 事件
+        self._new_dark_master_events: list[str] = []
 
     @property
     def events(self) -> list[StoryEvent]:
         return self._events
 
+    @property
+    def new_dark_master_events(self) -> list[str]:
+        """本轮新触发的黑暗天王事件 ID 列表 (check_trigger 调用后读取)。"""
+        return self._new_dark_master_events
+
+    @property
+    def dark_masters_count(self) -> int:
+        """已触发的黑暗天王数量。"""
+        return sum(
+            1 for e in self._events
+            if e.event_id in self.DARK_MASTER_EVENT_IDS and e.fired
+        )
+
     def check_trigger(self, world_state: Any, tracker: Any) -> list[StoryEvent]:
-        """扫描所有未点火事件,条件满足则触发。
-
-        触发动作:
-        - 标记 fired = True(只触发一次)
-        - 构造事件字典,append 到 world_state.events
-        - 若挂了 inject_fn,再调一次(与 /api/director/inject_event 同路径)
-
-        Returns:
-            本次新点火的事件列表(可能为空)。
-        """
+        """扫描所有未点火事件,条件满足则触发。"""
         newly_fired: list[StoryEvent] = []
+        self._new_dark_master_events = []
+
         for event in self._events:
             if event.fired:
                 continue
             try:
                 triggered = event.condition(world_state, tracker)
             except Exception:
-                # 条件函数出错不应拖垮整个扫描
                 triggered = False
             if not triggered:
                 continue
@@ -176,13 +260,17 @@ class StoryDirector:
             }
             # 写入世界事件日志
             world_state.events.append(payload)
-            # 走 inject 路径(广播 / 持久化 / Director 可见)
+            # 走 inject 路径
             if self._inject_fn is not None:
                 try:
                     self._inject_fn(payload)
                 except Exception:
                     pass
             newly_fired.append(event)
+
+            # Phase 8: 跟踪黑暗天王事件
+            if event.event_id in self.DARK_MASTER_EVENT_IDS:
+                self._new_dark_master_events.append(event.event_id)
 
         return newly_fired
 

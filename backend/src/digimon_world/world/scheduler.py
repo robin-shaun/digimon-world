@@ -199,7 +199,13 @@ class WorldScheduler:
         self._factions.form_factions(self._relationships)
         # 7. 剧情阶段: 每 CHECK_INTERVAL_TICKS 扫描一次全局剧情触发条件
         if self._tick_count % CHECK_INTERVAL_TICKS == 0:
+            from .events import set_world_tick
+            set_world_tick(self._tick_count)
             self._story_director.check_trigger(self._world, self._relationships)
+            # Phase 8: 黑暗四天王效果 — 新触发的天王事件让所有数码兽恐惧+战斗倾向+
+            if self._story_director.new_dark_master_events:
+                for agent in agents:
+                    agent.apply_dark_masters_effects()
         # 7.5 节日阶段: 检查是否跨入节日日,跨入则全员心情 / 关系增益
         festival = self._festivals.update_from_clock(
             self._clock.elapsed_minutes,

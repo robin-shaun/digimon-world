@@ -155,6 +155,38 @@ class DigimonAgent:
     battle_victories: int = 0
     # 个性特征: {trait_name: 0-10},初始化时随机 3 个突出特征
     personality_traits: dict[str, int] = field(default_factory=_generate_personality_traits)
+    # Phase 8: 黑暗四天王事件影响
+    # 是否有黑暗天王活跃 (触发后设为 True)
+    dark_masters_active: bool = False
+    # 恐惧修正系数 (天王活跃时 +20%,即 fear_base * 1.2)
+    fear_modifier: float = 1.0
+    # 战斗概率修正 (天王活跃时 +30%,即 battle_chance 增加 30 个百分点)
+    battle_probability_bonus: float = 0.0
+
+    def apply_dark_masters_effects(self) -> bool:
+        """当黑暗四天王事件激活时,增加恐惧和战斗倾向。
+        
+        调用此方法后:
+        - fear_modifier 设为 1.2 (恐惧 +20%)
+        - battle_probability_bonus 设为 0.3 (战斗概率 +30%)
+        - mood_state['fear'] 立即提升 0.2
+        
+        Returns:
+            True 如果之前未激活(首次激活)
+        """
+        if self.dark_masters_active:
+            return False
+        self.dark_masters_active = True
+        self.fear_modifier = 1.2
+        self.battle_probability_bonus = 0.3
+        self.mood_state["fear"] = min(1.0, self.mood_state.get("fear", 0.0) + 0.2)
+        return True
+
+    def clear_dark_masters_effects(self) -> None:
+        """清除黑暗天王影响,恢复正常。"""
+        self.dark_masters_active = False
+        self.fear_modifier = 1.0
+        self.battle_probability_bonus = 0.0
 
     def get_personality_summary(self) -> str:
         """返回突出个性特征的描述文本(用于注入 planner prompt)。"""
