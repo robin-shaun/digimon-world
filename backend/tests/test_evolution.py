@@ -97,21 +97,21 @@ def test_compute_bond_sums_importance(agumon, evo_system):
 
 def test_can_evolve_not_ready_too_few_victories_and_bond(agumon, evo_system):
     """刚开局什么都不够,不能进化。"""
-    can, reason = evo_system.can_evolve(agumon, battle_victories=0, bond=0)
+    can, reason, crest = evo_system.can_evolve(agumon, battle_victories=0, bond=0)
     assert can is False
     assert reason == EvolutionReason.NOT_READY
 
 
 def test_can_evolve_ready_when_both_met(agumon, evo_system):
     """ROOKIE → CHAMPION 需要 8 胜利 + 40 bond。"""
-    can, reason = evo_system.can_evolve(agumon, battle_victories=8, bond=40)
+    can, reason, crest = evo_system.can_evolve(agumon, battle_victories=8, bond=40)
     assert can is True
     assert reason == EvolutionReason.BATTLE_VICTORIES
 
 
 def test_can_evolve_bond_overflow_pure_bond_route(agumon, evo_system):
     """胜利不够,但羁绊值溢出 2 倍,纯羁绊路线。"""
-    can, reason = evo_system.can_evolve(agumon, battle_victories=0, bond=80)
+    can, reason, crest = evo_system.can_evolve(agumon, battle_victories=0, bond=80)
     assert can is True
     assert reason == EvolutionReason.BOND
 
@@ -122,7 +122,7 @@ def test_can_evolve_mega_cannot_go_further(evo_system):
         species="WarGreymon",
         stage=EvolutionStage.MEGA,
     )
-    can, reason = evo_system.can_evolve(mega, battle_victories=999, bond=999)
+    can, reason, crest = evo_system.can_evolve(mega, battle_victories=999, bond=999)
     assert can is False
     assert reason == EvolutionReason.ALREADY_MEGA
 
@@ -138,7 +138,8 @@ def test_evolve_changes_stage_and_species(agumon, evo_system):
     assert result.old_stage == old_stage
     assert result.new_stage == EvolutionStage.CHAMPION
     assert agumon.stage == EvolutionStage.CHAMPION
-    assert agumon.species == "champion_form"
+    # Phase 8: Agumon → Greymon (物种特定路由)
+    assert agumon.species == "greymon"
 
 
 def test_evolve_scales_stats(agumon, evo_system):
@@ -193,9 +194,12 @@ def test_check_and_evolve_full_chain(evo_system):
     r3 = evo_system.check_and_evolve(a, battle_victories=8, bond=40)
     assert r3.evolved and r3.new_stage == EvolutionStage.CHAMPION
 
-    # CHAMPION → ULTIMATE (15 wins, 60 bond)
+    # CHAMPION → ULTIMATE (15 wins, 60 bond) — 无特定物种,无需徽章
     r4 = evo_system.check_and_evolve(a, battle_victories=15, bond=60)
     assert r4.evolved and r4.new_stage == EvolutionStage.ULTIMATE
+
+    # Phase 8: ULTIMATE → MEGA 需要特殊事件触发
+    evo_system.trigger_story_event("angemon_arrow")
 
     # ULTIMATE → MEGA (25 wins, 100 bond)
     r5 = evo_system.check_and_evolve(a, battle_victories=25, bond=100)

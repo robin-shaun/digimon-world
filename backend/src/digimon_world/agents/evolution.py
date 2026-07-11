@@ -6,47 +6,220 @@
 
     BABY_I  →  BABY_II  →  ROOKIE  →  CHAMPION  →  ULTIMATE  →  MEGA
 
-触发条件 (本 commit):
-1. 战斗胜利数 ≥ 当前阶段阈值
-2. 羁绊值 ≥ 当前阶段阈值 (由 memory 中高 importance 记忆累计)
-3. 剧情事件 (可选,占位)
+Phase 8: 物种特定进化树 + 8 枚徽章 + 经典动画路线
 
-进化会修改:
-- agent.stage
-- agent.stats (按 species 模板重新填充 hp/max_hp/attack/defense)
-- 写一条 high-importance 记忆 "I evolved into <new stage>"
-- 返回 EvolutionResult (old_stage, new_stage, reason)
+徽章系统 (8 Crests):
+- courage (勇气): Agumon 线
+- friendship (友情): Gabumon 线
+- love (爱心): Biyomon / Palmon 线
+- knowledge (知识): Tentomon 线
+- sincerity (诚实): Gomamon 线
+- purity (纯真): Palmon 线
+- hope (希望): Patamon 线
+- light (光明): Tailmon 线
 
-参考 docs/DESIGN.md 第 4 节 "进化系统"。
+进化条件:
+- 成熟期 (ROOKIE → CHAMPION): 无徽章要求,仅 battle + bond
+- 完全体 (CHAMPION → ULTIMATE): 需要对应徽章
+- 究极体 (ULTIMATE → MEGA): 需要徽章 + 特殊事件触发
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
 from .digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
 
 
-# ----------------------------------------------------------------------------
-# 进化阈值表 (每个阶段 → 需要的胜利数 / 羁绊值)
-# ----------------------------------------------------------------------------
+# ============================================================================
+# 徽章系统 (Crests)
+# ============================================================================
+
+class Crest(str, Enum):
+    """8 枚被选召孩子的徽章。"""
+    COURAGE = "courage"         # 勇气 - 亚古兽
+    FRIENDSHIP = "friendship"   # 友情 - 加布兽
+    LOVE = "love"               # 爱心 - 比丘兽/巴鲁兽
+    KNOWLEDGE = "knowledge"     # 知识 - 甲虫兽
+    SINCERITY = "sincerity"     # 诚实 - 哥玛兽
+    PURITY = "purity"           # 纯真 - 巴鲁兽
+    HOPE = "hope"               # 希望 - 巴达兽
+    LIGHT = "light"             # 光明 - 迪路兽
+
+
+# ============================================================================
+# 物种特定进化链
+# ============================================================================
+
+@dataclass
+class SpeciesEvolution:
+    """某个物种在当前阶段的进化信息。"""
+    next_species: str       # 进化后物种名
+    crest: Optional[Crest] = None  # 进化所需徽章
+
+
+# 物种 → 每阶段进化信息 (按物种的 species_id)
+# 成熟期 (ROOKIE → CHAMPION): 不需要徽章
+# 完全体 (CHAMPION → ULTIMATE): 需要对应徽章
+# 究极体 (ULTIMATE → MEGA): 需要徽章 + 特殊事件
+
+SPECIES_EVOLUTION_TREE: dict[str, dict[EvolutionStage, SpeciesEvolution]] = {
+    # ── 亚古兽线: 勇气徽章 ──
+    "agumon": {
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="greymon",       # 暴龙兽
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="metal_greymon",  # 机械暴龙兽
+            crest=Crest.COURAGE,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="war_greymon",    # 战斗暴龙兽
+            crest=Crest.COURAGE,
+        ),
+    },
+    # ── 加布兽线: 友情徽章 ──
+    "gabumon": {
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="garurumon",      # 加鲁鲁兽
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="were_garurumon", # 兽人加鲁鲁
+            crest=Crest.FRIENDSHIP,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="metal_garurumon", # 钢铁加鲁鲁
+            crest=Crest.FRIENDSHIP,
+        ),
+    },
+    # ── 比丘兽线: 爱心徽章 ──
+    "biyomon": {
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="birdramon",      # 巴多拉兽
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="garudamon",      # 伽楼达兽
+            crest=Crest.LOVE,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="hououmon",       # 凤凰兽
+            crest=Crest.LOVE,
+        ),
+    },
+    # ── 甲虫兽线: 知识徽章 ──
+    "tentomon": {
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="kabuterimon",    # 比多兽
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="atlur_kabuterimon",  # 超比多兽
+            crest=Crest.KNOWLEDGE,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="hercules_kabuterimon",  # 巨大古加兽
+            crest=Crest.KNOWLEDGE,
+        ),
+    },
+    # ── 巴鲁兽线: 纯真/爱心徽章 ──
+    "palmon": {
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="togemon",        # 仙人掌兽
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="lilimon",        # 花仙兽
+            crest=Crest.PURITY,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="rosemon",        # 蔷薇兽
+            crest=Crest.PURITY,
+        ),
+    },
+    # ── 哥玛兽线: 诚实徽章 ──
+    "gomamon": {
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="ikkakumon",      # 海狮兽
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="zudomon",        # 祖顿兽
+            crest=Crest.SINCERITY,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="vikemon",        # 维京兽
+            crest=Crest.SINCERITY,
+        ),
+    },
+    # ── 巴达兽线: 希望徽章 ──
+    "patamon": {
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="angemon",        # 天使兽
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="holy_angemon",   # 神圣天使兽
+            crest=Crest.HOPE,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="seraphimon",     # 究极天使兽
+            crest=Crest.HOPE,
+        ),
+    },
+    # ── 迪路兽线: 光明徽章 ──
+    "tailmon": {
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="angewomon",      # 天女兽
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="holydramon",     # 圣龙兽 (神圣天女兽)
+            crest=Crest.LIGHT,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="ophanimon",      # 座天使兽
+            crest=Crest.LIGHT,
+        ),
+    },
+    # ── 小狗兽: 幼年期→迪路兽 (特殊: 小狗兽进化成迪路兽) ──
+    "plotmon": {
+        EvolutionStage.BABY_II: SpeciesEvolution(
+            next_species="tailmon",         # 迪路兽 (小狗兽 → 迪路兽)
+        ),
+        # 进化成迪路兽后,后续沿用 tailmon 线
+        EvolutionStage.ROOKIE: SpeciesEvolution(
+            next_species="angewomon",
+        ),
+        EvolutionStage.CHAMPION: SpeciesEvolution(
+            next_species="holydramon",
+            crest=Crest.LIGHT,
+        ),
+        EvolutionStage.ULTIMATE: SpeciesEvolution(
+            next_species="ophanimon",
+            crest=Crest.LIGHT,
+        ),
+    },
+}
+
+
+def get_species_evolution(species: str, stage: EvolutionStage) -> Optional[SpeciesEvolution]:
+    """获取某物种在某阶段的进化信息 (大小写不敏感)。"""
+    tree = SPECIES_EVOLUTION_TREE.get(species.lower(), {})
+    return tree.get(stage)
+
+
+# ============================================================================
+# 进化阈值表
+# ============================================================================
 
 @dataclass(frozen=True)
 class EvolutionRequirement:
     """某一阶段升到下一阶段的前置条件。"""
 
     min_victories: int       # 战斗胜利次数门槛
-    min_bond: int            # 羁绊值门槛 (记忆流累计 importance)
-    next_species: str        # 进化后的 species 名 (占位,后续用图鉴映射)
+    min_bond: int            # 羁绊值门槛
+    next_species: str        # 退化后备的 species
+    crest: Optional[Crest] = None        # 所需徽章 (完全体+究极体)
+    require_story_event: bool = False    # 是否需要特殊剧情事件
 
 
-# BABY_I → BABY_II 极宽松,开局几场战斗就能进化
-# BABY_II → ROOKIE 主角首次 "成熟",典型动画设定
-# ROOKIE → CHAMPION 战斗经验丰富
-# CHAMPION → ULTIMATE 完全体进化,需要深厚羁绊
-# ULTIMATE → MEGA 究极体,需要大量羁绊 + 胜利
 EVOLUTION_CHAIN: dict[EvolutionStage, EvolutionRequirement] = {
     EvolutionStage.BABY_I: EvolutionRequirement(
         min_victories=1,
@@ -61,19 +234,21 @@ EVOLUTION_CHAIN: dict[EvolutionStage, EvolutionRequirement] = {
     EvolutionStage.ROOKIE: EvolutionRequirement(
         min_victories=8,
         min_bond=40,
-        next_species="champion_form",
+        next_species="champion_form",  # 物种特定路由覆盖此值
     ),
     EvolutionStage.CHAMPION: EvolutionRequirement(
         min_victories=15,
         min_bond=60,
-        next_species="ultimate_form",
+        next_species="ultimate_form",  # 需要徽章
+        crest=None,  # 实际由物种路由决定
     ),
     EvolutionStage.ULTIMATE: EvolutionRequirement(
         min_victories=25,
         min_bond=100,
-        next_species="mega_form",
+        next_species="mega_form",      # 需要徽章+特殊事件
+        crest=None,
+        require_story_event=True,
     ),
-    # MEGA 已是终态,无下一阶段
 }
 
 
@@ -101,9 +276,9 @@ def next_stage(stage: EvolutionStage) -> Optional[EvolutionStage]:
     return order[idx + 1]
 
 
-# ----------------------------------------------------------------------------
+# ============================================================================
 # 进化结果 / 触发原因
-# ----------------------------------------------------------------------------
+# ============================================================================
 
 class EvolutionReason(str, Enum):
     """进化触发原因。"""
@@ -113,6 +288,8 @@ class EvolutionReason(str, Enum):
     STORY_EVENT = "story_event"
     NOT_READY = "not_ready"
     ALREADY_MEGA = "already_mega"
+    MISSING_CREST = "missing_crest"        # 缺少对应徽章
+    WAITING_EVENT = "waiting_event"         # 等待特殊事件触发
 
 
 @dataclass
@@ -124,6 +301,7 @@ class EvolutionResult:
     new_stage: EvolutionStage
     reason: EvolutionReason
     next_species: Optional[str] = None
+    crest_required: Optional[Crest] = None
 
     def to_dict(self) -> dict:
         return {
@@ -132,63 +310,100 @@ class EvolutionResult:
             "new_stage": self.new_stage.value,
             "reason": self.reason.value,
             "next_species": self.next_species,
+            "crest_required": self.crest_required.value if self.crest_required else None,
         }
 
 
-# ----------------------------------------------------------------------------
+# ============================================================================
 # 进化系统主体
-# ----------------------------------------------------------------------------
+# ============================================================================
 
 class EvolutionSystem:
-    """数码兽进化系统。
+    """数码兽进化系统 (Phase 8: 物种特定路由 + 徽章 + 事件)。"""
 
-    用法:
-        evo = EvolutionSystem()
-        result = evo.check_and_evolve(agent, battle_victories=5, bond=20)
-        if result.evolved:
-            # 庆祝!
-    """
+    def __init__(self):
+        # 全局已解锁的徽章 (被选召的孩子获得的徽章)
+        self.unlocked_crests: set[Crest] = set()
+        # 是否已触发特殊故事事件 (如天使兽射箭等)
+        self.story_events_triggered: set[str] = set()
+
+    def unlock_crest(self, crest: Crest) -> None:
+        """解锁一枚徽章。"""
+        self.unlocked_crests.add(crest)
+
+    def trigger_story_event(self, event_id: str) -> None:
+        """标记一个故事事件已触发。"""
+        self.story_events_triggered.add(event_id)
 
     def compute_bond(self, agent: DigimonAgent) -> int:
-        """从记忆流累计羁绊值。
-
-        简化算法: 累计所有记忆的 importance (1-10) 当作羁绊值。
-        未来可换成 LLM 评估"这份记忆对我意义多大"。
-        """
+        """从记忆流累计羁绊值。"""
         return sum(m.importance for m in agent.memory.entries)
+
+    def _get_next_species(
+        self, agent: DigimonAgent, stage: EvolutionStage
+    ) -> tuple[str, Optional[Crest], bool]:
+        """获取物种特定的下一形态和所需徽章。
+
+        Returns:
+            (next_species, required_crest, story_event_required)
+        """
+        sp_evo = get_species_evolution(agent.species, stage)
+        if sp_evo is not None:
+            return sp_evo.next_species, sp_evo.crest, False
+
+        # 回退到通用链
+        req = EVOLUTION_CHAIN.get(stage)
+        if req is not None:
+            return req.next_species, req.crest, req.require_story_event
+        return "unknown_form", None, False
 
     def can_evolve(
         self,
         agent: DigimonAgent,
         battle_victories: int,
         bond: Optional[int] = None,
-    ) -> tuple[bool, EvolutionReason]:
-        """判断当前能否进化。
-
-        Returns:
-            (can_evolve, reason)
-        """
+    ) -> tuple[bool, EvolutionReason, Optional[Crest]]:
+        """判断当前能否进化,返回 (can, reason, missing_crest)。"""
         if is_final_stage(agent.stage):
-            return False, EvolutionReason.ALREADY_MEGA
+            return False, EvolutionReason.ALREADY_MEGA, None
 
         req = EVOLUTION_CHAIN.get(agent.stage)
         if req is None:
-            return False, EvolutionReason.NOT_READY
+            return False, EvolutionReason.NOT_READY, None
 
         actual_bond = bond if bond is not None else self.compute_bond(agent)
 
-        if battle_victories >= req.min_victories and actual_bond >= req.min_bond:
-            return True, EvolutionReason.BATTLE_VICTORIES
-        if actual_bond >= req.min_bond * 2:
-            # 羁绊值严重溢出也算触发 (纯羁绊路线)
-            return True, EvolutionReason.BOND
-        return False, EvolutionReason.NOT_READY
+        # 检查数值条件
+        stats_ok = (
+            battle_victories >= req.min_victories and actual_bond >= req.min_bond
+        )
+        bond_overflow = actual_bond >= req.min_bond * 2
+
+        if not stats_ok and not bond_overflow:
+            return False, EvolutionReason.NOT_READY, None
+
+        # 检查徽章要求 (CHAMPION → ULTIMATE, ULTIMATE → MEGA)
+        _, required_crest, story_required = self._get_next_species(
+            agent, agent.stage
+        )
+
+        # ULTIMATE → MEGA: 需要特殊事件
+        if story_required and agent.stage == EvolutionStage.ULTIMATE:
+            if not self.story_events_triggered:
+                return False, EvolutionReason.WAITING_EVENT, required_crest
+
+        # CHAMPION → ULTIMATE 或 ULTIMATE → MEGA: 需要徽章
+        if required_crest is not None and required_crest not in self.unlocked_crests:
+            return False, EvolutionReason.MISSING_CREST, required_crest
+
+        if stats_ok:
+            return True, EvolutionReason.BATTLE_VICTORIES, None
+        if bond_overflow:
+            return True, EvolutionReason.BOND, None
+        return False, EvolutionReason.NOT_READY, None
 
     def evolve(self, agent: DigimonAgent, reason: EvolutionReason) -> EvolutionResult:
-        """实际执行进化: 改 stage / 改 species / 重置 stats / 写记忆。
-
-        注意: 本方法直接修改 agent 状态。调用方应先 can_evolve() 判定。
-        """
+        """实际执行进化: 改 stage / 改 species / 重置 stats / 写记忆。"""
         old_stage = agent.stage
         target = next_stage(old_stage)
         if target is None:
@@ -199,10 +414,9 @@ class EvolutionSystem:
                 reason=EvolutionReason.ALREADY_MEGA,
             )
 
-        req = EVOLUTION_CHAIN[old_stage]
-        new_species = req.next_species
+        next_species, crest, _ = self._get_next_species(agent, old_stage)
 
-        # ---- 升级数值 (每升一级 * 1.5 系数,简单粗暴) ----
+        # ---- 升级数值 (每升一级 * 1.5 系数) ----
         scale = 1.5
         old_stats = agent.stats
         new_stats = DigimonStats(
@@ -217,13 +431,13 @@ class EvolutionSystem:
 
         # ---- 修改 agent ----
         agent.stage = target
-        agent.species = new_species
+        agent.species = next_species
         agent.stats = new_stats
 
-        # ---- 写一条进化记忆 (Phase 2 reflector 会感知到 importance=9) ----
+        # ---- 写进化记忆 ----
         desc = (
             f"I evolved from {old_stage.value} to {target.value} "
-            f"(new form: {new_species}, reason: {reason.value})"
+            f"(new form: {next_species}, reason: {reason.value})"
         )
         agent.memory.add(
             event={"description": desc, "type": "evolution"},
@@ -236,7 +450,7 @@ class EvolutionSystem:
             old_stage=old_stage,
             new_stage=target,
             reason=reason,
-            next_species=new_species,
+            next_species=next_species,
         )
 
     def check_and_evolve(
@@ -245,28 +459,31 @@ class EvolutionSystem:
         battle_victories: int,
         bond: Optional[int] = None,
     ) -> EvolutionResult:
-        """一站式: 判定 + 执行。
-
-        Returns:
-            EvolutionResult(evolved=True/False, ...)
-        """
-        can, reason = self.can_evolve(agent, battle_victories=battle_victories, bond=bond)
+        """一站式: 判定 + 执行。"""
+        can, reason, crest = self.can_evolve(
+            agent, battle_victories=battle_victories, bond=bond
+        )
         if not can:
             return EvolutionResult(
                 evolved=False,
                 old_stage=agent.stage,
                 new_stage=agent.stage,
                 reason=reason,
+                crest_required=crest,
             )
         return self.evolve(agent, reason=reason)
 
 
 __all__ = [
+    "Crest",
     "EvolutionSystem",
     "EvolutionResult",
     "EvolutionReason",
     "EvolutionRequirement",
     "EVOLUTION_CHAIN",
+    "SPECIES_EVOLUTION_TREE",
+    "SpeciesEvolution",
+    "get_species_evolution",
     "is_final_stage",
     "next_stage",
 ]
