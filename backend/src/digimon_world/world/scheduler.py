@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from typing import Any, Awaitable, Callable, Optional
 
 from ..agents.digimon_agent import DigimonAgent
@@ -52,6 +53,13 @@ SAVE_INTERVAL_TICKS = 100
 # 相遇半径(像素): 距离小于此值才可能触发对话
 DIALOGUE_RADIUS = 200                     # 相遇触发距离(px),10只数码兽需更宽范围
 DIALOGUE_COOLDOWN_MINUTES = 10            # 对话冷却(世界分钟)
+
+# Phase 11: LLM 调用批量化 — 降低每 tick 的 LLM 调用密度
+# 30 只数码兽,每 tick 全调 LLM 不可行
+THINK_ROUND_INTERVAL = 10                 # 反思轮次: 每 10 tick 才收集需要反思的 agent
+PLAN_CACHE_TICKS = 30                     # 计划缓存: 生成后缓存 30 tick 不再重复调用
+DIALOGUE_TRIGGER_PROB = 0.3               # 对话触发概率: 距离<200 + 双方未冷却时,仅 30%
+MOVE_LLM_TICKS = 15                       # 移动决策: 每 15 tick 才调 LLM planner 一次(中间用向量+噪声)
 
 # ---- 显著性阈值(Phase 6) ----
 # 事件分级: trivial(0-2) / routine(3-5) / significant(6-8) / critical(9-10)
@@ -84,6 +92,7 @@ class WorldScheduler:
         season: Optional[SeasonSystem] = None,
         auto_save: bool = False,
         save_db_path: Optional[str] = None,
+        dialogue_prob: float = DIALOGUE_TRIGGER_PROB,
     ) -> None:
         self._world = world
         self._clock = clock
@@ -91,6 +100,7 @@ class WorldScheduler:
         # 是否每 SAVE_INTERVAL_TICKS 自动持久化一次(默认关,测试/独立实例不落盘)
         self._auto_save = auto_save
         self._save_db_path = save_db_path
+        self._dialogue_prob = dialogue_prob  # Phase 11: 对话触发概率(可注入,测试用1.0)
         # 对话生成器(可选): 有则在相遇时生成对话,无则跳过互动阶段
         self._dialogue = dialogue
         # 社交关系表: 默认用进程级单例,可注入独立实例(测试)
@@ -123,6 +133,14 @@ class WorldScheduler:
         self._last_world_day: Optional[int] = None
         # Phase 6: 监控指标 — 跳过 LLM 的事件计数
         self.skipped_llm_events: int = 0
+        # Phase 11: LLM 批量化 — 计划缓存 + 思考轮次
+        # _plan_cache: agent_name → (plan, cached_at_tick)
+        self._plan_cache: dict[str, tuple[str, int]] = {}
+        self._last_think_round: int = -THINK_ROUND_INTERVAL  # 首次 tick 即触发
+        # Phase 11 监控: 跳过 LLM 的计划/反思/对话次数
+        self.skipped_plan_calls: int = 0
+        self.skipped_reflect_calls: int = 0
+        self.skipped_dialogue_probs: int = 0
 
     @property
     def tick_count(self) -> int:
@@ -206,6 +224,8 @@ class WorldScheduler:
                         await self._on_event(ev, self._world.get(ev.get("agent", "")) or agents[0])
                     except Exception as e:  # 回调失败不影响主循环
                         logger.warning("on_event callback failed: %s", e)
+        # 4.4 Phase 11: 批量思考轮次 — 收集需要反思的 agent 一起调 LLM
+        await self._batch_reflect(agents)
         # 4.5 地标阶段: 移动后检测是否靠近地标并施加效果
         landmark_effects = self._landmarks.process(self._world)
         for ev in landmark_effects:
@@ -371,6 +391,14 @@ class WorldScheduler:
                 self.skipped_llm_events += 1
                 continue
 
+            # Phase 11: 对话降频 — 即使满足所有条件,也只有配置概率真正触发对话
+            if random.random() > self._dialogue_prob:
+                self._relationships.record_proximity_with_desire(
+                    a.name, a.latent_desire, b.name, b.latent_desire,
+                )
+                self.skipped_dialogue_probs += 1
+                continue
+
             try:
                 line = await self._dialogue.generate_dialogue(a, b, self._world.events[-5:])
             except Exception as e:  # 生成器内部已兜底,这里再保一层
@@ -480,9 +508,39 @@ class WorldScheduler:
         return elapsed_minutes < threshold
 
     async def _step_agent(self, agent: DigimonAgent) -> dict[str, Any]:
-        """调用单个 agent.step(),捕获异常不让一只炸了拖死整个 tick。"""
+        """调用单个 agent.step(),捕获异常不让一只炸了拖死整个 tick。
+
+        Phase 11 优化:
+        - 计划缓存: 30 tick 内从缓存取,不调 LLM planner
+        - 思考轮次: 每 10 tick 才批量触发 reflect
+        - 移动: 每 MOVE_LLM_TICKS 才调 LLM planner,中间用简单向量+噪声
+        """
         try:
-            return await agent.step(self._world.regions)
+            # Phase 11: 计划缓存 — 缓存未过期则跳过 LLM planner 调用
+            cache_entry = self._plan_cache.get(agent.name)
+            if cache_entry is not None:
+                cached_plan, cached_at = cache_entry
+                if self._tick_count - cached_at < PLAN_CACHE_TICKS:
+                    # 直接用缓存计划,跳过 LLM planner
+                    agent.current_plan = cached_plan
+                    self.skipped_plan_calls += 1
+                    return await self._step_with_cached_plan(agent)
+                else:
+                    # 缓存过期,移除
+                    del self._plan_cache[agent.name]
+
+            # Phase 11: 移动决策降频 — 非 plan-refresh tick 用简单向量+噪声
+            if self._tick_count % MOVE_LLM_TICKS != 0:
+                # 降频模式: 用已有的 current_plan 做向量移动(不调 LLM)
+                self.skipped_plan_calls += 1
+                return await self._step_with_cached_plan(agent)
+
+            # 正常路径: 调 LLM step (包含 plan + act)
+            result = await agent.step(self._world.regions)
+            # 缓存新生成的计划
+            if agent.current_plan:
+                self._plan_cache[agent.name] = (agent.current_plan, self._tick_count)
+            return result
         except Exception as e:
             logger.exception("agent.step failed for %s: %s", agent.name, e)
             return {
@@ -490,6 +548,45 @@ class WorldScheduler:
                 "agent": agent.name,
                 "error": str(e),
             }
+
+    async def _step_with_cached_plan(self, agent: DigimonAgent) -> dict[str, Any]:
+        """用已缓存的计划做简单移动(向量+噪声),不调 LLM。
+
+        适合: 计划缓存生效期 / 移动降频 tick。
+        逻辑: 对 current_plan 做关键词解析 → 方向位移;无方向则随机一步。
+        """
+        try:
+            return agent.act(self._world.regions)
+        except Exception as e:
+            logger.exception("agent.act (cached) failed for %s: %s", agent.name, e)
+            return {
+                "type": "step_error",
+                "agent": agent.name,
+                "error": str(e),
+            }
+
+    async def _batch_reflect(self, agents: list[DigimonAgent]) -> None:
+        """Phase 11: 批量思考轮次 — 收集需要反思的 agent 一起调 LLM。
+
+        只在思考轮次 tick (每 THINK_ROUND_INTERVAL) 调用。
+        并发执行所有 agent.reflect_if_needed()。
+        """
+        if self._tick_count - self._last_think_round < THINK_ROUND_INTERVAL:
+            return
+        self._last_think_round = self._tick_count
+
+        reflect_tasks = []
+        for agent in agents:
+            if agent.reflector is not None and agent.memory.should_reflect():
+                reflect_tasks.append(agent.reflect_if_needed(self._tick_count))
+            else:
+                self.skipped_reflect_calls += 1
+
+        if reflect_tasks:
+            results = await asyncio.gather(*reflect_tasks, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception):
+                    logger.warning("batch reflect failed: %s", r)
 
     async def run_forever(
         self,

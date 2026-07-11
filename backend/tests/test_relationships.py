@@ -164,6 +164,7 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
     sched = WorldScheduler(
         world=world, clock=clock, dialogue=dialogue,
         relationships=tracker, festivals=festivals,
+        dialogue_prob=1.0,
     )
 
     assert tracker.get_relationship("甲兽", "乙兽") == 0.0

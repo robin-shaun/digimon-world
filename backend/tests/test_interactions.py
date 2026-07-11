@@ -121,7 +121,7 @@ async def test_scheduler_triggers_dialogue_on_proximity() -> None:
     dialogue = Dialogue(llm_client=fake)
 
     clock = WorldClock()
-    sched = WorldScheduler(world=world, clock=clock, dialogue=dialogue)
+    sched = WorldScheduler(world=world, clock=clock, dialogue=dialogue, dialogue_prob=1.0)
     await sched.tick_once()
 
     # 双方记忆里都应有 first_meet 对话
@@ -154,7 +154,7 @@ async def test_scheduler_dialogue_cooldown() -> None:
 
     # ratio=60: 一次 tick(1 秒现实)= 1 世界分钟,远小于 30 分钟冷却
     clock = WorldClock(real_to_world_ratio=60)
-    sched = WorldScheduler(world=world, clock=clock, dialogue=dialogue)
+    sched = WorldScheduler(world=world, clock=clock, dialogue=dialogue, dialogue_prob=1.0)
 
     await sched.tick_once()
     await sched.tick_once()
