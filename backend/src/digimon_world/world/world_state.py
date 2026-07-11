@@ -24,6 +24,32 @@ from ..agents.digimon_agent import DigimonAgent
 
 
 @dataclass
+class SubRegion:
+    """一个子区域(如文件岛内部的 14 个区域)。
+
+    数码宝贝大冒险 01 中文件岛由多个子区域组成:
+    启程海滩 → 迷乱森林 → 齿轮草原 → 龙眼湖 → 无人商店 →
+    玩具城 → 工厂地带 → 古代恐龙境 → 无限山 → ...
+
+    每个子区域有边界矩形(bounds)和 POI,用于:
+    - agent 定位(当前在哪个子区)
+    - 前端地图渲染(不同颜色/纹理)
+    - 剧情事件触发(如黑暗齿轮感染特定子区)
+    """
+
+    sub_region_id: str
+    name: str
+    name_en: str
+    description: str
+    # 边界矩形的四角 (min_x, min_y, max_x, max_y),像素坐标
+    bounds: tuple[int, int, int, int]
+    # 子区域内的 POI (与父 Region 的 pois 可以重叠)
+    pois: dict[str, tuple[int, int, str]] = field(default_factory=dict)
+    # 父 region_id
+    parent_region_id: str = "file_island"
+
+
+@dataclass
 class Region:
     """一个地区(文件岛 / 无限山 / 沙拔大陆等)。"""
 
@@ -34,7 +60,146 @@ class Region:
     bounds: tuple[int, int, int, int] = (0, 0, 960, 600)
     # 兴趣点(POI): id -> (x, y, label)
     pois: dict[str, tuple[int, int, str]] = field(default_factory=dict)
+    # 子区域列表 (Phase 8: 文件岛有 14 个)
+    sub_regions: tuple[SubRegion, ...] = field(default_factory=tuple)
 
+    def find_sub_region(self, x: int, y: int) -> SubRegion | None:
+        """通过坐标查找所属子区域(点在矩形内即命中,按定义顺序优先)。
+
+        用于: agent 当前的 sub_region 定位、前端地图着色、剧情事件触发。
+        """
+        for sr in self.sub_regions:
+            min_x, min_y, max_x, max_y = sr.bounds
+            if min_x <= x <= max_x and min_y <= y <= max_y:
+                return sr
+        return None
+
+
+# ---- 文件岛 14 子区域 (数码宝贝大冒险 01 原作复刻) ----
+
+# 文件岛地图 960×600 分成 14 个矩形子区域:
+#   北带(上): 冰冻地带 / 密哈拉西山 / 古代恐龙境
+#   中上带:     怪蛙皇城  / 迷乱森林  / 齿轮草原  / 无限山
+#   中下带:     暗黑洞窟  / 龙眼湖    / 欧加兽堡垒 / 工厂地带
+#   南带(下): 启程海滩               / 无人商店  / 玩具城
+_FILE_ISLAND_SUB_REGIONS: tuple[SubRegion, ...] = (
+    # ── 北带 (y: 0-120) ──
+    SubRegion(
+        sub_region_id="freezing_area",
+        name="冰冻地带",
+        name_en="Freezing Area",
+        description="常年冰封的极寒之地,居住着雪人兽等冰系数码兽。",
+        bounds=(0, 0, 240, 120),
+        pois={"freezing_peak": (120, 50, "冰冻峰")},
+    ),
+    SubRegion(
+        sub_region_id="miharashi_mountain",
+        name="密哈拉西山",
+        name_en="Miharashi Mountain",
+        description="可以俯瞰整座文件岛的瞭望山,常作为数码兽们的集合点。",
+        bounds=(240, 0, 720, 120),
+        pois={"lookout_rock": (480, 60, "瞭望岩")},
+    ),
+    SubRegion(
+        sub_region_id="ancient_dino_region",
+        name="古代恐龙境",
+        name_en="Ancient Dino Region",
+        description="暴龙兽族群栖息的原始峡谷,到处是巨型恐龙化石。",
+        bounds=(720, 0, 960, 120),
+        pois={"dino_bones": (840, 55, "巨兽骸骨")},
+    ),
+    # ── 中上带 (y: 120-260) ──
+    SubRegion(
+        sub_region_id="shogungekomon_castle",
+        name="怪蛙皇城",
+        name_en="ShogunGekomon's Castle",
+        description="怪蛙皇控制的城堡,回荡着令人昏睡的歌声。",
+        bounds=(0, 120, 240, 260),
+        pois={"castle_gate": (100, 170, "城门")},
+    ),
+    SubRegion(
+        sub_region_id="confusion_forest",
+        name="迷乱森林",
+        name_en="Confusion Forest",
+        description="密林覆盖的迷宫地带,古加兽等昆虫系数码兽出没其中。初次遭遇危险的地方。",
+        bounds=(240, 120, 480, 260),
+        pois={"deep_woods": (360, 190, "密林深处"), "kuwagamon_nest": (400, 220, "古加兽巢穴")},
+    ),
+    SubRegion(
+        sub_region_id="gear_savannah",
+        name="齿轮草原",
+        name_en="Gear Savannah",
+        description="由黑色齿轮驱动的机械草原,击败梅拉兽后恢复了原本的宁静。",
+        bounds=(480, 120, 720, 260),
+        pois={"gear_remains": (600, 180, "齿轮残骸"), "meramon_spot": (620, 220, "梅拉兽遗迹")},
+    ),
+    SubRegion(
+        sub_region_id="infinity_mountain_peak",
+        name="无限山",
+        name_en="Infinity Mountain",
+        description="文件岛中央的圣山,数码蛋的起源地,Devimon 的据点。",
+        bounds=(720, 120, 960, 260),
+        pois={"evolution_shrine": (840, 190, "进化神殿"), "summit": (870, 150, "山顶祭坛")},
+    ),
+    # ── 中下带 (y: 260-400) ──
+    SubRegion(
+        sub_region_id="dark_cave",
+        name="暗黑洞窟",
+        name_en="Dark Cave",
+        description="恶魔兽盘踞的地下迷宫,深处供奉着黑色齿轮的核心。",
+        bounds=(0, 260, 240, 400),
+        pois={"cave_entrance": (110, 270, "洞口"), "black_gear_altar": (70, 360, "黑齿轮祭坛")},
+    ),
+    SubRegion(
+        sub_region_id="dragon_eye_lake",
+        name="龙眼湖",
+        name_en="Dragon Eye Lake",
+        description="清澈如龙眼的湖泊,海龙兽守护着湖下的秘密。",
+        bounds=(240, 260, 480, 400),
+        pois={"lake_shore": (360, 320, "湖岸"), "seadramon_deep": (330, 380, "海龙兽深渊")},
+    ),
+    SubRegion(
+        sub_region_id="ogremon_fortress",
+        name="欧加兽的堡垒",
+        name_en="Ogremon's Fortress",
+        description="莽撞的欧加兽镇守的石堡,被击败后沦为他的杂货铺。",
+        bounds=(480, 260, 720, 400),
+        pois={"ogremon_shop": (600, 340, "奥加兽商店"), "fortress_wall": (550, 370, "堡垒外墙")},
+    ),
+    SubRegion(
+        sub_region_id="factory_area",
+        name="工厂地带",
+        name_en="Factory Area",
+        description="安杜路兽运行的机械工厂,齿轮与蒸汽构成的地下迷宫。",
+        bounds=(720, 260, 960, 400),
+        pois={"andromon_factory": (830, 320, "安杜路兽工厂"), "assembly_line": (870, 370, "流水线")},
+    ),
+    # ── 南带 (y: 400-600) ──
+    SubRegion(
+        sub_region_id="beach_of_departure",
+        name="启程海滩",
+        name_en="Beach of Departure",
+        description="被选召的孩子们从夏令营坠落数码世界时最先到达的海滩。一切冒险的起点。",
+        bounds=(0, 400, 320, 600),
+        pois={"landing_spot": (160, 520, "降落点"), "campfire": (100, 560, "篝火营地")},
+    ),
+    SubRegion(
+        sub_region_id="vending_machine_area",
+        name="无人商店",
+        name_en="Abandoned Vending Area",
+        description="荒野中孤零零的自动售货机,为饥饿的被选召孩子提供生命线。",
+        bounds=(320, 400, 640, 600),
+        pois={"vending_machine": (460, 530, "自动售货机"), "open_field": (500, 470, "开阔地")},
+    ),
+    SubRegion(
+        sub_region_id="toy_town",
+        name="玩具城",
+        name_en="Toy Town",
+        description="熊仔兽(Monzaemon)统治的童话小镇,看似可爱却暗藏黑暗齿轮的控制。",
+        bounds=(640, 400, 960, 600),
+        pois={"toy_castle": (800, 520, "玩具城堡"), "monzaemon_throne": (750, 570, "熊仔兽王座")},
+    ),
+)
 
 # ---- 内置地区数据 ----
 FILE_ISLAND = Region(
@@ -47,6 +212,7 @@ FILE_ISLAND = Region(
         "evolution_shrine": (470, 230, "进化神殿"),
         "ogremon_shop": (745, 480, "奥加兽的商店"),
     },
+    sub_regions=_FILE_ISLAND_SUB_REGIONS,
 )
 
 INFINITY_MOUNTAIN = Region(
@@ -247,6 +413,21 @@ class WorldState:
         }
 
     # ---- 序列化 ----
+    def get_sub_region(self, agent: DigimonAgent) -> dict[str, Any] | None:
+        """获取数码兽当前所在的子区域信息。"""
+        region = self.regions.get(agent.region_id)
+        if region is None:
+            return None
+        x, y = agent.location
+        sr = region.find_sub_region(x, y)
+        if sr is None:
+            return None
+        return {
+            "id": sr.sub_region_id,
+            "name": sr.name,
+            "name_en": sr.name_en,
+        }
+
     def to_dict(self) -> dict[str, Any]:
         with self._lock:
             return {
@@ -257,10 +438,26 @@ class WorldState:
                         "description": r.description,
                         "bounds": list(r.bounds),
                         "pois": {k: {"x": v[0], "y": v[1], "label": v[2]} for k, v in r.pois.items()},
+                        "sub_regions": [
+                            {
+                                "id": sr.sub_region_id,
+                                "name": sr.name,
+                                "name_en": sr.name_en,
+                                "bounds": list(sr.bounds),
+                                "pois": {k: {"x": v[0], "y": v[1], "label": v[2]} for k, v in sr.pois.items()},
+                            }
+                            for sr in r.sub_regions
+                        ],
                     }
                     for r in self.regions.values()
                 ],
-                "agents": [a.to_dict() for a in self.agents.values()],
+                "agents": [
+                    {
+                        **a.to_dict(),
+                        "sub_region": self.get_sub_region(a),
+                    }
+                    for a in self.agents.values()
+                ],
                 "world_time": datetime.now().isoformat(),
                 "real_to_world_ratio": self.real_to_world_ratio,
                 "memory_stats": self.memory_stats,
