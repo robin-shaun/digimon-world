@@ -2,9 +2,9 @@
 进化系统 (Evolution System)
 ===========================
 
-数码兽 5 阶段进化链 (参考数码宝贝动画世界观):
+数码兽 6 阶段进化链 (参考数码宝贝动画世界观):
 
-    BABY_I  →  BABY_II  →  ROOKIE  →  CHAMPION  →  MEGA
+    BABY_I  →  BABY_II  →  ROOKIE  →  CHAMPION  →  ULTIMATE  →  MEGA
 
 触发条件 (本 commit):
 1. 战斗胜利数 ≥ 当前阶段阈值
@@ -45,7 +45,8 @@ class EvolutionRequirement:
 # BABY_I → BABY_II 极宽松,开局几场战斗就能进化
 # BABY_II → ROOKIE 主角首次 "成熟",典型动画设定
 # ROOKIE → CHAMPION 战斗经验丰富
-# CHAMPION → MEGA 究极体,需要大量羁绊 + 胜利
+# CHAMPION → ULTIMATE 完全体进化,需要深厚羁绊
+# ULTIMATE → MEGA 究极体,需要大量羁绊 + 胜利
 EVOLUTION_CHAIN: dict[EvolutionStage, EvolutionRequirement] = {
     EvolutionStage.BABY_I: EvolutionRequirement(
         min_victories=1,
@@ -63,8 +64,13 @@ EVOLUTION_CHAIN: dict[EvolutionStage, EvolutionRequirement] = {
         next_species="champion_form",
     ),
     EvolutionStage.CHAMPION: EvolutionRequirement(
-        min_victories=20,
-        min_bond=80,
+        min_victories=15,
+        min_bond=60,
+        next_species="ultimate_form",
+    ),
+    EvolutionStage.ULTIMATE: EvolutionRequirement(
+        min_victories=25,
+        min_bond=100,
         next_species="mega_form",
     ),
     # MEGA 已是终态,无下一阶段
@@ -83,6 +89,7 @@ def next_stage(stage: EvolutionStage) -> Optional[EvolutionStage]:
         EvolutionStage.BABY_II,
         EvolutionStage.ROOKIE,
         EvolutionStage.CHAMPION,
+        EvolutionStage.ULTIMATE,
         EvolutionStage.MEGA,
     ]
     try:

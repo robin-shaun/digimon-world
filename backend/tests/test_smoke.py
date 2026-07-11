@@ -61,9 +61,9 @@ def test_digimon_serialization_roundtrip():
 
 
 def test_evolution_stage_enum():
-    """5 个进化阶段应该齐全。"""
+    """6 个进化阶段应该齐全。"""
     stages = [s.value for s in EvolutionStage]
-    assert stages == ["baby_i", "baby_ii", "rookie", "champion", "mega"]
+    assert stages == ["baby_i", "baby_ii", "rookie", "champion", "ultimate", "mega"]
 
 
 if __name__ == "__main__":

@@ -189,12 +189,12 @@ class AchievementSystem:
         """检查是否已经历过至少一次进化。
 
         判定(满足其一即可):
-        - 当前阶段为 CHAMPION / MEGA(必定进化过)
+        - 当前阶段为 CHAMPION / ULTIMATE / MEGA(必定进化过)
         - 记忆流中存在进化记忆(EvolutionSystem 写入 "I evolved from ...")
         """
         from .digimon_agent import EvolutionStage
 
-        if agent.stage in {EvolutionStage.CHAMPION, EvolutionStage.MEGA}:
+        if agent.stage in {EvolutionStage.CHAMPION, EvolutionStage.ULTIMATE, EvolutionStage.MEGA}:
             return True
 
         for entry in agent.memory.entries:

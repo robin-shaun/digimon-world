@@ -84,6 +84,7 @@ class Skill:
 # 加布兽 (Gabumon) 进化线招式:
 #   ROOKIE     爆炎火焰弹 (Blue Blaster) / 妖狐火焰
 #   CHAMPION   绝对冷冻气 (Sub-Zero Ice Punch) — 加鲁鲁兽
+#   ULTIMATE   三叉戟臂 (Trident Arm) / 凯撒锐爪
 #   MEGA       战斧斯坦纳 (Wolf Claw / Metal Wolf Claw) — 钢铁加鲁鲁兽
 # ----------------------------------------------------------------------------
 
@@ -94,6 +95,10 @@ DIGIMON_SKILLS: dict[str, dict[EvolutionStage, list[Skill]]] = {
         ],
         EvolutionStage.CHAMPION: [
             Skill(name="超级火焰", type=SkillType.FIRE, power=55, cost=18),
+        ],
+        EvolutionStage.ULTIMATE: [
+            Skill(name="三叉戟臂", type=SkillType.PHYSICAL, power=72, cost=28),
+            Skill(name="究极破坏炮", type=SkillType.SPECIAL, power=85, cost=35),
         ],
         EvolutionStage.MEGA: [
             Skill(name="盖亚能量炮", type=SkillType.SPECIAL, power=95, cost=40),
@@ -107,6 +112,10 @@ DIGIMON_SKILLS: dict[str, dict[EvolutionStage, list[Skill]]] = {
         ],
         EvolutionStage.CHAMPION: [
             Skill(name="绝对冷冻气", type=SkillType.ICE, power=58, cost=20),
+        ],
+        EvolutionStage.ULTIMATE: [
+            Skill(name="凯撒锐爪", type=SkillType.PHYSICAL, power=75, cost=30),
+            Skill(name="圆月弯刀", type=SkillType.PHYSICAL, power=65, cost=25),
         ],
         EvolutionStage.MEGA: [
             Skill(name="战斧斯坦纳", type=SkillType.PHYSICAL, power=92, cost=38),
@@ -135,6 +144,7 @@ def all_skills_for(species: str) -> list[Skill]:
         EvolutionStage.BABY_II,
         EvolutionStage.ROOKIE,
         EvolutionStage.CHAMPION,
+        EvolutionStage.ULTIMATE,
         EvolutionStage.MEGA,
     ]
     result: list[Skill] = []

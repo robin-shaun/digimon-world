@@ -35,12 +35,18 @@ logger = logging.getLogger(__name__)
 
 
 class EvolutionStage(str, Enum):
-    """数码兽的进化阶段。"""
+    """数码兽的进化阶段。
+
+    标准 6 阶段进化链 (数码宝贝动画世界观):
+    BABY_I → BABY_II → ROOKIE → CHAMPION → ULTIMATE → MEGA
+    (幼年期I → 幼年期II → 成长期 → 成熟期 → 完全体 → 究极体)
+    """
 
     BABY_I = "baby_i"          # 幼年期 I
-    BABY_II = "baby_ii"        # 幼年期 II / 成长期
-    ROOKIE = "rookie"          # 成熟期
-    CHAMPION = "champion"      # 完全体
+    BABY_II = "baby_ii"        # 幼年期 II
+    ROOKIE = "rookie"          # 成长期
+    CHAMPION = "champion"      # 成熟期
+    ULTIMATE = "ultimate"      # 完全体
     MEGA = "mega"              # 究极体
 
 

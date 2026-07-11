@@ -55,7 +55,8 @@ def test_next_stage_basic():
     assert next_stage(EvolutionStage.BABY_I) == EvolutionStage.BABY_II
     assert next_stage(EvolutionStage.BABY_II) == EvolutionStage.ROOKIE
     assert next_stage(EvolutionStage.ROOKIE) == EvolutionStage.CHAMPION
-    assert next_stage(EvolutionStage.CHAMPION) == EvolutionStage.MEGA
+    assert next_stage(EvolutionStage.CHAMPION) == EvolutionStage.ULTIMATE
+    assert next_stage(EvolutionStage.ULTIMATE) == EvolutionStage.MEGA
 
 
 def test_next_stage_mega_returns_none():
@@ -69,9 +70,9 @@ def test_is_final_stage():
     assert is_final_stage(EvolutionStage.BABY_I) is False
 
 
-def test_evolution_chain_has_four_entries():
-    """5 个阶段中前 4 个有升级链,MEGA 不在里面。"""
-    assert len(EVOLUTION_CHAIN) == 4
+def test_evolution_chain_has_five_entries():
+    """6 个阶段中前 5 个有升级链,MEGA 不在里面。"""
+    assert len(EVOLUTION_CHAIN) == 5
     assert EvolutionStage.MEGA not in EVOLUTION_CHAIN
 
 
@@ -192,14 +193,18 @@ def test_check_and_evolve_full_chain(evo_system):
     r3 = evo_system.check_and_evolve(a, battle_victories=8, bond=40)
     assert r3.evolved and r3.new_stage == EvolutionStage.CHAMPION
 
-    # CHAMPION → MEGA (20 wins, 80 bond)
-    r4 = evo_system.check_and_evolve(a, battle_victories=20, bond=80)
-    assert r4.evolved and r4.new_stage == EvolutionStage.MEGA
+    # CHAMPION → ULTIMATE (15 wins, 60 bond)
+    r4 = evo_system.check_and_evolve(a, battle_victories=15, bond=60)
+    assert r4.evolved and r4.new_stage == EvolutionStage.ULTIMATE
+
+    # ULTIMATE → MEGA (25 wins, 100 bond)
+    r5 = evo_system.check_and_evolve(a, battle_victories=25, bond=100)
+    assert r5.evolved and r5.new_stage == EvolutionStage.MEGA
 
     # MEGA 终止
-    r5 = evo_system.check_and_evolve(a, battle_victories=999, bond=999)
-    assert r5.evolved is False
-    assert r5.reason == EvolutionReason.ALREADY_MEGA
+    r6 = evo_system.check_and_evolve(a, battle_victories=999, bond=999)
+    assert r6.evolved is False
+    assert r6.reason == EvolutionReason.ALREADY_MEGA
 
 
 def test_check_and_evolve_not_ready_no_change(agumon, evo_system):

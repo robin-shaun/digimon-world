@@ -117,6 +117,7 @@ class BadgeSystem:
 
         advanced_stages = {
             EvolutionStage.CHAMPION,
+            EvolutionStage.ULTIMATE,
             EvolutionStage.MEGA,
         }
         return agent.stage in advanced_stages
