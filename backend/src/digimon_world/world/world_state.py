@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
-from ..agents.digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
+from ..agents.digimon_agent import DigimonAgent, DigimonAttribute, DigimonStats, EvolutionStage
 
 
 @dataclass
@@ -549,86 +549,96 @@ class WorldState:
 # ---- 进程级单例 ----
 _state: Optional[WorldState] = None
 
+# Phase 11: 数码兽种群数据 (共 30+ 只)
+# 分类: 疫苗种(VACCINE) / 数据种(DATA) / 病毒种(VIRUS) / 自由种(FREE)
+# 区域分布: 文件岛 20 只, 无限山 10 只
+# 每只初始 latent_desire 随机, 初始位置散开不重叠
+_ALL_DIGIMON_SEEDS: tuple[dict, ...] = (
+    # ═══ 文件岛 (20只) — 疫苗种+数据种+自由种为主 ═══
+    # --- 疫苗种 (原 8 只 + 2 新) ---
+    {"name": "亚古兽", "species": "agumon", "attribute": "vaccine", "region": "file_island", "pos": (200, 400), "plan": "在沙滩附近闲逛"},
+    {"name": "加布兽", "species": "gabumon", "attribute": "vaccine", "region": "file_island", "pos": (700, 350), "plan": "安静地观察周围"},
+    {"name": "比丘兽", "species": "biyomon", "attribute": "vaccine", "region": "file_island", "pos": (480, 180), "plan": "从空中巡视"},
+    {"name": "甲虫兽", "species": "tentomon", "attribute": "vaccine", "region": "file_island", "pos": (350, 300), "plan": "在树林里找食物"},
+    {"name": "巴鲁兽", "species": "palmon", "attribute": "vaccine", "region": "file_island", "pos": (600, 250), "plan": "晒太阳光合作用"},
+    {"name": "哥玛兽", "species": "gomamon", "attribute": "vaccine", "region": "file_island", "pos": (150, 500), "plan": "在海边玩水"},
+    {"name": "巴达兽", "species": "patamon", "attribute": "vaccine", "region": "file_island", "pos": (400, 100), "plan": "在空中飞行"},
+    {"name": "小狗兽", "species": "plotmon", "attribute": "vaccine", "region": "file_island", "pos": (300, 450), "plan": "在草地上玩耍"},
+    {"name": "艾力兽", "species": "elecmon", "attribute": "vaccine", "region": "file_island", "pos": (750, 400), "plan": "在发电站附近巡逻"},
+    {"name": "独角兽", "species": "tsunomon", "attribute": "vaccine", "region": "file_island", "pos": (850, 520), "plan": "在玩具城附近探索"},
+    # --- 数据种 (5只新) ---
+    {"name": "齿轮兽", "species": "hagurumon", "attribute": "data", "region": "file_island", "pos": (550, 280), "plan": "在齿轮草原计算数据"},
+    {"name": "守卫兽", "species": "guardromon", "attribute": "data", "region": "file_island", "pos": (800, 300), "plan": "在工厂地带巡逻警戒"},
+    {"name": "时钟兽", "species": "clockmon", "attribute": "data", "region": "file_island", "pos": (650, 160), "plan": "调整齿轮草原的时间齿轮"},
+    {"name": "坦克兽", "species": "tankmon", "attribute": "data", "region": "file_island", "pos": (850, 150), "plan": "在古代恐龙境巡逻"},
+    {"name": "溜溜球兽", "species": "kokuwamon", "attribute": "data", "region": "file_island", "pos": (450, 380), "plan": "在龙眼湖附近做实验"},
+    # --- 自由种 (3只新) ---
+    {"name": "妖狐兽", "species": "renamon", "attribute": "free", "region": "file_island", "pos": (180, 250), "plan": "在迷乱森林修炼忍术"},
+    {"name": "小妖兽", "species": "impmon", "attribute": "free", "region": "file_island", "pos": (550, 450), "plan": "在无人商店附近恶作剧"},
+    {"name": "多路兽", "species": "dorumon", "attribute": "free", "region": "file_island", "pos": (100, 130), "plan": "在冰冻地带适应寒冷"},
+    # --- 病毒种 (2只新) ---
+    {"name": "小恶魔兽", "species": "picodevimon", "attribute": "virus", "region": "file_island", "pos": (250, 160), "plan": "在暗黑洞窟附近潜伏"},
+    {"name": "黑加布兽", "species": "blackgabumon", "attribute": "virus", "region": "file_island", "pos": (700, 500), "plan": "在玩具城边缘徘徊"},
+    # ═══ 无限山 (10只) — 病毒种为主 + 自由种 ═══
+    {"name": "迪路兽", "species": "tailmon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (500, 150), "plan": "守护创世者祭坛"},
+    # --- 病毒种 (5只) ---
+    {"name": "恶魔兽", "species": "devimon", "attribute": "virus", "region": "infinity_mountain", "pos": (550, 200), "plan": "在无限山顶散布黑暗力量"},
+    {"name": "邪龙兽", "species": "devidramon", "attribute": "virus", "region": "infinity_mountain", "pos": (350, 300), "plan": "在无限山深处沉睡"},
+    {"name": "吸血魔兽", "species": "vamdemon", "attribute": "virus", "region": "infinity_mountain", "pos": (650, 350), "plan": "在暗处策划阴谋"},
+    {"name": "死神兽", "species": "fantomon", "attribute": "virus", "region": "infinity_mountain", "pos": (450, 400), "plan": "在无限山游荡收割灵魂"},
+    {"name": "猛鬼兽", "species": "bakemon", "attribute": "virus", "region": "infinity_mountain", "pos": (300, 200), "plan": "在无限山洞穴中藏匿"},
+    # --- 数据种 (2只) ---
+    {"name": "安杜路兽", "species": "andromon", "attribute": "data", "region": "infinity_mountain", "pos": (700, 120), "plan": "在无限山顶维护系统"},
+    {"name": "守卫兽S", "species": "guardromon", "attribute": "data", "region": "infinity_mountain", "pos": (200, 450), "plan": "守卫无限山的入口"},
+    # --- 自由种 (2只) ---
+    {"name": "巫师兽", "species": "wizarmon", "attribute": "free", "region": "infinity_mountain", "pos": (600, 480), "plan": "在无限山研究古代魔法"},
+    {"name": "狮子兽", "species": "leomon", "attribute": "free", "region": "infinity_mountain", "pos": (250, 100), "plan": "在无限山修炼正义之拳"},
+)
+
+# 随机欲望池
+_LATENT_DESIRES = (
+    "想变强", "想交朋友", "想吃东西", "想探索新区域",
+    "想保护家园", "想成为最强数码兽", "想找到数码蛋", "想独自安静生活",
+    "想组建团队", "想复仇", "想学习新技能", "想守护同伴",
+    "想支配数码世界", "想找到训练师", "想到达进化神殿", "想回到创始村",
+)
+
+import random as _random
+
+def _spawn_from_seed(world: WorldState, seed: dict) -> DigimonAgent:
+    """从种子数据创建一只数码兽,附随机欲望。"""
+    attr_map = {
+        "vaccine": DigimonAttribute.VACCINE,
+        "data": DigimonAttribute.DATA,
+        "virus": DigimonAttribute.VIRUS,
+        "free": DigimonAttribute.FREE,
+    }
+    agent = DigimonAgent(
+        name=seed["name"],
+        species=seed["species"],
+        attribute=attr_map.get(seed["attribute"], DigimonAttribute.FREE),
+        region_id=seed["region"],
+        location=seed["pos"],
+        current_plan=seed["plan"],
+    )
+    agent.latent_desire = _random.choice(_LATENT_DESIRES)
+    agent.desire_strength = round(_random.uniform(0.3, 0.9), 2)
+    return agent
+
 
 def get_world() -> WorldState:
     """获取(或延迟初始化)世界单例。
 
-    启动时塞几只数码兽到文件岛,方便前端联调。
+    Phase 11: 30+ 只数码兽覆盖文件岛(20只)和无限山(10只)。
+    不同属性: 疫苗种/数据种/病毒种/自由种。
+    每只初始 latent_desire 随机生成。
     """
     global _state
     if _state is None:
         _state = WorldState(world_id="prime")
-        # 启动数据
-        _state.spawn(DigimonAgent(
-            name="亚古兽",
-            species="agumon",
-            region_id="file_island",
-            location=(200, 400),
-            current_plan="在沙滩附近闲逛",
-        ))
-        _state.spawn(DigimonAgent(
-            name="加布兽",
-            species="gabumon",
-            region_id="file_island",
-            location=(700, 350),
-            current_plan="安静地观察周围",
-        ))
-        _state.spawn(DigimonAgent(
-            name="比丘兽",
-            species="biyomon",
-            region_id="file_island",
-            location=(480, 180),
-            current_plan="从空中巡视",
-        ))
-        _state.spawn(DigimonAgent(
-            name="甲虫兽",
-            species="tentomon",
-            region_id="file_island",
-            location=(350, 300),
-            current_plan="在树林里找食物",
-        ))
-        _state.spawn(DigimonAgent(
-            name="巴鲁兽",
-            species="palmon",
-            region_id="file_island",
-            location=(600, 250),
-            current_plan="晒太阳光合作用",
-        ))
-        _state.spawn(DigimonAgent(
-            name="哥玛兽",
-            species="gomamon",
-            region_id="file_island",
-            location=(150, 500),
-            current_plan="在海边玩水",
-        ))
-        _state.spawn(DigimonAgent(
-            name="巴达兽",
-            species="patamon",
-            region_id="file_island",
-            location=(400, 100),
-            current_plan="在空中飞行",
-        ))
-        _state.spawn(DigimonAgent(
-            name="迪路兽",
-            species="tailmon",
-            region_id="infinity_mountain",
-            location=(500, 150),
-            current_plan="守护创世者祭坛",
-        ))
-        _state.spawn(DigimonAgent(
-            name="小狗兽",
-            species="plotmon",
-            region_id="file_island",
-            location=(300, 450),
-            current_plan="在草地上玩耍",
-        ))
-        _state.spawn(DigimonAgent(
-            name="艾力兽",
-            species="elecmon",
-            region_id="file_island",
-            location=(750, 400),
-            current_plan="在发电站附近巡逻",
-        ))
+        for seed in _ALL_DIGIMON_SEEDS:
+            agent = _spawn_from_seed(_state, seed)
+            _state.spawn(agent)
     return _state
 
 

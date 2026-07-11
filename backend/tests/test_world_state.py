@@ -70,7 +70,7 @@ def test_to_dict_roundtrip_fields() -> None:
 def test_get_world_singleton_seeded() -> None:
     reset_world()
     w = get_world()
-    assert w.count() >= 3
+    assert w.count() >= 30
     assert w.get("亚古兽") is not None
     # 重复调用应该是同一个实例
     assert get_world() is w
