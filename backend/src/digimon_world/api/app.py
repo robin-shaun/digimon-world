@@ -41,6 +41,7 @@ from ..world import (
     WorldScheduler,
     WorldState,
     compute_vitality,
+    get_dark_gear_system,
     get_director,
     get_festival_system,
     get_landmark_system,
@@ -757,6 +758,68 @@ def get_digimon_diary(name: str) -> dict[str, Any]:
         "name": name,
         "count": len(entries),
         "entries": entries,
+    }
+
+
+# ---- 黑色齿轮 API (Phase 8) ----
+
+
+@app.get("/api/dark-gears")
+def get_dark_gears() -> dict[str, Any]:
+    """黑色齿轮系统状态: 活动齿轮列表 / 感染区域 / 威胁等级。
+
+    Phase 8: 数码宝贝原作复刻 — 恶魔兽投放的黑色齿轮。
+    前端可据此在地图上渲染齿轮图标和感染区域高亮。
+    """
+    dgs = get_dark_gear_system()
+    return dgs.to_dict()
+
+
+@app.post("/api/dark-gears/attack")
+def attack_dark_gear(
+    agent_name: str, sub_region_id: str
+) -> dict[str, Any]:
+    """数码兽在所在子区域内攻击黑色齿轮。
+
+    每次攻击造成 GEAR_DAMAGE_PER_BATTLE(20) 基础伤害,
+    数码兽进化阶段越高(如 MEGA)伤害倍率越高。
+
+    Args:
+        agent_name: 攻击的数码兽名字
+        sub_region_id: 数码兽当前所在的子区域 ID
+
+    Returns:
+        {destroyed, message, gear_status}
+    """
+    world = get_world()
+    agent = world.get(agent_name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{agent_name}' not found")
+
+    # 根据进化阶段计算伤害倍率
+    stage_multiplier = {
+        "FRESH": 0.5,
+        "IN_TRAINING": 0.75,
+        "ROOKIE": 1.0,
+        "CHAMPION": 1.5,
+        "ULTIMATE": 2.0,
+        "MEGA": 3.0,
+    }.get(agent.stage.value, 1.0)
+
+    dgs = get_dark_gear_system()
+    destroyed, msg = dgs.try_destroy_gear(sub_region_id, damage_multiplier=stage_multiplier)
+
+    # 攻击齿轮也被视为战斗行动(引擎无关,直接计数)
+    if destroyed:
+        msg += f" {agent_name} 以{agent.stage.value}之力摧毁了齿轮!经验获得大增幅 🌟"
+
+    return {
+        "agent": agent_name,
+        "stage": agent.stage.value,
+        "sub_region_id": sub_region_id,
+        "destroyed": destroyed,
+        "message": msg,
+        "gear_status": dgs.to_dict(),
     }
 
 

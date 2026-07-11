@@ -27,6 +27,7 @@ from typing import Any, Awaitable, Callable, Optional
 from ..agents.digimon_agent import DigimonAgent
 from ..agents.dialogue import Dialogue
 from .clock import WorldClock
+from .dark_gears import DarkGearSystem, get_dark_gear_system
 from .events import CHECK_INTERVAL_TICKS, StoryDirector
 from .factions import FactionRegistry
 from .festivals import FestivalSystem, get_festival_system
@@ -70,13 +71,14 @@ class WorldScheduler:
         story_director: Optional[StoryDirector] = None,
         landmarks: Optional[LandmarkSystem] = None,
         festivals: Optional[FestivalSystem] = None,
+        dark_gears: Optional[DarkGearSystem] = None,
         auto_save: bool = False,
         save_db_path: Optional[str] = None,
     ) -> None:
         self._world = world
         self._clock = clock
         self._on_event = on_event
-        # 是否每 SAVE_INTERVAL_TICKS 自动持久化一次(默认关,测试 / 独立实例不落盘)
+        # 是否每 SAVE_INTERVAL_TICKS 自动持久化一次(默认关,测试/独立实例不落盘)
         self._auto_save = auto_save
         self._save_db_path = save_db_path
         # 对话生成器(可选): 有则在相遇时生成对话,无则跳过互动阶段
@@ -94,6 +96,8 @@ class WorldScheduler:
         # 治疗系统: 每 tick 让受伤数码兽自然回血(神殿附近加成)
         from ..agents.healing import get_healing_system
         self._healing = get_healing_system()
+        # 黑色齿轮系统: Phase 8 — 每 tick 投放/清理齿轮(无则用进程级单例)
+        self._dark_gears = dark_gears if dark_gears is not None else get_dark_gear_system()
         self._tick_count = 0
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
         self._last_world_day: Optional[int] = None
@@ -124,6 +128,11 @@ class WorldScheduler:
     def festivals(self) -> FestivalSystem:
         """节日系统(前端 / Director 视角读取)。"""
         return self._festivals
+
+    @property
+    def dark_gears(self) -> DarkGearSystem:
+        """黑色齿轮系统(Phase 8 — 前端 / Director 视角读取)。"""
+        return self._dark_gears
 
     async def tick_once(self, real_seconds: float = DEFAULT_TICK_SECONDS) -> list[dict[str, Any]]:
         """执行一次 tick: 推进时钟 + 所有 agent 并发 step。
@@ -164,6 +173,26 @@ class WorldScheduler:
         heal_events = self._healing.process(self._world)
         for ev in heal_events:
             self._world.events.append(ev)
+        # 4.7 黑色齿轮阶段: Phase 8 — 投放/清理齿轮,记录感染事件
+        gear = self._dark_gears.process(self._tick_count, world=self._world)
+        if gear is not None:
+            event_g = {
+                "type": "dark_gear_placed",
+                "gear_id": gear.gear_id,
+                "sub_region_id": gear.sub_region_id,
+                "threat_level": self._dark_gears.threat_level,
+                "at": str(self._clock.elapsed_minutes),
+            }
+            self._world.events.append(event_g)
+            # 通知齿轮所在子区域内的所有 agent
+            for agent in agents:
+                sr = self._world.get_sub_region(agent)
+                if sr is not None and sr.get("id") == gear.sub_region_id:
+                    agent.observe({
+                        "type": "dark_gear_infection",
+                        "description": f"黑色齿轮 {gear.gear_id} 出现,感到一阵黑暗力量…",
+                        "gear_id": gear.gear_id,
+                    })
         # 5. 互动阶段: 相遇的数码兽触发对话
         await self._run_interactions(agents)
         # 6. 派系阶段: 从关系表重算自动派系(导演注入的派系保留)
