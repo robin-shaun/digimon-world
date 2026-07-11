@@ -934,6 +934,67 @@ def open_digital_gate(req: OpenGateRequest) -> dict[str, Any]:
     }
 
 
+@app.delete("/api/multiverse/{world_id}")
+def delete_world(world_id: str) -> dict[str, Any]:
+    """删除一个平行世界(主宇宙不可删除)。
+
+    被删除世界的数码兽和事件一同销毁。
+    如果有数码兽之前通过数码之门迁移到了其他世界,它们不受影响。
+    """
+    mv = get_multiverse()
+    if world_id == "prime":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete the prime world (主宇宙)",
+        )
+    removed = mv.remove_world(world_id)
+    if not removed:
+        raise HTTPException(
+            status_code=404,
+            detail=f"World '{world_id}' not found",
+        )
+    return {
+        "world_id": world_id,
+        "deleted": True,
+        "total_worlds": mv.count(),
+    }
+
+
+@app.get("/api/multiverse/{world_id}/events")
+def get_world_events(
+    world_id: str,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """获取指定世界的事件列表(最新在前,支持分页)。
+
+    Args:
+        world_id: 世界 ID
+        limit: 返回条数(1~200,默认 50)
+        offset: 偏移量(跳过前 N 条)
+    """
+    mv = get_multiverse()
+    world = mv.get_world(world_id)
+    if world is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"World '{world_id}' not found",
+        )
+    limit = max(1, min(limit, 200))
+    total = len(world.events)
+    # 事件按时间倒序(最新在前)
+    events = list(reversed(world.events))
+    start = min(offset, total)
+    end = min(start + limit, total)
+    return {
+        "world_id": world_id,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "events": events[start:end],
+    }
+
+
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
 class ConnectionManager:
     def __init__(self) -> None:

@@ -410,3 +410,155 @@ class TestSeedAgents:
         assert w is not None
         assert w.count() == 10
         assert w.get("亚古兽") is not None
+
+
+# ========== Phase 9: 世界删除 & 事件查询 API ==========
+
+
+class TestDeleteWorldAPI:
+    def test_delete_world(self):
+        """DELETE /api/multiverse/{id} 删除一个非主世界。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        # 先创建一个世界
+        client.post("/api/multiverse/create", json={"world_id": "to_delete"})
+        assert get_multiverse().count() == 2
+
+        resp = client.delete("/api/multiverse/to_delete")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "to_delete"
+        assert data["deleted"] is True
+        assert data["total_worlds"] == 1
+        assert get_multiverse().get_world("to_delete") is None
+
+    def test_delete_nonexistent_world(self):
+        """DELETE 不存在的世界返回 404。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.delete("/api/multiverse/ghost")
+        assert resp.status_code == 404
+
+    def test_cannot_delete_prime(self):
+        """DELETE prime 世界返回 400。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.delete("/api/multiverse/prime")
+        assert resp.status_code == 400
+        assert "prime" in resp.json()["detail"].lower()
+        # prime 世界仍然存在
+        assert get_multiverse().count() == 1
+
+    def test_delete_world_removes_agents(self):
+        """删除世界后其数码兽不复存在。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={
+            "world_id": "populated", "seed_digimon": True,
+        })
+        w = get_multiverse().get_world("populated")
+        assert w is not None and w.count() == 10
+
+        client.delete("/api/multiverse/populated")
+        assert get_multiverse().get_world("populated") is None
+
+    def test_delete_then_recreate(self):
+        """删除世界后可重新创建同名世界。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={"world_id": "recycled"})
+        client.delete("/api/multiverse/recycled")
+        # 重新创建
+        resp = client.post("/api/multiverse/create", json={"world_id": "recycled"})
+        assert resp.status_code == 200
+        assert get_multiverse().get_world("recycled") is not None
+
+
+class TestWorldEventsAPI:
+    def test_get_prime_events(self):
+        """GET /api/multiverse/prime/events 返回主世界事件。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/prime/events")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "prime"
+        assert "events" in data
+        assert "total" in data
+        assert data["limit"] == 50
+        assert data["offset"] == 0
+
+    def test_get_world_events_empty(self):
+        """新创建的空世界事件列表为空。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={"world_id": "empty_events"})
+        resp = client.get("/api/multiverse/empty_events/events")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 0
+        assert data["events"] == []
+
+    def test_get_world_events_not_found(self):
+        """GET 不存在世界的事件返回 404。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/ghost/events")
+        assert resp.status_code == 404
+
+    def test_get_world_events_reversed_order(self):
+        """事件按时间倒序(最新在前)。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={"world_id": "ordered"})
+        # 手动注入事件到世界
+        w = get_multiverse().get_world("ordered")
+        assert w is not None
+        w.events.append({"type": "test", "msg": "first"})
+        w.events.append({"type": "test", "msg": "second"})
+        w.events.append({"type": "test", "msg": "third"})
+
+        resp = client.get("/api/multiverse/ordered/events", params={"limit": 3})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 3
+        events = data["events"]
+        # 最新在前: third → second → first
+        assert events[0]["msg"] == "third"
+        assert events[1]["msg"] == "second"
+        assert events[2]["msg"] == "first"
+
+    def test_get_world_events_pagination(self):
+        """事件分页: limit + offset 正确工作。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={"world_id": "paged"})
+        w = get_multiverse().get_world("paged")
+        assert w is not None
+        for i in range(5):
+            w.events.append({"type": "test", "idx": i})
+
+        # limit=2, offset=1 -> 应返回 idx=3, idx=2 (最新 5 条: 4,3,2,1,0, skip 1 -> 3,2)
+        resp = client.get(
+            "/api/multiverse/paged/events",
+            params={"limit": 2, "offset": 1},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["limit"] == 2
+        assert data["offset"] == 1
+        assert data["total"] == 5
+        events = data["events"]
+        assert len(events) == 2
+        assert events[0]["idx"] == 3
+        assert events[1]["idx"] == 2
