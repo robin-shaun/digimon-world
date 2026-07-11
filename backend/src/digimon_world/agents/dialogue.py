@@ -73,9 +73,9 @@ class Dialogue:
         b_mem = self._recent_memory_text(agent_b)
 
         prompt = (
-            f"你是{agent_a.name}({agent_a.species}), 遇到了{agent_b.name}({agent_b.species}). "
-            f"你们各自最近记忆: {a_mem}, {b_mem}. "
-            f"请生成一句对话 (1 句, 中文, 简短, 像动画里数码兽说话)."
+            f"我是{agent_a.name}，遇到{agent_b.name}了。"
+            f"我最近在：{a_mem}。{agent_b.name}最近在：{b_mem}。"
+            f"我想对{agent_b.name}说一句话（简短、像数码宝贝动画里的台词）。"
         )
 
         try:
@@ -83,11 +83,11 @@ class Dialogue:
                 messages=[
                     ChatMessage(
                         role="system",
-                        content="你是数码兽的台词生成器。只输出这句台词本身,不要加引号或旁白。",
+                        content=f"你是一只数码宝贝，名字叫{agent_a.name}（{agent_a.species}）。你生活在数码世界，性格鲜明。说话简短直接，像动画角色。",
                     ),
                     ChatMessage(role="user", content=prompt),
                 ],
-                model=LlmModel.MINIMAX_M3,
+                model=LlmModel.MINIMAX_TEXT_01,
                 max_tokens=60,
                 temperature=0.9,
             )

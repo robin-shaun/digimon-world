@@ -27,6 +27,7 @@ class LlmModel(str, Enum):
     # MiniMax
     MINIMAX_M1 = "minimax-m1"   # 主力模型 (计划/反思/战斗)
     MINIMAX_M3 = "minimax-m3"   # 轻量模型 (观察/短文本)
+    MINIMAX_TEXT_01 = "MiniMax-Text-01"  # 对话生成 (支持角色扮演)
 
 
 class LlmError(RuntimeError):
