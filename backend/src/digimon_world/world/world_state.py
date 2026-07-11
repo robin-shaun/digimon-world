@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
-from ..agents.digimon_agent import DigimonAgent
+from ..agents.digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
 
 
 @dataclass
@@ -225,9 +225,22 @@ INFINITY_MOUNTAIN = Region(
     },
 )
 
+# Phase 8: 创始村 — 数码蛋重生的圣地
+VILLAGE_OF_BEGINNINGS = Region(
+    region_id="village_of_beginnings",
+    name="创始村",
+    description="数码世界的生命之源,战败的数码兽化作数码蛋在此重生。被选召的孩子们最初降落时最先感受到的温暖光芒。",
+    bounds=(0, 0, 960, 600),
+    pois={
+        "digitama_spring": (480, 500, "数码蛋之泉"),
+        "elecmon_nursery": (400, 520, "艾力兽育幼院"),
+    },
+)
+
 DEFAULT_REGIONS: dict[str, Region] = {
     "file_island": FILE_ISLAND,
     "infinity_mountain": INFINITY_MOUNTAIN,
+    "village_of_beginnings": VILLAGE_OF_BEGINNINGS,
 }
 
 
@@ -412,7 +425,65 @@ class WorldState:
             "per_agent": per_agent,
         }
 
-    # ---- 序列化 ----
+    # ---- 创始村重生 (Phase 8) ----
+
+    def rebirth_at_village(self, agent: DigimonAgent) -> dict[str, Any]:
+        """战败数码兽在创始村重生为数码蛋。
+
+        规则:
+        - 重置 location 到创始村 (digitama_spring 附近)
+        - 重置 region_id 为 village_of_beginnings
+        - 重置 stage 为 BABY_I (数码蛋)
+        - 重置 stats 为基础值
+        - 保留 importance >= 7 的记忆,其余清空
+        - HP 恢复为初始值
+        - battle_victories 清零
+
+        Returns:
+            重生事件字典。
+        """
+        # 保留高重要性记忆
+        kept_memories = [
+            m for m in agent.memory.entries
+            if m.importance >= 7
+        ]
+
+        # 清空并恢复
+        agent.memory.entries.clear()
+        for m in kept_memories:
+            agent.memory.entries.append(m)
+
+        # 重置状态
+        agent.stage = EvolutionStage.BABY_I
+        agent.species = f"{agent.name}_digitama"  # 数码蛋状态
+        agent.region_id = "village_of_beginnings"
+        agent.location = (480, 500)  # digitama_spring
+        agent.stats = DigimonStats(
+            hp=20, max_hp=20, ep=10, max_ep=10,
+            attack=5, defense=5, speed=5,
+        )
+        agent.battle_victories = 0
+        agent.mood = "calm"
+        agent.mood_state = {"joy": 0.0, "sadness": 0.0, "anger": 0.0, "fear": 0.0}
+        agent.current_plan = "从数码蛋中苏醒,感受创始村的温暖"
+
+        # 写重生记忆
+        desc = f"I was defeated but reborn as a Digitama at the Village of Beginnings."
+        agent.memory.add(
+            event={"description": desc, "type": "rebirth"},
+            importance=10,
+            memory_type="observation",
+        )
+
+        rebirth_event = {
+            "type": "rebirth",
+            "agent": agent.name,
+            "description": f"{agent.name} 在创始村重生为数码蛋,新一轮冒险开始了。",
+            "importance": 10,
+            "source": "village_of_beginnings",
+        }
+        self.events.append(rebirth_event)
+        return rebirth_event
     def get_sub_region(self, agent: DigimonAgent) -> dict[str, Any] | None:
         """获取数码兽当前所在的子区域信息。"""
         region = self.regions.get(agent.region_id)
