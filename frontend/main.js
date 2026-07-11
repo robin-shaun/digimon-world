@@ -100,6 +100,13 @@
         connected: false,
         error: null,          // 后端不可达时的错误信息
         vitality: null,       // Phase 7: 世界活力分数 (0-100)
+        // Phase 10: 环境状态
+        env: {
+            daynight: { period: 'day', icon: '\u2600\ufe0f', is_daytime: true },
+            weather: { weather: 'sunny', icon: '\u2600\ufe0f', label: '\u6674' },
+            ecology: { regions: {} },
+            season: { season: 'spring', label: '\u6625' },
+        },
     };
 
     let pollTimer = null;
@@ -109,10 +116,19 @@
     // ══════════════════════════════════════════════
 
     function drawSky() {
+        const isNight = !state.env.daynight.is_daytime;
         const grad = ctx.createLinearGradient(0, 0, 0, H);
-        grad.addColorStop(0, '#0a1233');
-        grad.addColorStop(0.6, '#1e2a5a');
-        grad.addColorStop(1, '#3a1a4a');
+        if (isNight) {
+            // 夜晚: 深蓝黑渐变
+            grad.addColorStop(0, '#020518');
+            grad.addColorStop(0.6, '#0a1535');
+            grad.addColorStop(1, '#15082a');
+        } else {
+            // 白天: 蓝紫渐变
+            grad.addColorStop(0, '#0a1233');
+            grad.addColorStop(0.6, '#1e2a5a');
+            grad.addColorStop(1, '#3a1a4a');
+        }
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, W, H);
     }
@@ -127,6 +143,42 @@
             ctx.beginPath();
             ctx.arc(x, y, 1, 0, Math.PI * 2);
             ctx.fill();
+        }
+    }
+
+    /** Phase 10: 天气粒子特效 (雨滴/雾气) */
+    function drawWeatherParticles() {
+        const weather = state.env.weather.weather;
+
+        if (weather === 'rainy' || weather === 'stormy') {
+            // 雨滴: 半透明白色竖线
+            const intensity = weather === 'stormy' ? 80 : 40;
+            const alpha = weather === 'stormy' ? 0.35 : 0.2;
+            for (let i = 0; i < intensity; i++) {
+                const x = ((i * 173 + Date.now() * 0.08 + i * 13) % (W + 40)) - 20;
+                const y = ((i * 97 + Date.now() * 0.15) % (H + 20)) - 10;
+                const len = 8 + (i % 12);
+                ctx.strokeStyle = `rgba(180, 210, 255, ${alpha})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x - 2, y + len);
+                ctx.stroke();
+            }
+        }
+
+        if (weather === 'foggy') {
+            // 雾气: 半透明白色水平飘动的横条
+            for (let i = 0; i < 25; i++) {
+                const y = ((i * 89 + 40) % H);
+                const x = ((i * 137 + Date.now() * 0.03) % (W + 100)) - 50;
+                const w = 80 + (i * 37) % 160;
+                const alpha = 0.04 + (i % 6) * 0.02;
+                ctx.fillStyle = `rgba(200, 210, 230, ${alpha})`;
+                ctx.beginPath();
+                ctx.ellipse(x, y, w, 8 + (i % 10), 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
     }
 
@@ -319,6 +371,7 @@
         drawRegions();
         drawPOIs();
         drawDigimon();
+        drawWeatherParticles();  // Phase 10: 天气粒子特效
         drawTitle();
     }
 
@@ -345,13 +398,19 @@
         const vitalityEl = document.getElementById('vitality-score');
         const phaseEl = document.getElementById('phase');
 
-        if (timeEl) timeEl.textContent = '世界时间: ' + new Date().toLocaleTimeString('zh-CN');
-        if (countEl) countEl.textContent = '数码兽: ' + state.digimon.length;
-        if (battleEl) battleEl.textContent = '战斗: ' + battleCount24h;
-        if (vitalityEl) vitalityEl.textContent = '活力: ' + (state.vitality != null ? state.vitality.toFixed(0) : '--');
+        // Phase 10: 环境图标
+        const dnIcon = state.env.daynight.icon || '\u2600\ufe0f';
+        const wxIcon = state.env.weather.icon || '\u2600\ufe0f';
+        const snLabel = state.env.season.label || '\u6625';
 
-        const connStatus = state.connected ? '🟢 在线' : '🔴 离线';
-        if (phaseEl) phaseEl.textContent = `Phase 3 · ${connStatus}`;
+        if (timeEl) timeEl.textContent = `\u4e16\u754c\u65f6\u95f4: ${dnIcon} ${new Date().toLocaleTimeString('zh-CN')}`;
+        if (countEl) countEl.textContent = `\u6570\u7801\u517d: ${state.digimon.length}`;
+        if (battleEl) battleEl.textContent = `\u6218\u6597: ${battleCount24h}`;
+        if (vitalityEl) vitalityEl.textContent = `\u6d3b\u529b: ${state.vitality != null ? state.vitality.toFixed(0) : '--'}`;
+
+        const connStatus = state.connected ? '\ud83d\udfe2 \u5728\u7ebf' : '\ud83d\udd34 \u79bb\u7ebf';
+        // Phase 10: 状态栏显示天气+季节
+        if (phaseEl) phaseEl.textContent = `${wxIcon} ${snLabel} \u00b7 Phase 3 \u00b7 ${connStatus}`;
     }
 
     // ══════════════════════════════════════════════
@@ -1213,6 +1272,7 @@
     }
 
     const VITALITY_POLL_MS = 5000;  // Phase 7: 活力指标 5s 轮询
+    const ENV_POLL_MS = 8000;      // Phase 10: 环境数据 8s 轮询
 
     async function pollVitality() {
         try {
@@ -1224,6 +1284,21 @@
             }
         } catch (err) {
             // 静默 — 活力不是关键功能
+        }
+    }
+
+    /** Phase 10: 拉取环境综合数据 (昼夜+天气+生态+季节) */
+    async function fetchEnvironment() {
+        try {
+            const resp = await fetchWithTimeout(API_BASE + '/api/environment', { cache: 'no-store' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data.daynight) state.env.daynight = data.daynight;
+            if (data.weather) state.env.weather = data.weather;
+            if (data.ecology) state.env.ecology = data.ecology;
+            if (data.season) state.env.season = data.season;
+        } catch (e) {
+            // 静默失败
         }
     }
 
@@ -1254,6 +1329,11 @@
         // 9. Phase 7: 世界活力指标 5s 轮询
         pollVitality();
         setInterval(pollVitality, VITALITY_POLL_MS);
+        // 10. Phase 10: 环境数据 8s 轮询
+        fetchEnvironment();
+        setInterval(fetchEnvironment, ENV_POLL_MS);
+        // 11. Phase 10: 天气粒子动画循环 (每 100ms 重新绘制粒子)
+        setInterval(render, 100);
     }
 
     start();

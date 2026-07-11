@@ -42,7 +42,10 @@ from ..world import (
     WorldState,
     compute_vitality,
     get_dark_gear_system,
+    get_daynight_system,
     get_director,
+    get_ecology_system,
+    get_env_events_system,
     get_festival_system,
     get_landmark_system,
     get_multiverse,
@@ -432,7 +435,7 @@ def director_speed(req: SpeedRequest) -> dict[str, Any]:
 
 @app.get("/api/director/state")
 def director_state() -> dict[str, Any]:
-    """导演视角状态: 当前流速 / 世界时间 / 最近 10 条事件 / 派系列表。"""
+    """导演视角状态: 当前流速 / 世界时间 / 最近 10 条事件 / 派系列表 / 环境数据。"""
     world = get_world()
     clock: Optional[WorldClock] = getattr(app.state, "world_clock", None)
     return {
@@ -440,6 +443,9 @@ def director_state() -> dict[str, Any]:
         "current_world_time": clock.format_clock() if clock is not None else None,
         "recent_events": world.events[-10:],
         "factions": [f.to_dict() for f in get_registry().all_factions()],
+        "daynight": get_daynight_system().to_dict(),
+        "weather": get_weather_system().to_dict(),
+        "ecology": get_ecology_system().to_dict(),
     }
 
 
@@ -714,6 +720,35 @@ def get_leaderboard(
 def get_weather() -> dict[str, Any]:
     """当前天气状态(天气类型 + 行为系数)。"""
     return get_weather_system().to_dict()
+
+
+# ---- Phase 10: 环境演化 API ----
+@app.get("/api/daynight")
+def get_daynight() -> dict[str, Any]:
+    """当前昼夜状态(时段 + 行为系数)。"""
+    return get_daynight_system().to_dict()
+
+
+@app.get("/api/ecology")
+def get_ecology() -> dict[str, Any]:
+    """当前生态状态(各区域食物量 + 植被覆盖率)。"""
+    return get_ecology_system().to_dict()
+
+
+@app.get("/api/environment")
+def get_environment() -> dict[str, Any]:
+    """环境综合快照: 昼夜 + 天气 + 生态 + 季节。"""
+    daynight = get_daynight_system()
+    weather = get_weather_system()
+    ecology = get_ecology_system()
+    from ..world import get_season_system
+    season = get_season_system()
+    return {
+        "daynight": daynight.to_dict(),
+        "weather": weather.to_dict(),
+        "ecology": ecology.to_dict(),
+        "season": season.to_dict(),
+    }
 
 
 # ---- 徽章 API ----

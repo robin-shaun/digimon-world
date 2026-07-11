@@ -28,12 +28,17 @@ from ..agents.digimon_agent import DigimonAgent
 from ..agents.dialogue import Dialogue
 from .clock import WorldClock
 from .dark_gears import DarkGearSystem, get_dark_gear_system
+from .daynight import DayNightSystem, get_daynight_system
+from .ecology import EcologySystem, get_ecology_system
+from .environmental_events import EnvironmentalEventSystem, get_env_events_system
 from .events import CHECK_INTERVAL_TICKS, StoryDirector
 from .factions import FactionRegistry
 from .festivals import FestivalSystem, get_festival_system
 from .interactions import detect_proximity
 from .landmarks import LandmarkSystem, get_landmark_system
 from .relationships import RelationshipTracker, get_tracker
+from .seasons import SeasonSystem, get_season_system
+from .weather import WeatherSystem, get_weather_system
 from .world_state import WorldState
 
 logger = logging.getLogger(__name__)
@@ -72,6 +77,11 @@ class WorldScheduler:
         landmarks: Optional[LandmarkSystem] = None,
         festivals: Optional[FestivalSystem] = None,
         dark_gears: Optional[DarkGearSystem] = None,
+        daynight: Optional[DayNightSystem] = None,
+        weather: Optional[WeatherSystem] = None,
+        ecology: Optional[EcologySystem] = None,
+        env_events: Optional[EnvironmentalEventSystem] = None,
+        season: Optional[SeasonSystem] = None,
         auto_save: bool = False,
         save_db_path: Optional[str] = None,
     ) -> None:
@@ -98,6 +108,16 @@ class WorldScheduler:
         self._healing = get_healing_system()
         # 黑色齿轮系统: Phase 8 — 每 tick 投放/清理齿轮(无则用进程级单例)
         self._dark_gears = dark_gears if dark_gears is not None else get_dark_gear_system()
+        # 昼夜系统: Phase 10 — 每 tick 更新时段(无则用进程级单例)
+        self._daynight = daynight if daynight is not None else get_daynight_system()
+        # 天气系统: Phase 10 — 每 30 tick 切换天气(无则用进程级单例)
+        self._weather = weather if weather is not None else get_weather_system()
+        # 生态系统: Phase 10 — 每 tick 更新食物/植被(无则用进程级单例)
+        self._ecology = ecology if ecology is not None else get_ecology_system()
+        # 环境事件系统: Phase 10 — 检测暴风雨/干旱/火山(无则用进程级单例)
+        self._env_events = env_events if env_events is not None else get_env_events_system()
+        # 季节系统: Phase 10 — 每 tick 更新季节(无则用进程级单例)
+        self._season = season if season is not None else get_season_system()
         self._tick_count = 0
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
         self._last_world_day: Optional[int] = None
@@ -133,6 +153,31 @@ class WorldScheduler:
     def dark_gears(self) -> DarkGearSystem:
         """黑色齿轮系统(Phase 8 — 前端 / Director 视角读取)。"""
         return self._dark_gears
+
+    @property
+    def daynight(self) -> DayNightSystem:
+        """昼夜系统(Phase 10)。"""
+        return self._daynight
+
+    @property
+    def weather(self) -> WeatherSystem:
+        """天气系统(Phase 10)。"""
+        return self._weather
+
+    @property
+    def ecology(self) -> EcologySystem:
+        """生态系统(Phase 10)。"""
+        return self._ecology
+
+    @property
+    def env_events(self) -> EnvironmentalEventSystem:
+        """环境事件系统(Phase 10)。"""
+        return self._env_events
+
+    @property
+    def season(self) -> SeasonSystem:
+        """季节系统(Phase 10)。"""
+        return self._season
 
     async def tick_once(self, real_seconds: float = DEFAULT_TICK_SECONDS) -> list[dict[str, Any]]:
         """执行一次 tick: 推进时钟 + 所有 agent 并发 step。
@@ -219,6 +264,9 @@ class WorldScheduler:
                     agent.observe(festival)
                 except Exception as e:
                     logger.warning("festival observe failed for %s: %s", agent.name, e)
+        # 8. Phase 10 环境演化阶段:
+        #    昼夜循环、天气切换、生态更新、环境事件检测
+        await self._process_environment(agents)
         self._tick_count += 1
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
@@ -350,6 +398,50 @@ class WorldScheduler:
             # 刷新双方冷却时间戳
             a.last_interaction_at = now
             b.last_interaction_at = now
+
+    # ---- Phase 10: 环境演化处理 ----
+    async def _process_environment(self, agents: list[DigimonAgent]) -> None:
+        """每 tick 处理: 昼夜循环、天气切换、生态更新、环境事件检测。
+
+        这些系统都是同步的,放在一个 async 方法里批量处理,
+        不阻塞 agent step 的并发。
+        """
+        minutes = self._clock.elapsed_minutes
+
+        # 8.1 昼夜循环
+        self._daynight.update(minutes)
+
+        # 8.2 天气切换
+        self._weather.update(self._tick_count)
+
+        # 8.3 季节更新
+        self._season.update_from_clock(minutes)
+
+        # 8.4 生态更新 + 饥饿效果
+        eco_events = self._ecology.process(
+            self._world,
+            tick_count=self._tick_count,
+            season=self._season.current.value,
+            weather_value=self._weather.current.value,
+        )
+        for ev in eco_events:
+            self._world.events.append(ev)
+
+        # 8.5 环境事件检测(暴风雨/干旱/火山)
+        env_evs = self._env_events.process(
+            self._world,
+            self._ecology,
+            self._weather,
+            self._tick_count,
+        )
+        for ev in env_evs:
+            self._world.events.append(ev)
+            # 重大环境事件让所有数码兽 observe
+            for agent in agents:
+                try:
+                    agent.observe(ev)
+                except Exception as e:
+                    logger.warning("env_event observe failed for %s: %s", agent.name, e)
 
     @staticmethod
     def _score_event_significance(event: dict[str, Any]) -> int:

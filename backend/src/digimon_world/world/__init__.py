@@ -19,11 +19,28 @@ from .dark_gears import (
     get_dark_gear_system,
     reset_dark_gear_system,
 )
+from .daynight import (
+    DayNightSystem,
+    DayPeriod,
+    get_daynight_system,
+    reset_daynight_system,
+)
 from .disasters import (
     Disaster,
     DisasterSystem,
     get_disaster_system,
     reset_disaster_system,
+)
+from .ecology import (
+    EcologySystem,
+    RegionEcology,
+    get_ecology_system,
+    reset_ecology_system,
+)
+from .environmental_events import (
+    EnvironmentalEventSystem,
+    get_env_events_system,
+    reset_env_events_system,
 )
 from .economy import (
     EconomySystem,
@@ -93,7 +110,11 @@ __all__ = [
     "DEFAULT_LANDMARKS",
     "DarkGear",
     "DarkGearSystem",
+    "DayPeriod",
+    "DayNightSystem",
+    "EcologySystem",
     "EconomySystem",
+    "EnvironmentalEventSystem",
     "FILE_ISLAND",
     "INFINITY_MOUNTAIN",
     "PRIME_WORLD_ID",
@@ -122,8 +143,11 @@ __all__ = [
     "compute_vitality",
     "persistence",
     "get_dark_gear_system",
+    "get_daynight_system",
     "get_director",
+    "get_ecology_system",
     "get_economy_system",
+    "get_env_events_system",
     "get_festival_system",
     "get_landmark_system",
     "get_multiverse",
@@ -134,7 +158,10 @@ __all__ = [
     "get_weather_system",
     "get_world",
     "reset_dark_gear_system",
+    "reset_daynight_system",
     "reset_director",
+    "reset_ecology_system",
+    "reset_env_events_system",
     "reset_festival_system",
     "reset_landmark_system",
     "reset_multiverse",
