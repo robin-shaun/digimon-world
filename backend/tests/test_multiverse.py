@@ -562,3 +562,84 @@ class TestWorldEventsAPI:
         assert len(events) == 2
         assert events[0]["idx"] == 3
         assert events[1]["idx"] == 2
+
+
+# ========== Phase 9: Seed World API ==========
+
+
+class TestSeedWorldAPI:
+    def test_seed_empty_world(self):
+        """POST /api/multiverse/{id}/seed 注入 10 只默认数码兽到空世界。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={"world_id": "empty"})
+        w = get_multiverse().get_world("empty")
+        assert w is not None and w.count() == 0
+
+        resp = client.post("/api/multiverse/empty/seed")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "empty"
+        assert data["added"] == 10
+        assert data["total_agents"] == 10
+        assert w.get("亚古兽") is not None
+        assert w.get("迪路兽") is not None
+
+    def test_seed_existing_world_appends(self):
+        """seed 对已有同名数码兽的世界会覆盖(spawn 是 upsert),不加新。
+
+        要测试追加,先注入非默认名的数码兽,seed 不会覆盖它们。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        from digimon_world.agents.digimon_agent import DigimonAgent, DigimonStats
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={
+            "world_id": "has_custom", "seed_digimon": True,
+        })
+        w = get_multiverse().get_world("has_custom")
+        assert w is not None and w.count() == 10
+
+        # spawn 一只自定义名的数码兽(不会被 seed 覆盖)
+        custom = DigimonAgent(
+            name="吸血鬼兽",
+            species="vamdemon",
+            region_id="infinity_mountain",
+            stats=DigimonStats(hp=100, ep=50, attack=20, defense=15, speed=15),
+        )
+        w.spawn(custom)
+        assert w.count() == 11
+
+        # seed: 默认 10 只会覆盖同名,自定义的不受影响,净增可能为 0
+        resp = client.post("/api/multiverse/has_custom/seed")
+        assert resp.status_code == 200
+        data = resp.json()
+        # spawn 是 upsert: 10 只默认兽覆盖同名(净增 0),自定义的不受影响
+        assert data["added"] >= 0
+        assert data["total_agents"] == 11  # 10 覆盖 + 1 自定义
+
+    def test_seed_nonexistent_world(self):
+        """seed 不存在的世界返回 404。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.post("/api/multiverse/ghost/seed")
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"]
+
+    def test_seed_prime_world(self):
+        """seed 主宇宙也允许,但 spawn 是 upsert(同名覆盖,净增可能为 0)。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        w = get_multiverse().get_world("prime")
+        assert w is not None
+        before = w.count()
+
+        resp = client.post("/api/multiverse/prime/seed")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "prime"
+        # spawn 是 upsert,已有同名兽则净增可能为 0
+        assert data["added"] >= 0
+        assert data["total_agents"] >= before

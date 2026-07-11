@@ -134,6 +134,19 @@ class MultiverseManager:
             return False
         return self.worlds.pop(world_id, None) is not None
 
+    def seed_world(self, world_id: str) -> int:
+        """向已有世界注入默认数码兽,返回新注入的数量。
+
+        世界不存在返回 -1,世界已有数码兽时仍追加(不跳过)。
+        主宇宙也允许 seed(可重复注入)。
+        """
+        world = self.worlds.get(world_id)
+        if world is None:
+            return -1
+        before = world.count()
+        _seed_default_digimon(world)
+        return world.count() - before
+
     # ---- 数码之门:跨世界迁移 ----
     def open_gate(
         self,

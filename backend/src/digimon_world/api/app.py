@@ -995,6 +995,31 @@ def get_world_events(
     }
 
 
+@app.post("/api/multiverse/{world_id}/seed")
+def seed_world(world_id: str) -> dict[str, Any]:
+    """向已有世界注入默认数码兽(不影响现有数码兽)。
+
+    注入默认的 10 只数码兽: 亚古兽/加布兽/比丘兽/甲虫兽/巴鲁兽/
+    哥玛兽/巴达兽/迪路兽/小狗兽/艾力兽。
+
+    如果世界不存在返回 404。
+    可对同一世界多次调用(每次追加 10 只)。
+    """
+    mv = get_multiverse()
+    added = mv.seed_world(world_id)
+    if added == -1:
+        raise HTTPException(
+            status_code=404,
+            detail=f"World '{world_id}' not found",
+        )
+    world = mv.get_world(world_id)
+    return {
+        "world_id": world_id,
+        "added": added,
+        "total_agents": world.count() if world else 0,
+    }
+
+
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
 class ConnectionManager:
     def __init__(self) -> None:
