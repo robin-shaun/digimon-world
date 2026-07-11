@@ -64,12 +64,14 @@ class MultiverseManager:
         self,
         world_id: Optional[str] = None,
         regions: Optional[dict[str, Any]] = None,
+        seasons_enabled: bool = True,
     ) -> WorldState:
         """新建一个平行世界并登记。
 
         Args:
             world_id: 世界 id。不给则确定性生成 'world_<序号>'(序号 = 当前世界数)。
             regions: 传给 WorldState 的地区表(不给则用默认地区)。
+            seasons_enabled: 是否启用季节系统(默认 True)。
 
         Returns:
             新建(或已存在同 id 时返回既有)的 WorldState。
@@ -80,7 +82,7 @@ class MultiverseManager:
         existing = self.worlds.get(world_id)
         if existing is not None:
             return existing
-        world = WorldState(regions=regions)
+        world = WorldState(regions=regions, seasons_enabled=seasons_enabled)
         self.worlds[world_id] = world
         return world
 

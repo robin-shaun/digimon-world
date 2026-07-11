@@ -875,7 +875,7 @@ def get_multiverse_overview() -> dict[str, Any]:
 def create_world(req: CreateWorldRequest) -> dict[str, Any]:
     """创建一个新的平行世界,返回新世界 ID 和状态。"""
     mv = get_multiverse()
-    world = mv.create_world(world_id=req.world_id)
+    world = mv.create_world(world_id=req.world_id, seasons_enabled=req.seasons)
     # 找到新创建世界的 id(create_world 返回的 WorldState 不带 id; 从管理器反查)
     world_id = next(
         (wid for wid, ws in mv.worlds.items() if ws is world),
@@ -885,7 +885,26 @@ def create_world(req: CreateWorldRequest) -> dict[str, Any]:
         "world_id": world_id,
         "agent_count": world.count(),
         "event_count": len(world.events),
+        "seasons_enabled": world.seasons_enabled,
         "total_worlds": mv.count(),
+    }
+
+
+@app.get("/api/multiverse/{world_id}")
+def get_world_detail(world_id: str) -> dict[str, Any]:
+    """获取指定世界的详细信息(agents, events, regions, seasons_enabled)。"""
+    mv = get_multiverse()
+    world = mv.get_world(world_id)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_id}' not found")
+    return {
+        "world_id": world_id,
+        "seasons_enabled": world.seasons_enabled,
+        "agent_count": world.count(),
+        "event_count": len(world.events),
+        "region_count": len(world.regions),
+        "agent_names": [a.name for a in world.all()],
+        "recent_events": world.events[-20:] if world.events else [],
     }
 
 

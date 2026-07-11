@@ -246,3 +246,92 @@ class TestMultiverseAPI:
         )
         assert resp.status_code == 400
         assert "Gate failed" in resp.json()["detail"]
+
+
+class TestSeasonsEnabled:
+    def test_world_state_defaults_seasons_enabled(self):
+        """新创建的 WorldState 默认启用季节系统。"""
+        from digimon_world.world.world_state import WorldState
+        ws = WorldState()
+        assert ws.seasons_enabled is True
+
+    def test_world_state_seasons_disabled(self):
+        """可以显式关闭季节系统。"""
+        from digimon_world.world.world_state import WorldState
+        ws = WorldState(seasons_enabled=False)
+        assert ws.seasons_enabled is False
+
+    def test_to_dict_includes_seasons(self):
+        """to_dict 包含 seasons_enabled 字段。"""
+        from digimon_world.world.world_state import WorldState
+        ws = WorldState(seasons_enabled=False)
+        d = ws.to_dict()
+        assert d["seasons_enabled"] is False
+
+
+class TestMultiverseCreateSeasons:
+    def test_create_world_seasons_disabled(self):
+        """create_world 可以传递 seasons_enabled=False。"""
+        mv = get_multiverse()
+        mv.create_world(world_id="no_seasons", seasons_enabled=False)
+        world = mv.get_world("no_seasons")
+        assert world is not None
+        assert world.seasons_enabled is False
+
+    def test_create_api_seasons_disabled(self):
+        """POST /api/multiverse/create 支持 seasons 参数。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.post(
+            "/api/multiverse/create",
+            json={"world_id": "eternal_spring", "seasons": False},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "eternal_spring"
+        assert data["seasons_enabled"] is False
+        # 验证后端实际状态
+        world = get_multiverse().get_world("eternal_spring")
+        assert world is not None
+        assert world.seasons_enabled is False
+
+
+class TestGetWorldDetail:
+    def test_get_prime_world(self):
+        """GET /api/multiverse/prime 返回主世界详情。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/prime")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "prime"
+        assert data["seasons_enabled"] is True
+        assert "agent_names" in data
+        assert "recent_events" in data
+        assert data["region_count"] > 0
+
+    def test_get_nonexistent_world(self):
+        """GET /api/multiverse/{id} 对不存在的世界返回 404。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/ghost_world")
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"]
+
+    def test_get_created_world(self):
+        """GET /api/multiverse/{id} 可以查询新创建的世界。"""
+        mv = get_multiverse()
+        mv.create_world(world_id="target", seasons_enabled=False)
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/target")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "target"
+        assert data["seasons_enabled"] is False
+        assert data["agent_count"] == 0
+        assert data["event_count"] == 0

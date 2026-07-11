@@ -251,7 +251,11 @@ class WorldState:
     Phase 4: 加 SQLite 持久化,加多进程同步(可能用 asyncio Lock 替代 threading.Lock)。
     """
 
-    def __init__(self, regions: Optional[dict[str, Region]] = None) -> None:
+    def __init__(
+        self,
+        regions: Optional[dict[str, Region]] = None,
+        seasons_enabled: bool = True,
+    ) -> None:
         self._lock = threading.RLock()
         self.regions: dict[str, Region] = regions or dict(DEFAULT_REGIONS)
         self.agents: dict[str, DigimonAgent] = {}
@@ -261,6 +265,8 @@ class WorldState:
         self.real_to_world_ratio: int = 60
         # Phase 7: 因果链 —— 事件 ID 自增计数器
         self._next_event_id: int = 0
+        # Phase 9: 季节系统开关(创建世界时可关闭)
+        self.seasons_enabled: bool = seasons_enabled
 
     # ---- Phase 7: 因果链支持 ----
     def _next_id(self) -> int:
@@ -532,6 +538,7 @@ class WorldState:
                 "world_time": datetime.now().isoformat(),
                 "real_to_world_ratio": self.real_to_world_ratio,
                 "memory_stats": self.memory_stats,
+                "seasons_enabled": self.seasons_enabled,
             }
 
 
