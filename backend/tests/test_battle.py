@@ -232,4 +232,4 @@ class TestBattleLlmAi:
         assert result.final_hp[loser] == 0
         # 确认确实调用了 LLM
         assert len(fake.calls) > 0
-        assert fake.calls[0].model == LlmModel.HAIKU
+        assert fake.calls[0].model == LlmModel.MINIMAX_M3

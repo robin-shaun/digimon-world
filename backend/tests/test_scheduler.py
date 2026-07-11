@@ -220,7 +220,7 @@ async def test_scheduler_real_planner_fallback_path() -> None:
     )
     # 挂上 fake planner + reflector,确保走真实 plan 路径而不是 fallback
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.HAIKU, reply="去沙滩寻找食物")
+    fake.set_reply(LlmModel.MINIMAX_M3, reply="去沙滩寻找食物")
     from digimon_world.agents.planner import Planner
     agent.planner = Planner(llm_client=fake)
     world.spawn(agent)

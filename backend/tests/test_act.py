@@ -341,7 +341,7 @@ async def test_step_does_not_raise_with_any_plan(agumon: DigimonAgent) -> None:
 async def test_latent_desire_influences_plan(agumon: DigimonAgent) -> None:
     """agent 有 latent_desire 时,plan_next 的 prompt 应带上内心渴望。"""
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.HAIKU, reply="向北方的高山进发, 挑战强敌")
+    fake.set_reply(LlmModel.MINIMAX_M3, reply="向北方的高山进发, 挑战强敌")
     agumon.planner = Planner(llm_client=fake)
     agumon.latent_desire = "想变强"
     agumon.desire_strength = 0.9
@@ -360,7 +360,7 @@ async def test_latent_desire_influences_plan(agumon: DigimonAgent) -> None:
 async def test_latent_desire_absent_not_in_plan_prompt(agumon: DigimonAgent) -> None:
     """无 latent_desire 时,prompt 不应出现"内心渴望"一行。"""
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.HAIKU, reply="在附近走走")
+    fake.set_reply(LlmModel.MINIMAX_M3, reply="在附近走走")
     agumon.planner = Planner(llm_client=fake)
     assert agumon.latent_desire == ""
 

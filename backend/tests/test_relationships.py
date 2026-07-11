@@ -155,7 +155,7 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
     world.spawn(DigimonAgent(name="乙兽", species="b", region_id="file_island", location=(120, 100)))
 
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.HAIKU, reply="你好呀!")
+    fake.set_reply(LlmModel.MINIMAX_M3, reply="你好呀!")
     dialogue = Dialogue(llm_client=fake)
 
     tracker = RelationshipTracker()

@@ -56,7 +56,7 @@ async def decide_action(
     try:
         req = ChatRequest(
             messages=[ChatMessage(role="user", content=prompt)],
-            model=LlmModel.HAIKU,
+            model=LlmModel.MINIMAX_M3,
             max_tokens=16,
             temperature=0.7,
         )

@@ -39,7 +39,7 @@ def _make_agent(n_memories: int = 5, n_reflections: int = 2) -> DigimonAgent:
 async def test_plan_generates_string() -> None:
     """验证 LLM 返回字符串被写到 agent.current_plan。"""
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.HAIKU, reply="去沙滩寻找食物,顺便观察周围有没有其他数码兽。")
+    fake.set_reply(LlmModel.MINIMAX_M3, reply="去沙滩寻找食物,顺便观察周围有没有其他数码兽。")
 
     planner = Planner(llm_client=fake)
     agent = _make_agent()
@@ -59,7 +59,7 @@ async def test_plan_generates_string() -> None:
 async def test_plan_updates_last_planned_at() -> None:
     """验证 plan_next 后 last_planned_at 被更新。"""
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.HAIKU, reply="在森林里探索新路径。")
+    fake.set_reply(LlmModel.MINIMAX_M3, reply="在森林里探索新路径。")
 
     planner = Planner(llm_client=fake)
     agent = _make_agent()
@@ -102,7 +102,7 @@ async def test_plan_failure_uses_fallback() -> None:
 async def test_plan_uses_recent_memories_and_reflections() -> None:
     """验证 prompt 包含记忆和反思内容。"""
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.HAIKU, reply="继续在附近巡逻。")
+    fake.set_reply(LlmModel.MINIMAX_M3, reply="继续在附近巡逻。")
 
     planner = Planner(llm_client=fake)
     agent = _make_agent(n_memories=5, n_reflections=2)
@@ -131,5 +131,5 @@ async def test_plan_uses_recent_memories_and_reflections() -> None:
     # prompt 应包含世界状态
     assert "sunny" in prompt
     # 模型应该是 HAIKU
-    assert call.model == LlmModel.HAIKU
+    assert call.model == LlmModel.MINIMAX_M3
     assert call.max_tokens == 100

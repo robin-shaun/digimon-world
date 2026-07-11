@@ -20,8 +20,13 @@ from typing import Any, Protocol, runtime_checkable
 class LlmModel(str, Enum):
     """模型分层。"""
 
+    # Anthropic (中转)
     OPUS = "opus-4.8"      # 反思 / 计划 / 战斗决策
     HAIKU = "haiku-4.5"    # 观察 / 短文本
+
+    # MiniMax
+    MINIMAX_M1 = "minimax-m1"   # 主力模型 (计划/反思/战斗)
+    MINIMAX_M3 = "minimax-m3"   # 轻量模型 (观察/短文本)
 
 
 class LlmError(RuntimeError):
@@ -44,7 +49,7 @@ class ChatRequest:
     """一次完整调用请求。"""
 
     messages: list[ChatMessage]
-    model: LlmModel = LlmModel.HAIKU
+    model: LlmModel = LlmModel.MINIMAX_M3
     max_tokens: int = 512
     temperature: float = 0.7
     # 可选: 透传给中转的元数据(trace id 等)
@@ -187,7 +192,80 @@ class HttpLlmClient:
         raise LlmError(f"调用 LLM 失败(已重试 {self.max_retries} 次)") from last_err
 
 
-# ---- 进程级单例 ----
+# ---- MiniMax client ----
+
+
+class MiniMaxClient:
+    """MiniMax API 直连客户端。
+
+    API 文档: https://platform.minimax.chat
+    端点: POST https://api.minimax.chat/v1/text/chatcompletion_v2
+    """
+
+    BASE_URL = "https://api.minimax.chat/v1/text/chatcompletion_v2"
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        timeout: float = 45.0,
+        max_retries: int = 3,
+    ) -> None:
+        self.api_key = api_key or os.environ.get("MINIMAX_API_KEY", "")
+        self.timeout = timeout
+        self.max_retries = max_retries
+
+    def _build_payload(self, req: ChatRequest) -> dict[str, Any]:
+        return {
+            "model": req.model.value,
+            "messages": [m.to_dict() for m in req.messages],
+            "max_tokens": req.max_tokens,
+            "temperature": req.temperature,
+        }
+
+    def _parse_response(self, data: dict[str, Any], req: ChatRequest) -> ChatResponse:
+        status = data.get("base_resp", {}).get("status_code", -1)
+        if status != 0:
+            msg = data.get("base_resp", {}).get("status_msg", "unknown")
+            raise LlmError(f"MiniMax 返回错误 {status}: {msg}")
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise LlmError(f"无法解析 MiniMax 响应: {data}") from e
+        return ChatResponse(content=content, model=req.model, raw=data)
+
+    async def complete(self, req: ChatRequest) -> ChatResponse:
+        if not self.api_key:
+            raise LlmError("MiniMaxClient 缺少 api_key")
+
+        import httpx
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = self._build_payload(req)
+
+        last_err: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as cli:
+                    r = await cli.post(self.BASE_URL, json=payload, headers=headers)
+                if 200 <= r.status_code < 300:
+                    return self._parse_response(r.json(), req)
+                if r.status_code == 429:
+                    raise LlmError(f"MiniMax 限流 429: {r.text[:200]}")
+                if 400 <= r.status_code < 500:
+                    raise LlmError(f"MiniMax 客户端错误 {r.status_code}: {r.text[:200]}")
+                raise LlmError(f"MiniMax 返回 {r.status_code}: {r.text[:200]}")
+            except (httpx.HTTPError, LlmError) as e:
+                last_err = e
+                if isinstance(e, LlmError) and "客户端错误" in str(e):
+                    break
+                if attempt < self.max_retries:
+                    await asyncio.sleep(0.5 * (2 ** attempt))
+                    continue
+                break
+        raise LlmError(f"MiniMax 调用失败(已重试 {self.max_retries} 次)") from last_err
 
 _client: LlmClient | None = None
 
@@ -197,17 +275,19 @@ def get_client() -> LlmClient:
 
     优先顺序:
     1. 显式 set_client() 的实例(测试注入)
-    2. 环境变量配置 OK → HttpLlmClient
-    3. 兜底: FakeLlmClient(避免崩,标记 offline)
+    2. MINIMAX_API_KEY 已设 → MiniMaxClient (M3)
+    3. DIGIMON_LLM_API_KEY + DIGIMON_LLM_BASE_URL → HttpLlmClient
+    4. 兜底: FakeLlmClient
     """
     global _client
     if _client is not None:
         return _client
-    if os.environ.get("DIGIMON_LLM_API_KEY") and os.environ.get("DIGIMON_LLM_BASE_URL"):
+    if os.environ.get("MINIMAX_API_KEY"):
+        _client = MiniMaxClient()
+    elif os.environ.get("DIGIMON_LLM_API_KEY") and os.environ.get("DIGIMON_LLM_BASE_URL"):
         _client = HttpLlmClient()
     else:
-        # 离线模式:用 Fake,默认返回固定串,避免崩
-        _client = FakeLlmClient(default_reply="[offline] LLM 未配置,请设置 DIGIMON_LLM_API_KEY")
+        _client = FakeLlmClient(default_reply="[offline] LLM 未配置")
     return _client
 
 
@@ -219,7 +299,7 @@ def set_client(client: LlmClient) -> None:
 
 async def complete(
     messages: list[ChatMessage],
-    model: LlmModel = LlmModel.HAIKU,
+    model: LlmModel = LlmModel.MINIMAX_M3,
     max_tokens: int = 512,
     temperature: float = 0.7,
 ) -> ChatResponse:

@@ -38,7 +38,7 @@ async def test_reflect_generates_reflection() -> None:
     """用 FakeLlmClient 返回固定 JSON,验证 reflection 写入 memory。"""
     fake = FakeLlmClient()
     fake.set_reply(
-        LlmModel.HAIKU,
+        LlmModel.MINIMAX_M3,
         reply='{"reflections": ["我似乎一直在沙滩附近活动", "我对周围环境越来越熟悉了"]}',
     )
 
@@ -108,7 +108,7 @@ async def test_reflect_writes_to_memory() -> None:
     """验证 reflection 是 memory_type='reflection', importance=8。"""
     fake = FakeLlmClient()
     fake.set_reply(
-        LlmModel.HAIKU,
+        LlmModel.MINIMAX_M3,
         reply='{"reflections": ["我需要找到更多食物来源"]}',
     )
 
@@ -133,7 +133,7 @@ async def test_reflection_includes_desire() -> None:
     """反思返回值应带上 desire / desire_strength 字段。"""
     fake = FakeLlmClient()
     fake.set_reply(
-        LlmModel.HAIKU,
+        LlmModel.MINIMAX_M3,
         reply=(
             '{"reflections": ["我一直在独自游荡"], '
             '"desire": "想交朋友", "desire_strength": 0.8}'
@@ -157,7 +157,7 @@ async def test_reflection_includes_desire() -> None:
 async def test_reflect_bad_json_silent() -> None:
     """LLM 返回非法 JSON 时静默返回 None。"""
     fake = FakeLlmClient()
-    fake.set_reply(LlmModel.HAIKU, reply="这不是 JSON 格式")
+    fake.set_reply(LlmModel.MINIMAX_M3, reply="这不是 JSON 格式")
 
     reflector = Reflector(llm_client=fake)
     agent = _make_agent_with_memories(3)

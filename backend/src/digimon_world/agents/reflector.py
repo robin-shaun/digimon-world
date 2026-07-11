@@ -98,7 +98,7 @@ class Reflector:
                     ChatMessage(role="system", content="你是数码兽的内心独白生成器。"),
                     ChatMessage(role="user", content=prompt),
                 ],
-                model=LlmModel.HAIKU,
+                model=LlmModel.MINIMAX_M3,
                 max_tokens=512,
                 temperature=0.7,
             )

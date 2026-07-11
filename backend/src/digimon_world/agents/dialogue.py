@@ -87,7 +87,7 @@ class Dialogue:
                     ),
                     ChatMessage(role="user", content=prompt),
                 ],
-                model=LlmModel.HAIKU,
+                model=LlmModel.MINIMAX_M3,
                 max_tokens=60,
                 temperature=0.9,
             )
