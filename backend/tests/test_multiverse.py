@@ -335,3 +335,78 @@ class TestGetWorldDetail:
         assert data["seasons_enabled"] is False
         assert data["agent_count"] == 0
         assert data["event_count"] == 0
+
+
+class TestWorldStateId:
+    """测试 WorldState.world_id 字段(Phase 9 新增)。"""
+
+    def test_world_id_is_set_by_multiverse(self):
+        """通过 MultiverseManager 创建的世界,world_id 正确设置。"""
+        mv = get_multiverse()
+        # prime 世界
+        prime = mv.get_world("prime")
+        assert prime is not None
+        assert prime.world_id == "prime"
+        # 新建世界
+        mv.create_world(world_id="test_id")
+        w = mv.get_world("test_id")
+        assert w is not None
+        assert w.world_id == "test_id"
+
+    def test_auto_generated_world_id(self):
+        """自动生成 world_id 时也正确设置。"""
+        mv = get_multiverse()
+        w = mv.create_world()
+        assert w.world_id == "world_1"
+
+    def test_world_id_in_to_dict(self):
+        """WorldState.to_dict() 包含 world_id。"""
+        mv = get_multiverse()
+        w = mv.create_world(world_id="dict_test")
+        d = w.to_dict()
+        assert d["world_id"] == "dict_test"
+
+    def test_direct_construction_world_id_none(self):
+        """直接构造 WorldState 时 world_id 默认为 None。"""
+        from digimon_world.world.world_state import WorldState
+        ws = WorldState()
+        assert ws.world_id is None
+
+
+class TestSeedAgents:
+    """测试 seed_agents 参数(Phase 9 新增)。"""
+
+    def test_seed_agents_false_default(self):
+        """默认 seed_agents=False,新世界为空。"""
+        mv = get_multiverse()
+        w = mv.create_world(world_id="empty_world", seed_agents=False)
+        assert w.count() == 0
+
+    def test_seed_agents_true(self):
+        """seed_agents=True 注入 10 只默认数码兽。"""
+        mv = get_multiverse()
+        w = mv.create_world(world_id="seeded_world", seed_agents=True)
+        assert w.count() == 10
+        # 验证包含关键数码兽
+        assert w.get("亚古兽") is not None
+        assert w.get("加布兽") is not None
+        assert w.get("迪路兽") is not None
+
+    def test_seed_agents_api(self):
+        """POST /api/multiverse/create 支持 seed_digimon 参数。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.post(
+            "/api/multiverse/create",
+            json={"world_id": "seeded_api", "seed_digimon": True},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_id"] == "seeded_api"
+        assert data["agent_count"] == 10
+        # 后端验证
+        w = get_multiverse().get_world("seeded_api")
+        assert w is not None
+        assert w.count() == 10
+        assert w.get("亚古兽") is not None

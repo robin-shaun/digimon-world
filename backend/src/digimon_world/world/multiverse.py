@@ -34,6 +34,36 @@ from .world_state import WorldState
 PRIME_WORLD_ID: str = "prime"
 
 
+def _seed_default_digimon(world: WorldState) -> None:
+    """往一个空世界里注入默认的 10 只数码兽,与 prime 世界初始化一致。
+
+    包含: 亚古兽 / 加布兽 / 比丘兽 / 甲虫兽 / 巴鲁兽 /
+          哥玛兽 / 巴达兽 / 迪路兽 / 小狗兽 / 艾力兽
+    """
+    from ..agents.digimon_agent import DigimonAgent
+
+    defaults = [
+        ("亚古兽", "agumon", "file_island", (200, 400), "在沙滩附近闲逛"),
+        ("加布兽", "gabumon", "file_island", (700, 350), "安静地观察周围"),
+        ("比丘兽", "biyomon", "file_island", (480, 180), "从空中巡视"),
+        ("甲虫兽", "tentomon", "file_island", (350, 300), "在树林里找食物"),
+        ("巴鲁兽", "palmon", "file_island", (600, 250), "晒太阳光合作用"),
+        ("哥玛兽", "gomamon", "file_island", (150, 500), "在海边玩水"),
+        ("巴达兽", "patamon", "file_island", (400, 100), "在空中飞行"),
+        ("迪路兽", "tailmon", "infinity_mountain", (500, 150), "守护创世者祭坛"),
+        ("小狗兽", "plotmon", "file_island", (300, 450), "在草地上玩耍"),
+        ("艾力兽", "elecmon", "file_island", (800, 500), "在发电站巡逻"),
+    ]
+    for name, species, region_id, (x, y), plan in defaults:
+        world.spawn(DigimonAgent(
+            name=name,
+            species=species,
+            region_id=region_id,
+            location=(x, y),
+            current_plan=plan,
+        ))
+
+
 class MultiverseManager:
     """管理多个平行 WorldState 实例。
 
@@ -46,6 +76,9 @@ class MultiverseManager:
         self.worlds: dict[str, WorldState] = {
             PRIME_WORLD_ID: prime if prime is not None else WorldState()
         }
+        # 确保主宇宙 world_id 正确(可能从外部注入且未设置)
+        if self.worlds[PRIME_WORLD_ID].world_id is None:
+            self.worlds[PRIME_WORLD_ID].world_id = PRIME_WORLD_ID
 
     # ---- 查询 ----
     def get_world(self, world_id: str = PRIME_WORLD_ID) -> Optional[WorldState]:
@@ -65,6 +98,7 @@ class MultiverseManager:
         world_id: Optional[str] = None,
         regions: Optional[dict[str, Any]] = None,
         seasons_enabled: bool = True,
+        seed_agents: bool = False,
     ) -> WorldState:
         """新建一个平行世界并登记。
 
@@ -72,6 +106,7 @@ class MultiverseManager:
             world_id: 世界 id。不给则确定性生成 'world_<序号>'(序号 = 当前世界数)。
             regions: 传给 WorldState 的地区表(不给则用默认地区)。
             seasons_enabled: 是否启用季节系统(默认 True)。
+            seed_agents: 是否注入默认数码兽(默认 False,空世界)。
 
         Returns:
             新建(或已存在同 id 时返回既有)的 WorldState。
@@ -82,7 +117,14 @@ class MultiverseManager:
         existing = self.worlds.get(world_id)
         if existing is not None:
             return existing
-        world = WorldState(regions=regions, seasons_enabled=seasons_enabled)
+        world = WorldState(
+            regions=regions,
+            seasons_enabled=seasons_enabled,
+            world_id=world_id,
+        )
+        # 注入默认数码兽
+        if seed_agents:
+            _seed_default_digimon(world)
         self.worlds[world_id] = world
         return world
 

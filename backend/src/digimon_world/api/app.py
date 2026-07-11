@@ -854,6 +854,7 @@ class CreateWorldRequest(BaseModel):
 
     world_id: str | None = None
     seasons: bool = True  # 是否启用季节系统
+    seed_digimon: bool = False  # 是否注入默认数码兽(默认空世界)
 
 
 class OpenGateRequest(BaseModel):
@@ -875,14 +876,13 @@ def get_multiverse_overview() -> dict[str, Any]:
 def create_world(req: CreateWorldRequest) -> dict[str, Any]:
     """创建一个新的平行世界,返回新世界 ID 和状态。"""
     mv = get_multiverse()
-    world = mv.create_world(world_id=req.world_id, seasons_enabled=req.seasons)
-    # 找到新创建世界的 id(create_world 返回的 WorldState 不带 id; 从管理器反查)
-    world_id = next(
-        (wid for wid, ws in mv.worlds.items() if ws is world),
-        list(mv.worlds.keys())[-1],
+    world = mv.create_world(
+        world_id=req.world_id,
+        seasons_enabled=req.seasons,
+        seed_agents=req.seed_digimon,
     )
     return {
-        "world_id": world_id,
+        "world_id": world.world_id,
         "agent_count": world.count(),
         "event_count": len(world.events),
         "seasons_enabled": world.seasons_enabled,

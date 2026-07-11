@@ -255,6 +255,7 @@ class WorldState:
         self,
         regions: Optional[dict[str, Region]] = None,
         seasons_enabled: bool = True,
+        world_id: str | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self.regions: dict[str, Region] = regions or dict(DEFAULT_REGIONS)
@@ -267,6 +268,8 @@ class WorldState:
         self._next_event_id: int = 0
         # Phase 9: 季节系统开关(创建世界时可关闭)
         self.seasons_enabled: bool = seasons_enabled
+        # Phase 9: 世界 id(多元宇宙中唯一标识,默认新建时不设置)
+        self.world_id: str | None = world_id
 
     # ---- Phase 7: 因果链支持 ----
     def _next_id(self) -> int:
@@ -539,6 +542,7 @@ class WorldState:
                 "real_to_world_ratio": self.real_to_world_ratio,
                 "memory_stats": self.memory_stats,
                 "seasons_enabled": self.seasons_enabled,
+                "world_id": self.world_id,
             }
 
 
@@ -553,7 +557,7 @@ def get_world() -> WorldState:
     """
     global _state
     if _state is None:
-        _state = WorldState()
+        _state = WorldState(world_id="prime")
         # 启动数据
         _state.spawn(DigimonAgent(
             name="亚古兽",
