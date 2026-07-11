@@ -307,6 +307,18 @@ def get_world_vitality() -> dict[str, Any]:
     return vitality.to_dict()
 
 
+@app.get("/api/emergence")
+def get_emergence_metrics() -> dict[str, Any]:
+    """涌现指标: 社交网络分析 + 行为多样性 + 情绪传染 + 涌现事件。
+
+    Phase 11 科研级端点，用于量化「世界是否涌现复杂结构」。
+    """
+    world = get_world()
+    from ..world.emergence_metrics import compute_emergence_metrics
+    snapshot = compute_emergence_metrics(world)
+    return snapshot.to_dict()
+
+
 @app.post("/api/world/save")
 async def save_world() -> dict[str, Any]:
     """手动全量保存世界状态到 SQLite(data/world.db)。"""

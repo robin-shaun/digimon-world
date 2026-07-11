@@ -37,6 +37,10 @@ from .ecology import (
     get_ecology_system,
     reset_ecology_system,
 )
+from .emergence_metrics import (
+    EmergenceSnapshot,
+    compute_emergence_metrics,
+)
 from .environmental_events import (
     EnvironmentalEventSystem,
     get_env_events_system,
