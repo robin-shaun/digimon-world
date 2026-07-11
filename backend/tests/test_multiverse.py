@@ -643,3 +643,125 @@ class TestSeedWorldAPI:
         # spawn 是 upsert,已有同名兽则净增可能为 0
         assert data["added"] >= 0
         assert data["total_agents"] >= before
+
+
+# ========== Phase 9: 聚合统计 API ==========
+
+
+class TestMultiverseStats:
+    def test_stats_single_world(self):
+        """只有一个 prime 世界时的统计。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_count"] == 1
+        assert len(data["worlds"]) == 1
+        assert data["worlds"][0]["world_id"] == "prime"
+        assert data["worlds"][0]["agent_count"] > 0
+        assert data["worlds"][0]["region_count"] > 0
+        assert data["total_agents"] == data["worlds"][0]["agent_count"]
+        assert data["total_events"] == data["worlds"][0]["event_count"]
+
+    def test_stats_multiple_worlds(self):
+        """多个世界时聚合统计正确。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+
+        # 创建两个世界: 一个空,一个有种子
+        client.post("/api/multiverse/create", json={"world_id": "empty"})
+        client.post(
+            "/api/multiverse/create",
+            json={"world_id": "seeded", "seed_digimon": True},
+        )
+
+        resp = client.get("/api/multiverse/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world_count"] == 3  # prime + empty + seeded
+        assert len(data["worlds"]) == 3
+
+        # 验证各世界数据
+        world_map = {w["world_id"]: w for w in data["worlds"]}
+        assert world_map["prime"]["agent_count"] > 0
+        assert world_map["empty"]["agent_count"] == 0
+        assert world_map["seeded"]["agent_count"] == 10
+
+        # 聚合值
+        assert data["total_agents"] == sum(
+            w["agent_count"] for w in data["worlds"]
+        )
+        assert data["total_events"] == sum(
+            w["event_count"] for w in data["worlds"]
+        )
+
+    def test_stats_after_delete(self):
+        """删除世界后聚合统计更新。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={"world_id": "temp"})
+
+        before = client.get("/api/multiverse/stats").json()
+        assert before["world_count"] == 2
+
+        client.delete("/api/multiverse/temp")
+
+        after = client.get("/api/multiverse/stats").json()
+        assert after["world_count"] == 1
+
+    def test_stats_after_gate(self):
+        """跨世界迁移后聚合统计更新(total_agents 不变)。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        client.post("/api/multiverse/create", json={"world_id": "dest"})
+
+        # 主世界注入一只独特的数码兽
+        from digimon_world.agents.digimon_agent import DigimonAgent, DigimonStats
+        mv = get_multiverse()
+        prime = mv.get_world("prime")
+        assert prime is not None
+        before_count = prime.count()
+        custom = DigimonAgent(
+            name="测试兽",
+            species="testmon",
+            region_id="file_island",
+            stats=DigimonStats(hp=100, ep=50, attack=20, defense=15, speed=15),
+        )
+        prime.spawn(custom)
+
+        before = client.get("/api/multiverse/stats").json()
+
+        # 通过数码之门迁移
+        client.post("/api/multiverse/gate", json={
+            "agent_name": "测试兽",
+            "from_world": "prime",
+            "to_world": "dest",
+        })
+
+        after = client.get("/api/multiverse/stats").json()
+        # total_agents 不变(只是从一个世界移到另一个)
+        assert after["total_agents"] == before["total_agents"]
+        # total_events 增加(两边各一条 gate 事件)
+        assert after["total_events"] == before["total_events"] + 2
+        # prime 减少 1, dest 增加 1
+        after_map = {w["world_id"]: w for w in after["worlds"]}
+        before_map = {w["world_id"]: w for w in before["worlds"]}
+        assert after_map["prime"]["agent_count"] == before_map["prime"]["agent_count"] - 1
+        assert after_map["dest"]["agent_count"] == before_map["dest"]["agent_count"] + 1
+
+    def test_stats_includes_region_count(self):
+        """stats 响应中每个世界包含 region_count。"""
+        from digimon_world.api.app import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/api/multiverse/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        for w in data["worlds"]:
+            assert "region_count" in w
+            assert w["region_count"] > 0  # 默认至少有 file_island 和 infinity_mountain

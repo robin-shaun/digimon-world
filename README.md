@@ -44,7 +44,7 @@ digimon-world/
 │   │   ├── world/           # 世界状态 + 关系 + 经济 + 灾难 + 节日 + 活力
 │   │   ├── llm/             # LLM 客户端
 │   │   └── api/             # FastAPI 接口
-│   └── tests/               # 402 测试
+│   └── tests/               # 407 测试
 └── src/index.js             # Cloudflare Worker (API反代)
 ```
 
@@ -73,7 +73,7 @@ digimon-world/
 | 后端 | Python 3.11 + FastAPI + SQLite |
 | AI | Anthropic Claude (Opus 4.8 + Haiku 4.5) via 中转 |
 | 部署 | Cloudflare Workers (前端) + Cloudflare Tunnel (后端) |
-- **测试**: pytest (402 passed)
+- **测试**: pytest (407 passed)
 
 ## 🚀 本地启动
 
@@ -89,7 +89,7 @@ cd backend && source .venv/bin/activate && python -m pytest tests/ -q
 ## 📊 当前状态
 
 - **数码兽**: 10 只（亚古兽 / 加布兽 / 比丘兽 / 甲虫兽 / 巴鲁兽 / 哥玛兽 / 巴达兽 / 迪路兽 / 小狗兽 / 艾力兽）
-- **测试**: 388 passed
+- **测试**: 402 passed
 - **部署**: Cloudflare Workers + Tunnel
 - **每日调研**: 08:30 自动跑 arXiv + GitHub + 数码宝贝原作
 

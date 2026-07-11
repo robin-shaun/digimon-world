@@ -872,6 +872,19 @@ def get_multiverse_overview() -> dict[str, Any]:
     return mv.to_dict()
 
 
+@app.get("/api/multiverse/stats")
+def get_multiverse_stats() -> dict[str, Any]:
+    """多元宇宙聚合统计: 世界数、总 agent 数、总事件数、各世界摘要。
+
+    相比 /api/multiverse 的轻量概览,此端点额外包含:
+    - total_agents: 所有世界的 agent 总和
+    - total_events: 所有世界的事件总和
+    - region_count: 各世界的地区数
+    """
+    mv = get_multiverse()
+    return mv.stats()
+
+
 @app.post("/api/multiverse/create")
 def create_world(req: CreateWorldRequest) -> dict[str, Any]:
     """创建一个新的平行世界,返回新世界 ID 和状态。"""

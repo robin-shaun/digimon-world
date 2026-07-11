@@ -201,6 +201,30 @@ class MultiverseManager:
         })
         return agent
 
+    # ---- 聚合统计 ----
+    def stats(self) -> dict[str, Any]:
+        """跨世界聚合统计: 世界数、总 agent 数、总事件数、各世界摘要。"""
+        world_summaries = []
+        total_agents = 0
+        total_events = 0
+        for wid, world in self.worlds.items():
+            agents = world.count()
+            events = len(world.events)
+            total_agents += agents
+            total_events += events
+            world_summaries.append({
+                "world_id": wid,
+                "agent_count": agents,
+                "event_count": events,
+                "region_count": len(world.regions),
+            })
+        return {
+            "world_count": self.count(),
+            "total_agents": total_agents,
+            "total_events": total_events,
+            "worlds": world_summaries,
+        }
+
     # ---- 序列化 ----
     def to_dict(self) -> dict[str, Any]:
         """多元宇宙概览(每个世界只给轻量摘要,不展开全部 agent)。"""
