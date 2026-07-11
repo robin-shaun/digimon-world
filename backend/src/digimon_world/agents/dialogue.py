@@ -83,13 +83,13 @@ class Dialogue:
                 messages=[
                     ChatMessage(
                         role="system",
-                        content=f"你是一只数码宝贝，名字叫{agent_a.name}（{agent_a.species}）。你生活在数码世界，性格鲜明。说话简短直接，像动画角色。",
+                        content=f"你是{agent_a.name}，一只数码宝贝。只输出你口中说出的一句台词，不要旁白、不要选项、不要引号。",
                     ),
                     ChatMessage(role="user", content=prompt),
                 ],
                 model=LlmModel.MINIMAX_TEXT_01,
-                max_tokens=60,
-                temperature=0.9,
+                max_tokens=30,
+                temperature=0.7,
             )
             resp = await self._llm.complete(req)
             line = resp.content.strip()
