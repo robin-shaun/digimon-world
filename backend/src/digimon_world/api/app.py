@@ -14,6 +14,8 @@ Phase 1-11 接口:
 - GET  /api/vitality          — 世界活力指标
 - GET  /api/emergence         — 涌现指标 (Phase 11)
 - GET  /api/multiverse        — 多元宇宙管理 (Phase 9+)
+- POST /api/multiverse/migrate — 批量跨世界迁移 (Phase 12)
+- POST /api/multiverse/auto-migrate — 自动跨世界迁移 (Phase 12)
 
 详细设计: docs/DESIGN.md 第 7 节
 """
@@ -917,6 +919,20 @@ class OpenGateRequest(BaseModel):
     to_world: str = Field(..., description="目标世界 id")
 
 
+class MigrateBatchRequest(BaseModel):
+    """批量数码之门迁移请求(Phase 12)。"""
+
+    agent_names: list[str] = Field(..., min_length=1, max_length=100, description="要迁移的数码兽名字列表")
+    from_world: str = Field(..., description="源世界 id")
+    to_world: str = Field(..., description="目标世界 id")
+
+
+class AutoMigrateRequest(BaseModel):
+    """自动跨世界迁移请求(Phase 12)。"""
+
+    max_per_pair: int = Field(default=3, ge=1, le=20, description="每对世界最大迁移数码兽数")
+
+
 @app.get("/api/multiverse")
 def get_multiverse_overview() -> dict[str, Any]:
     """多元宇宙概览: 所有世界列表、agent 数、事件数。"""
@@ -996,6 +1012,55 @@ def open_digital_gate(req: OpenGateRequest) -> dict[str, Any]:
         "from_world": req.from_world,
         "to_world": req.to_world,
         "message": f"{agent.name} 穿过了数码之门,从 {req.from_world} 到达 {req.to_world}! 🌌",
+    }
+
+
+@app.post("/api/multiverse/migrate")
+def migrate_digimon_batch(req: MigrateBatchRequest) -> dict[str, Any]:
+    """批量数码之门: 一次迁移多只数码兽跨世界(Phase 12)。
+
+    部分 agent 不存在不会导致整批失败,
+    返回 migrated / failed 两个列表。
+    """
+    mv = get_multiverse()
+    result = mv.migrate_batch(
+        agent_names=req.agent_names,
+        from_world_id=req.from_world,
+        to_world_id=req.to_world,
+    )
+    return {
+        "from_world": req.from_world,
+        "to_world": req.to_world,
+        **result,
+        "message": (
+            f"批量迁移完成: {len(result['migrated'])}/{req.agent_names} "
+            f"成功从 {req.from_world} 到达 {req.to_world} 🌌"
+            if result["migrated"]
+            else f"批量迁移失败: 所有 {len(req.agent_names)} 只数码兽无法迁移"
+        ),
+    }
+
+
+@app.post("/api/multiverse/auto-migrate")
+def trigger_auto_migrate(req: AutoMigrateRequest | None = None) -> dict[str, Any]:
+    """触发自动跨世界迁移(Phase 12)。
+
+    在非 prime 世界之间随机迁移数码兽,模拟自然跨世界流动。
+    可选参数 max_per_pair 控制每对世界最多迁移几只。
+    """
+    mv = get_multiverse()
+    max_pp = req.max_per_pair if req is not None else 3
+    results = mv.auto_migrate(max_per_pair=max_pp)
+    total_moved = sum(r["count"] for r in results)
+    return {
+        "pairs": len(results),
+        "total_migrated": total_moved,
+        "details": results,
+        "message": (
+            f"自动迁移完成: {total_moved} 只数码兽在 {len(results)} 对世界间流动 🌌"
+            if results
+            else "无可用非 prime 世界对(需要至少 2 个非 prime 世界)"
+        ),
     }
 
 

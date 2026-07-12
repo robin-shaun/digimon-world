@@ -201,6 +201,136 @@ class MultiverseManager:
         })
         return agent
 
+    # ---- 批量迁移 ----
+    def migrate_batch(
+        self,
+        agent_names: list[str],
+        from_world_id: str,
+        to_world_id: str,
+    ) -> dict[str, Any]:
+        """批量数码之门: 把多只数码兽从 from_world 迁移到 to_world。
+
+        与 open_gate 不同: 支持一次传多只,部分失败不阻塞其他。
+        每只 agent 独立迁移,各自记录 digital_gate 事件。
+
+        Args:
+            agent_names: 要迁移的数码兽名字列表
+            from_world_id: 源世界 id
+            to_world_id: 目标世界 id
+
+        Returns:
+            {
+                "migrated": [...],   # 成功迁移的名字
+                "failed": [...],      # 失败的名字 + 原因
+                "total": int,         # 请求总数
+            }
+        """
+        if from_world_id == to_world_id:
+            return {
+                "migrated": [],
+                "failed": [
+                    {"name": name, "reason": "same world"}
+                    for name in agent_names
+                ],
+                "total": len(agent_names),
+            }
+        src = self.worlds.get(from_world_id)
+        dst = self.worlds.get(to_world_id)
+        if src is None or dst is None:
+            reason = f"world '{from_world_id}' not found" if src is None else f"world '{to_world_id}' not found"
+            return {
+                "migrated": [],
+                "failed": [{"name": name, "reason": reason} for name in agent_names],
+                "total": len(agent_names),
+            }
+
+        migrated: list[str] = []
+        failed: list[dict[str, str]] = []
+        for name in agent_names:
+            agent = src.get(name)
+            if agent is None:
+                failed.append({"name": name, "reason": "agent not found"})
+                continue
+            # 从源世界移除
+            with src._lock:
+                src.agents.pop(name, None)
+            # 落到目标世界
+            dst.spawn(agent)
+            # 事件记录
+            src.events.append({
+                "type": "digital_gate",
+                "agent": name,
+                "direction": "depart",
+                "from_world": from_world_id,
+                "to_world": to_world_id,
+                "source": "multiverse",
+                "method": "batch",
+            })
+            dst.events.append({
+                "type": "digital_gate",
+                "agent": name,
+                "direction": "arrive",
+                "from_world": from_world_id,
+                "to_world": to_world_id,
+                "source": "multiverse",
+                "method": "batch",
+            })
+            migrated.append(name)
+
+        return {
+            "migrated": migrated,
+            "failed": failed,
+            "total": len(agent_names),
+        }
+
+    def auto_migrate(
+        self,
+        max_per_pair: int = 3,
+    ) -> list[dict[str, Any]]:
+        """自动跨世界迁移: 在非 prime 世界之间随机迁移数码兽。
+
+        算法:
+        1. 找出所有非 prime 世界(至少 2 个才有意义)
+        2. 随机配对世界 (from, to)
+        3. 从 from 世界随机挑 1~max_per_pair 只数码兽, 迁移到 to
+        4. 返回迁移摘要列表
+
+        设计目的: 让平行世界之间保持数码兽"自然流动",模拟跨世界
+        生态,同时为⑤长期一致性测试提供持续的跨世界数据流。
+
+        Returns:
+            [{from_world, to_world, count, agents: [...]}, ...]
+        """
+        non_prime = [wid for wid in self.worlds if wid != PRIME_WORLD_ID]
+        if len(non_prime) < 2:
+            return []
+
+        import random
+        results: list[dict[str, Any]] = []
+        # 随机配对: 先打乱,相邻两个配对
+        shuffled = non_prime[:]
+        random.shuffle(shuffled)
+        for i in range(0, len(shuffled) - 1, 2):
+            from_wid = shuffled[i]
+            to_wid = shuffled[i + 1]
+            src = self.worlds[from_wid]
+            # 从源世界随机挑数码兽
+            all_agents = src.all()
+            if not all_agents:
+                continue
+            count = min(random.randint(1, max_per_pair), len(all_agents))
+            chosen = random.sample(all_agents, count)
+            names = [a.name for a in chosen]
+            result = self.migrate_batch(names, from_wid, to_wid)
+            results.append({
+                "from_world": from_wid,
+                "to_world": to_wid,
+                "count": len(result["migrated"]),
+                "agents": result["migrated"],
+            })
+
+        return results
+
     # ---- 聚合统计 ----
     def stats(self) -> dict[str, Any]:
         """跨世界聚合统计: 世界数、总 agent 数、总事件数、各世界摘要。"""

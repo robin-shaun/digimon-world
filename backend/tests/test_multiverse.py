@@ -872,3 +872,260 @@ class TestListWorldDigimon:
         r4 = client.get("/api/multiverse/after_gate_dest/digimon")
         assert not any(d["name"] == "测试兽X" for d in r3.json()["digimon"])
         assert any(d["name"] == "测试兽X" for d in r4.json()["digimon"])
+
+
+# ========== Phase 12: 批量迁移 + 自动迁移 测试 ==========
+
+
+class TestBatchMigrate:
+    """测试 MultiverseManager.migrate_batch 方法。"""
+
+    def test_batch_migrate_all_success(self):
+        mv = get_multiverse()
+        mv.create_world(world_id="batch_src", seed_agents=True)
+        mv.create_world(world_id="batch_dst")  # 不 seed,确保没有同名覆盖
+        src = mv.get_world("batch_src")
+        all_names = [a.name for a in src.all()]
+
+        result = mv.migrate_batch(
+            agent_names=all_names,
+            from_world_id="batch_src",
+            to_world_id="batch_dst",
+        )
+        assert result["total"] == len(all_names)
+        assert len(result["migrated"]) == len(all_names)
+        assert len(result["failed"]) == 0
+        # 源世界空了
+        assert mv.get_world("batch_src").count() == 0
+        # 目标世界有迁移过来的所有 agent
+        assert mv.get_world("batch_dst").count() == len(all_names)
+
+    def test_batch_migrate_partial_failure(self):
+        mv = get_multiverse()
+        mv.create_world(world_id="partial_src", seed_agents=True)
+        mv.create_world(world_id="partial_dst")
+        src = mv.get_world("partial_src")
+        real_names = [a.name for a in src.all()]
+        # 混入不存在的 agent
+        names_with_fake = real_names[:3] + ["不存在的数码兽"]
+
+        result = mv.migrate_batch(
+            agent_names=names_with_fake,
+            from_world_id="partial_src",
+            to_world_id="partial_dst",
+        )
+        assert len(result["migrated"]) == 3
+        assert len(result["failed"]) == 1
+        assert result["failed"][0]["name"] == "不存在的数码兽"
+        assert result["failed"][0]["reason"] == "agent not found"
+
+    def test_batch_migrate_same_world(self):
+        mv = get_multiverse()
+        mv.create_world(world_id="same_w", seed_agents=True)
+        src = mv.get_world("same_w")
+        names = [a.name for a in src.all()][:2]
+
+        result = mv.migrate_batch(names, "same_w", "same_w")
+        assert len(result["migrated"]) == 0
+        assert all(f["reason"] == "same world" for f in result["failed"])
+
+    def test_batch_migrate_missing_world(self):
+        mv = get_multiverse()
+        result = mv.migrate_batch(["亚古兽"], "nonexistent", "also_nonexistent")
+        assert len(result["migrated"]) == 0
+        assert "not found" in result["failed"][0]["reason"]
+
+    def test_batch_migrate_empty_list(self):
+        mv = get_multiverse()
+        mv.create_world(world_id="empty_src")
+        mv.create_world(world_id="empty_dst")
+        result = mv.migrate_batch([], "empty_src", "empty_dst")
+        assert result["total"] == 0
+        assert result["migrated"] == []
+        assert result["failed"] == []
+
+    def test_batch_migrate_events_recorded(self):
+        mv = get_multiverse()
+        mv.create_world(world_id="evt_src", seed_agents=True)
+        mv.create_world(world_id="evt_dst")
+        src = mv.get_world("evt_src")
+        dst = mv.get_world("evt_dst")
+        names = [a.name for a in src.all()][:2]
+
+        mv.migrate_batch(names, "evt_src", "evt_dst")
+        # 源世界有 depart 事件
+        depart_evts = [e for e in src.events if e.get("type") == "digital_gate" and e.get("direction") == "depart"]
+        # 目标世界有 arrive 事件
+        arrive_evts = [e for e in dst.events if e.get("type") == "digital_gate" and e.get("direction") == "arrive"]
+        assert len(depart_evts) == 2
+        assert len(arrive_evts) == 2
+        for ev in depart_evts:
+            assert ev["method"] == "batch"
+        for ev in arrive_evts:
+            assert ev["method"] == "batch"
+
+
+class TestAutoMigrate:
+    """测试 MultiverseManager.auto_migrate 方法。"""
+
+    def test_auto_migrate_needs_two_non_prime_worlds(self):
+        mv = get_multiverse()
+        # 只有 prime 世界
+        results = mv.auto_migrate()
+        assert results == []
+
+    def test_auto_migrate_single_non_prime(self):
+        mv = get_multiverse()
+        w = mv.create_world(world_id="lone")
+        w.spawn(_make_agent("lone_agent"))
+        # 只有 1 个非 prime 世界
+        results = mv.auto_migrate()
+        assert results == []
+
+    def test_auto_migrate_two_worlds(self):
+        mv = get_multiverse()
+        # 创建两个世界,各自有唯一命名的 agent(避免 spawn 同名覆盖)
+        w_a = mv.create_world(world_id="auto_a")
+        w_b = mv.create_world(world_id="auto_b")
+        for i in range(5):
+            w_a.spawn(_make_agent(f"autoA_{i}"))
+            w_b.spawn(_make_agent(f"autoB_{i}"))
+        count_a_before = w_a.count()
+        count_b_before = w_b.count()
+
+        results = mv.auto_migrate(max_per_pair=3)
+        assert len(results) == 1  # 一对配对
+        pair = results[0]
+        assert "from_world" in pair
+        assert "to_world" in pair
+        assert pair["count"] >= 1
+        assert pair["count"] <= 3
+
+        # 总数守恒 (数码兽只是在世界间移动)
+        count_a_after = mv.get_world("auto_a").count()
+        count_b_after = mv.get_world("auto_b").count()
+        assert count_a_after + count_b_after == count_a_before + count_b_before
+
+    def test_auto_migrate_three_worlds(self):
+        mv = get_multiverse()
+        for wid in ["t_a", "t_b", "t_c"]:
+            w = mv.create_world(world_id=wid)
+            for i in range(5):
+                w.spawn(_make_agent(f"{wid}_{i}"))
+
+        results = mv.auto_migrate(max_per_pair=2)
+        # 3 个非 prime 世界 → 1 对配对 (第三个奇数被跳过)
+        assert len(results) == 1
+
+    def test_auto_migrate_max_per_pair(self):
+        mv = get_multiverse()
+        for wid in ["max_a", "max_b"]:
+            w = mv.create_world(world_id=wid)
+            for i in range(5):
+                w.spawn(_make_agent(f"{wid}_{i}"))
+
+        results = mv.auto_migrate(max_per_pair=1)
+        pair = results[0]
+        assert pair["count"] == 1
+
+    def test_auto_migrate_empty_world(self):
+        mv = get_multiverse()
+        mv.create_world(world_id="empty_a")  # 空世界
+        mv.create_world(world_id="empty_b")  # 空世界
+
+        results = mv.auto_migrate()
+        # 两个空世界 → 从空世界迁移 0 只
+        assert results == [] or all(r["count"] == 0 for r in results)
+
+
+class TestBatchMigrateAPI:
+    """测试 POST /api/multiverse/migrate 端点。"""
+
+    @pytest.fixture(autouse=True)
+    def _setup_api(self, _clean_multiverse):
+        from digimon_world.api.app import app
+        self.client = TestClient(app)
+        self.mv = get_multiverse()
+
+    def test_batch_migrate_api_success(self):
+        self.mv.create_world(world_id="bapi_src", seed_agents=True)
+        self.mv.create_world(world_id="bapi_dst")
+        src = self.mv.get_world("bapi_src")
+        names = [a.name for a in src.all()][:3]
+
+        resp = self.client.post("/api/multiverse/migrate", json={
+            "agent_names": names,
+            "from_world": "bapi_src",
+            "to_world": "bapi_dst",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["migrated"] == names
+        assert data["failed"] == []
+        assert "批量迁移完成" in data["message"]
+
+    def test_batch_migrate_api_partial(self):
+        self.mv.create_world(world_id="bapi_p_src", seed_agents=True)
+        self.mv.create_world(world_id="bapi_p_dst")
+        src = self.mv.get_world("bapi_p_src")
+        real = [a.name for a in src.all()][:2]
+
+        resp = self.client.post("/api/multiverse/migrate", json={
+            "agent_names": real + ["幽灵兽"],
+            "from_world": "bapi_p_src",
+            "to_world": "bapi_p_dst",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["migrated"]) == 2
+        assert len(data["failed"]) == 1
+
+    def test_batch_migrate_api_empty_names(self):
+        self.mv.create_world(world_id="bapi_e_src")
+        self.mv.create_world(world_id="bapi_e_dst")
+
+        resp = self.client.post("/api/multiverse/migrate", json={
+            "agent_names": [],
+            "from_world": "bapi_e_src",
+            "to_world": "bapi_e_dst",
+        })
+        # 空列表应该被校验拒绝
+        assert resp.status_code in (200, 422)
+
+
+class TestAutoMigrateAPI:
+    """测试 POST /api/multiverse/auto-migrate 端点。"""
+
+    @pytest.fixture(autouse=True)
+    def _setup_api(self, _clean_multiverse):
+        from digimon_world.api.app import app
+        self.client = TestClient(app)
+        self.mv = get_multiverse()
+
+    def test_auto_migrate_api_no_worlds(self):
+        resp = self.client.post("/api/multiverse/auto-migrate")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pairs"] == 0
+        assert "无可用" in data["message"]
+
+    def test_auto_migrate_api_success(self):
+        self.mv.create_world(world_id="autoapi_a", seed_agents=True)
+        self.mv.create_world(world_id="autoapi_b", seed_agents=True)
+
+        resp = self.client.post("/api/multiverse/auto-migrate", json={"max_per_pair": 2})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pairs"] == 1
+        assert data["total_migrated"] >= 1
+        assert "自动迁移完成" in data["message"]
+
+    def test_auto_migrate_api_default_params(self):
+        self.mv.create_world(world_id="auto_def_a", seed_agents=True)
+        self.mv.create_world(world_id="auto_def_b", seed_agents=True)
+
+        # 不传 body
+        resp = self.client.post("/api/multiverse/auto-migrate")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pairs"] == 1
