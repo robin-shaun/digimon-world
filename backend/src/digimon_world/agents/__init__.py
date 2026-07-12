@@ -6,6 +6,7 @@
 详细设计: docs/DESIGN.md 第 3 节
 """
 from .digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
+from .chosen_child import ChosenChildAgent, Crest
 from .dialogue import Dialogue
 from .evolution import (
     EVOLUTION_CHAIN,
@@ -28,6 +29,8 @@ from .reflector import Reflection, Reflector
 __all__ = [
     "Badge",
     "BadgeSystem",
+    "ChosenChildAgent",
+    "Crest",
     "DigimonAgent",
     "Dialogue",
     "Planner",

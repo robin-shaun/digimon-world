@@ -202,9 +202,10 @@ def root() -> dict[str, Any]:
     return {
         "name": "DIGIMON WORLD",
         "version": __version__,
-        "phase": 11,
+        "phase": 12,
         "status": "ok",
         "digimon_count": world.count(),
+        "chosen_children_count": len(_chosen_children),
         "regions": list(world.regions.keys()),
     }
 
@@ -1116,6 +1117,118 @@ def list_world_digimon(world_id: str) -> dict[str, Any]:
     }
 
 
+# ---- Phase 12: 被选召的孩子 API ----
+
+
+# 内存存储(后续持久化到 SQLite)
+_chosen_children: dict[str, "ChosenChildAgent"] = {}
+
+
+class CreateChosenChildRequest(BaseModel):
+    """创建被选召的孩子。"""
+
+    name: str = Field(..., min_length=1, max_length=20, description="孩子名字")
+    crest: str = Field(default="courage", description="徽章类型")
+    partner_name: str | None = Field(default=None, description="搭档数码兽名字")
+
+
+class MoveChosenChildRequest(BaseModel):
+    """移动被选召的孩子。"""
+
+    dx: int = Field(..., ge=-200, le=200, description="X 方向位移(像素)")
+    dy: int = Field(..., ge=-200, le=200, description="Y 方向位移(像素)")
+
+
+class SetPartnerRequest(BaseModel):
+    """绑定搭档数码兽。"""
+
+    partner_name: str = Field(..., description="搭档数码兽名字")
+
+
+from ..agents.chosen_child import ChosenChildAgent, Crest  # noqa: E402
+
+
+@app.post("/api/chosen-children", status_code=201)
+def create_chosen_child(req: CreateChosenChildRequest) -> dict[str, Any]:
+    """创建一个被选召的孩子。"""
+    if req.name in _chosen_children:
+        raise HTTPException(status_code=409, detail=f"Chosen child '{req.name}' already exists")
+
+    try:
+        crest = Crest(req.crest)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid crest '{req.crest}'. Valid: {[c.value for c in Crest]}")
+
+    child = ChosenChildAgent(
+        name=req.name,
+        partner_name=req.partner_name,
+        crest=crest,
+    )
+    _chosen_children[req.name] = child
+    return child.to_dict()
+
+
+@app.get("/api/chosen-children")
+def list_chosen_children() -> dict[str, Any]:
+    """列出所有被选召的孩子。"""
+    return {
+        "count": len(_chosen_children),
+        "children": [c.to_dict() for c in _chosen_children.values()],
+    }
+
+
+@app.get("/api/chosen-children/{name}")
+def get_chosen_child(name: str) -> dict[str, Any]:
+    """获取指定被选召孩子的详情。"""
+    child = _chosen_children.get(name)
+    if child is None:
+        raise HTTPException(status_code=404, detail=f"Chosen child '{name}' not found")
+    child.touch()
+    return child.to_dict()
+
+
+@app.post("/api/chosen-children/{name}/move")
+def move_chosen_child(name: str, req: MoveChosenChildRequest) -> dict[str, Any]:
+    """移动被选召的孩子。"""
+    child = _chosen_children.get(name)
+    if child is None:
+        raise HTTPException(status_code=404, detail=f"Chosen child '{name}' not found")
+    new_pos = child.move(req.dx, req.dy)
+    return {
+        "name": name,
+        "position": {"x": new_pos[0], "y": new_pos[1]},
+    }
+
+
+@app.post("/api/chosen-children/{name}/partner")
+def set_chosen_child_partner(name: str, req: SetPartnerRequest) -> dict[str, Any]:
+    """绑定/更换被选召孩子的搭档数码兽。"""
+    child = _chosen_children.get(name)
+    if child is None:
+        raise HTTPException(status_code=404, detail=f"Chosen child '{name}' not found")
+
+    # 验证搭档数码兽存在
+    world = get_world()
+    partner = world.get(req.partner_name)
+    if partner is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Partner digimon '{req.partner_name}' not found in world",
+        )
+
+    child.set_partner(req.partner_name)
+    return child.to_dict()
+
+
+@app.delete("/api/chosen-children/{name}")
+def delete_chosen_child(name: str) -> dict[str, Any]:
+    """删除一个被选召的孩子。"""
+    if name not in _chosen_children:
+        raise HTTPException(status_code=404, detail=f"Chosen child '{name}' not found")
+    del _chosen_children[name]
+    return {"name": name, "deleted": True}
+
+
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----
 class ConnectionManager:
     def __init__(self) -> None:
@@ -1159,6 +1272,15 @@ async def _position_broadcaster() -> None:
                     "region_id": a.region_id,
                 }
                 for a in world.all()
+            ],
+            "chosen_children": [
+                {
+                    "name": c.name,
+                    "position": {"x": c.location[0], "y": c.location[1]},
+                    "region_id": c.region_id,
+                    "partner_name": c.partner_name,
+                }
+                for c in _chosen_children.values()
             ],
         }
         await manager.broadcast(payload)
