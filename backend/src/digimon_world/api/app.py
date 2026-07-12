@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
@@ -1292,6 +1294,71 @@ def delete_chosen_child(name: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Chosen child '{name}' not found")
     del _chosen_children[name]
     return {"name": name, "deleted": True}
+
+
+# ---- Phase 13③: 性能监控端点 ----
+@app.get("/api/health/perf")
+def health_perf() -> dict[str, Any]:
+    """返回运行时性能指标: 进程内存、DB 大小、活跃连接数等。"""
+    import sys
+
+    # 进程内存 (Linux only)
+    mem_bytes = 0
+    try:
+        import resource
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        mem_bytes = usage.ru_maxrss * 1024  # Linux: ru_maxrss is in KB
+    except (ImportError, AttributeError):
+        try:
+            # Fallback: /proc/self/status
+            with open("/proc/self/status") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        mem_bytes = int(line.split()[1]) * 1024
+                        break
+        except Exception:
+            mem_bytes = 0
+
+    # DB 文件大小
+    from ..world.persistence import DEFAULT_DB_PATH
+    db_path = DEFAULT_DB_PATH
+    db_size_bytes = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+
+    # 世界状态统计
+    world = get_world()
+    agent_count = world.count()
+    memory_count = sum(len(a.memory.entries) for a in world.all())
+    event_count = len(world.events)
+
+    # Python 进程信息
+    return {
+        "pid": os.getpid(),
+        "python_version": sys.version,
+        "uptime_seconds": time.time() - _START_TIME,
+        "memory": {
+            "rss_mb": round(mem_bytes / (1024 * 1024), 2),
+            "rss_bytes": mem_bytes,
+        },
+        "database": {
+            "path": db_path,
+            "size_mb": round(db_size_bytes / (1024 * 1024), 2),
+            "size_bytes": db_size_bytes,
+        },
+        "world": {
+            "agent_count": agent_count,
+            "total_memories": memory_count,
+            "event_count": event_count,
+            "ws_connections": len(manager.active),
+            "clock_tick": (
+                getattr(app.state, "scheduler", None)
+                and getattr(app.state.scheduler, "tick_count", 0) or 0
+            ),
+        },
+    }
+
+
+# 启动时间戳 (用于 uptime 计算)
+_START_TIME: float = time.time()
 
 
 # ---- WebSocket(Phase 1: 占位,周期性广播位置) ----

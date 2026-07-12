@@ -108,10 +108,40 @@ CREATE TABLE IF NOT EXISTS world_meta (
 );
 """
 
+# Phase 13③: Performance indexes for common query patterns
+_INDEXES = [
+    # memories: 按 agent 查询是最频繁的操作 (load 时按 agent_name 分组排序)
+    "CREATE INDEX IF NOT EXISTS idx_memories_agent ON memories(agent_name, node_id);",
+    # memories: 按时间范围查询 (未来可能需要)
+    "CREATE INDEX IF NOT EXISTS idx_memories_timestamp ON memories(timestamp);",
+    # events: 按类型查询 (前端按类型筛选事件)
+    "CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);",
+    # events: 按时间排序查询 (最近 N 条事件)
+    "CREATE INDEX IF NOT EXISTS idx_events_at ON events(at);",
+    # relationships: 从任一方向查找关系 (单 agent 详情页)
+    "CREATE INDEX IF NOT EXISTS idx_relationships_a ON relationships(agent_a);",
+    "CREATE INDEX IF NOT EXISTS idx_relationships_b ON relationships(agent_b);",
+]
+
+# Phase 13③: SQLite PRAGMA optimizations for performance
+PRAGMA_OPTIMIZE = [
+    "PRAGMA journal_mode=WAL;",       # Write-Ahead Logging: 读写不互斥, 大幅提升并发
+    "PRAGMA synchronous=NORMAL;",      # 正常同步 (WAL 模式下安全, 比 FULL 快 10-50x)
+    "PRAGMA cache_size=-64000;",       # 64MB 页缓存 (适合 175MB+ 数据库)
+    "PRAGMA mmap_size=268435456;",     # 256MB 内存映射 (大库加速)
+    "PRAGMA temp_store=MEMORY;",       # 临时表放内存
+    "PRAGMA busy_timeout=5000;",       # 5s 忙等待 (减少 "database is locked")
+]
+
 
 async def _ensure_schema(db: aiosqlite.Connection) -> None:
-    """建表(幂等)。"""
+    """建表 + 索引 + 性能优化(幂等)。"""
     await db.executescript(_SCHEMA)
+    # Phase 13③: Apply indexes and PRAGMA optimizations
+    for idx_sql in _INDEXES:
+        await db.execute(idx_sql)
+    for pragma_sql in PRAGMA_OPTIMIZE:
+        await db.execute(pragma_sql)
 
 
 def _ensure_parent_dir(db_path: str) -> None:
