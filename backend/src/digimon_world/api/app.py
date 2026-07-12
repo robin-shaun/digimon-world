@@ -2,14 +2,18 @@
 FastAPI App - 数码世界后端 HTTP 接口
 ====================================
 
-Phase 1 接口:
+Phase 1-11 接口:
 - GET  /                      — 健康检查 + 元信息
 - GET  /api/digimon           — 数码兽列表
 - GET  /api/digimon/{name}    — 单只数码兽详情
 - GET  /api/digimon/{name}/position — 单只数码兽位置
 - POST /api/digimon/{name}/move — 移动数码兽 (body: {dx, dy})
 - GET  /api/world             — 整个世界快照(给前端用)
-- WS   /ws/world              — 世界状态实时推送 (Phase 1 占位)
+- WS   /ws/world              — 世界状态实时推送
+- POST /api/battle/start      — 战斗引擎
+- GET  /api/vitality          — 世界活力指标
+- GET  /api/emergence         — 涌现指标 (Phase 11)
+- GET  /api/multiverse        — 多元宇宙管理 (Phase 9+)
 
 详细设计: docs/DESIGN.md 第 7 节
 """
@@ -173,7 +177,7 @@ async def lifespan(_app: FastAPI):
 # ---- App ----
 app = FastAPI(
     title="DIGIMON WORLD API",
-    description="数码宝贝虚拟世界后端 (Phase 1)",
+    description="数码宝贝虚拟世界后端 (Phase 11)",
     version=__version__,
     lifespan=lifespan,
 )
@@ -198,7 +202,7 @@ def root() -> dict[str, Any]:
     return {
         "name": "DIGIMON WORLD",
         "version": __version__,
-        "phase": 1,
+        "phase": 11,
         "status": "ok",
         "digimon_count": world.count(),
         "regions": list(world.regions.keys()),
