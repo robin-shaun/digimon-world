@@ -83,6 +83,12 @@ from .seasons import (
     get_season_system,
     reset_season_system,
 )
+from .snapshots import (
+    SnapshotManager,
+    SnapshotMeta,
+    get_snapshot_manager,
+    reset_snapshot_manager,
+)
 from .timeline import (
     TimelineSystem,
     get_timeline_system,
@@ -135,6 +141,8 @@ __all__ = [
     "RelationshipTracker",
     "Season",
     "SeasonSystem",
+    "SnapshotManager",
+    "SnapshotMeta",
     "StoryDirector",
     "StoryEvent",
     "TimelineSystem",
@@ -171,6 +179,7 @@ __all__ = [
     "reset_multiverse",
     "reset_registry",
     "reset_season_system",
+    "reset_snapshot_manager",
     "reset_timeline_system",
     "reset_tracker",
     "reset_weather_system",

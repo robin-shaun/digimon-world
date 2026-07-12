@@ -58,6 +58,7 @@ from ..world import (
     get_landmark_system,
     get_multiverse,
     get_registry,
+    get_snapshot_manager,
     get_timeline_system,
     get_tracker,
     get_weather_system,
@@ -342,6 +343,58 @@ async def load_world() -> dict[str, Any]:
     world = get_world()
     loaded = await persistence.load(world, get_tracker())
     return {"status": "loaded" if loaded else "no_data", "digimon_count": world.count()}
+
+
+# ---- Phase 13⑤: 世界快照存档 API ----
+class SnapshotCreateRequest(BaseModel):
+    """创建快照时可选的备注。"""
+    note: str = ""
+
+
+@app.get("/api/snapshots")
+async def list_snapshots() -> dict[str, Any]:
+    """列出所有快照(按时间降序)。"""
+    mgr = get_snapshot_manager()
+    snapshots = await mgr.list()
+    return {"count": len(snapshots), "snapshots": snapshots}
+
+
+@app.post("/api/snapshots")
+async def create_snapshot(req: SnapshotCreateRequest = SnapshotCreateRequest()) -> dict[str, Any]:
+    """手动创建世界快照。"""
+    world = get_world()
+    scheduler: Optional[WorldScheduler] = getattr(app.state, "scheduler", None)
+    tick = scheduler.tick_count if scheduler is not None else 0
+
+    mgr = get_snapshot_manager()
+    snapshot_id = await mgr.create(
+        world_db_path=persistence.DEFAULT_DB_PATH,
+        world_tick=tick,
+        digimon_count=world.count(),
+        note=req.note or "",
+    )
+    if snapshot_id is None:
+        return {"status": "error", "detail": "snapshot create failed (check world.db exists)"}
+
+    return {"status": "created", "snapshot_id": snapshot_id, "tick": tick}
+
+
+@app.post("/api/snapshots/{snapshot_id}/restore")
+async def restore_snapshot(snapshot_id: str) -> dict[str, Any]:
+    """从指定快照回滚世界状态。
+
+    注意: 回滚后内存里的 world_state 不会自动更新。
+    需要手动调用 POST /api/world/load 加载回滚后的 world.db。
+    """
+    mgr = get_snapshot_manager()
+    ok = await mgr.restore(snapshot_id, persistence.DEFAULT_DB_PATH)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Snapshot '{snapshot_id}' not found or restore failed")
+
+    # 自动重新加载到内存
+    world = get_world()
+    await persistence.load(world, get_tracker())
+    return {"status": "restored", "snapshot_id": snapshot_id, "digimon_count": world.count()}
 
 
 @app.get("/api/scheduler/status")

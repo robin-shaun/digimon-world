@@ -50,6 +50,9 @@ DEFAULT_TICK_SECONDS = 1.0
 # 每隔多少 tick 自动持久化一次世界状态
 SAVE_INTERVAL_TICKS = 100
 
+# Phase 13⑤: 每隔多少 tick 创建一次快照 (0 = 禁用)
+SNAPSHOT_INTERVAL_TICKS = 500
+
 # 相遇半径(像素): 距离小于此值才可能触发对话
 DIALOGUE_RADIUS = 200                     # 相遇触发距离(px),10只数码兽需更宽范围
 DIALOGUE_COOLDOWN_MINUTES = 10            # 对话冷却(世界分钟)
@@ -291,6 +294,9 @@ class WorldScheduler:
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
             await self._auto_save_world()
+            # Phase 13⑤: 每次 save 之后也创建快照 (每 SNAPSHOT_INTERVAL_TICKS)
+            if SNAPSHOT_INTERVAL_TICKS > 0 and self._tick_count % SNAPSHOT_INTERVAL_TICKS == 0:
+                await self._auto_snapshot_world()
         return events
 
     async def _auto_save_world(self) -> None:
@@ -305,6 +311,23 @@ class WorldScheduler:
                 await persistence.save(self._world, self._relationships)
         except Exception as e:
             logger.warning("auto-save failed at tick %d: %s", self._tick_count, e)
+
+    async def _auto_snapshot_world(self) -> None:
+        """自动创建世界快照。失败只记 warning,不打断 tick 循环。"""
+        try:
+            from .persistence import DEFAULT_DB_PATH
+            from .snapshots import get_snapshot_manager
+
+            db_path = self._save_db_path or DEFAULT_DB_PATH
+            mgr = get_snapshot_manager()
+            await mgr.create(
+                world_db_path=db_path,
+                world_tick=self._tick_count,
+                digimon_count=self._world.count(),
+                note="auto",
+            )
+        except Exception as e:
+            logger.warning("auto-snapshot failed at tick %d: %s", self._tick_count, e)
 
     async def _maybe_write_diaries(self) -> None:
         """检测世界日期跨天,触发所有 agent 写日记。
