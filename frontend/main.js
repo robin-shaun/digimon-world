@@ -554,6 +554,29 @@
         }
     });
 
+    // Phase 12: 移动端触控支持 — touchstart 等效 click
+    canvas.addEventListener('touchstart', (ev) => {
+        if (ev.touches.length !== 1) return;  // 忽略多点触控
+        ev.preventDefault();  // 防止双击缩放/滚动
+        const rect = canvas.getBoundingClientRect();
+        const mx = (ev.touches[0].clientX - rect.left) * (W / rect.width);
+        const my = (ev.touches[0].clientY - rect.top) * (H / rect.height);
+
+        for (const d of state.digimon) {
+            const dx = mx - d.position.x;
+            const dy = my - d.position.y;
+            if (dx * dx + dy * dy < 28 * 28) {  // 触控用更大的碰撞半径
+                state.selectedName = d.name;
+                showSidebar(d);
+                render();
+                return;
+            }
+        }
+        state.selectedName = null;
+        hideSidebar();
+        render();
+    }, { passive: false });
+
     // ══════════════════════════════════════════════
     //  侧栏
     // ══════════════════════════════════════════════
@@ -808,6 +831,7 @@
         events: [],     // 最近事件 (最新在后)
         ratio: null,    // 当前时间流速
         enabled: false, // 面板是否处于显示状态
+        isMobile: false,// Phase 12: 当前是否移动端布局
         relOk: true,    // GET /api/relationships 最近一次是否成功
         stateOk: true,  // GET /api/director/state 最近一次是否成功
         leaderboard: { battle: [], bond: [], badges: [] }, // 三维排行榜数据
@@ -1155,11 +1179,53 @@
     function updateDirectorVisibility() {
         const panel = document.getElementById('director-panel');
         if (!panel) return;
-        const shouldShow = window.innerWidth >= DIRECTOR_MIN_WIDTH;
-        if (shouldShow === director.enabled) return;
-        director.enabled = shouldShow;
-        panel.classList.toggle('open', shouldShow);
-        if (shouldShow) refreshDirector();
+        const isMobile = window.innerWidth < DIRECTOR_MIN_WIDTH;
+        if (isMobile === director.isMobile) return;  // 无变化
+        director.isMobile = isMobile;
+
+        if (isMobile) {
+            // 移动端: 面板变为底部抽屉, 加浮动按钮切换
+            panel.classList.remove('open');
+            ensureDirectorToggleBtn();
+        } else {
+            // 桌面端: 恢复固定右侧面板
+            panel.classList.add('open');
+            removeDirectorToggleBtn();
+            refreshDirector();
+        }
+    }
+
+    /** 移动端创建/获取导演面板浮动按钮 */
+    function ensureDirectorToggleBtn() {
+        if (document.getElementById('director-toggle-btn')) return;
+        const btn = document.createElement('button');
+        btn.id = 'director-toggle-btn';
+        btn.className = 'director-toggle-btn';
+        btn.textContent = '🎬';
+        btn.title = '导演面板';
+        btn.addEventListener('click', () => {
+            const panel = document.getElementById('director-panel');
+            if (!panel) return;
+            const isOpen = panel.classList.contains('open');
+            if (isOpen) {
+                panel.classList.remove('open');
+                btn.textContent = '🎬';
+            } else {
+                panel.classList.add('open');
+                btn.textContent = '✕';
+                refreshDirector();
+            }
+        });
+        document.body.appendChild(btn);
+        // 移动端显示浮动按钮
+        btn.style.display = 'flex';
+        btn.style.alignItems = 'center';
+        btn.style.justifyContent = 'center';
+    }
+
+    function removeDirectorToggleBtn() {
+        const btn = document.getElementById('director-toggle-btn');
+        if (btn) btn.remove();
     }
 
     /** 绑定导演面板交互 + 启动 30s 刷新 */
@@ -1411,7 +1477,7 @@
     // 暴露调试接口
     window.DigimonWorld = {
         version: '1.0.0',
-        phase: 1,
+        phase: 12,
         getState: () => state,
         refresh: async () => { await fetchDigimon(); render(); },
     };

@@ -815,3 +815,198 @@ footer {
     background: rgba(255, 215, 0, 0.25);
     color: var(--accent-gold);
 }
+
+/* ══════════════════════════════════════════════
+   Phase 12: 移动端 H5 适配 (响应式 + 触控)
+   ══════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    /* ---- 全局 ---- */
+    body {
+        align-items: flex-start;
+        padding: 0;
+    }
+
+    #app {
+        max-width: 100%;
+        padding: 12px 8px;
+    }
+
+    /* ---- 头部 ---- */
+    h1 {
+        font-size: 28px;
+        letter-spacing: 2px;
+    }
+
+    .subtitle {
+        font-size: 11px;
+        letter-spacing: 1px;
+        margin-top: 4px;
+    }
+
+    /* ---- 主题切换按钮 (缩小 + 右上角) ---- */
+    .theme-toggle {
+        top: 8px;
+        left: auto;
+        right: 8px;
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+
+    /* ---- 导航栏 (紧凑 + 可滚) ---- */
+    .main-nav {
+        gap: 4px;
+        margin-top: 10px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;
+    }
+
+    .main-nav .nav-link {
+        padding: 6px 12px;
+        font-size: 12px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* ---- Canvas 容器 (满宽缩放) ---- */
+    .canvas-wrap {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+
+    #world-map {
+        border-radius: 4px;
+        border-width: 1px;
+        box-shadow: 0 0 16px var(--shadow-accent);
+    }
+
+    /* ---- 侧栏 → 底部抽屉 ---- */
+    .sidebar {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-height: 55vh;
+        min-height: unset;
+        border-radius: 14px 14px 0 0;
+        padding: 16px;
+        transform: translateY(100%);
+        transition: transform 0.3s ease-out;
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+        overflow-y: auto;
+        z-index: 30;
+        display: block;
+    }
+
+    .sidebar.open {
+        display: block;
+        transform: translateY(0);
+    }
+
+    /* 侧栏拖拽手柄 */
+    .sidebar::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: var(--text-muted);
+        border-radius: 2px;
+        margin: 0 auto 12px auto;
+    }
+
+    .sidebar h3 {
+        font-size: 18px;
+    }
+
+    .sidebar .poke {
+        padding: 12px;
+        font-size: 16px;
+    }
+
+    /* ---- 导演面板 → 左下角浮动按钮 + 展开 ---- */
+    .director-panel {
+        position: fixed;
+        top: auto;
+        bottom: 70px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        height: auto;
+        max-height: 60vh;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        z-index: 25;
+        transform: translateY(120%);
+        transition: transform 0.3s ease-out;
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    .director-panel.open {
+        display: block;
+        transform: translateY(0);
+    }
+
+    /* 导演面板浮动按钮 */
+    .director-toggle-btn {
+        position: fixed;
+        bottom: 16px;
+        left: 16px;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+        color: var(--btn-text);
+        border: none;
+        font-size: 22px;
+        cursor: pointer;
+        z-index: 26;
+        box-shadow: 0 2px 16px rgba(0, 212, 255, 0.3);
+        display: none;  /* 仅移动端显示 */
+    }
+
+    .director-toggle-btn:active {
+        transform: scale(0.95);
+    }
+
+    /* ---- 状态栏 (换行 + 紧凑) ---- */
+    #status-bar {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 12px;
+        font-size: 11px;
+        margin-top: 10px;
+    }
+
+    #status-bar span {
+        letter-spacing: 0.5px;
+    }
+
+    /* ---- 页脚 ---- */
+    footer {
+        margin-top: 12px;
+        font-size: 10px;
+        padding: 0 8px;
+    }
+}
+
+/* 小屏手机 (< 400px) 额外收紧 */
+@media (max-width: 400px) {
+    h1 { font-size: 22px; }
+    .subtitle { font-size: 10px; }
+
+    .main-nav .nav-link {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+
+    #status-bar {
+        font-size: 10px;
+        gap: 4px;
+        padding: 6px 8px;
+    }
+}
