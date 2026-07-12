@@ -23,16 +23,26 @@ from .healing import (
     get_healing_system,
     reset_healing_system,
 )
+from .meme import (
+    Meme,
+    MemeCategory,
+    MemePool,
+    CATEGORY_SPREAD_RATE,
+)
 from .planner import Planner
 from .reflector import Reflection, Reflector
 
 __all__ = [
     "Badge",
     "BadgeSystem",
+    "CATEGORY_SPREAD_RATE",
     "ChosenChildAgent",
     "Crest",
     "DigimonAgent",
     "Dialogue",
+    "Meme",
+    "MemeCategory",
+    "MemePool",
     "Planner",
     "Reflection",
     "Reflector",
