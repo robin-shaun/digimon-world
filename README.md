@@ -44,7 +44,7 @@ digimon-world/
 │   │   ├── world/           # 世界状态 + 关系 + 经济 + 灾难 + 节日 + 活力
 │   │   ├── llm/             # LLM 客户端
 │   │   └── api/             # FastAPI 接口
-|   └── tests/               # 484 测试
+|   └── tests/               # 567 测试
 └── src/index.js             # Cloudflare Worker (API反代)
 ```
 
@@ -64,7 +64,7 @@ digimon-world/
 | **9** | 多元宇宙 — 多世界副本 API + 种子数码兽 + 世界管理 | ✅ 完成 |
 | **10** | 环境自主演化 — 昼夜+天气+生态+环境事件 | ✅ 完成 |
 | **11** | 规模化 3→30+ agents + LLM 批量调用 + 涌现指标 API + Canvas 适配 | ✅ 完成 |
-| **12** | 跨世界联动 + 被选召的孩子 POC + 长期稳定性 | ⏳ 进行中 |
+|| **12** | 跨世界联动 + 被选召的孩子 POC + 长期稳定性 | ✅ 完成 |
 
 详细见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
@@ -76,7 +76,7 @@ digimon-world/
 | 后端 | Python 3.11 + FastAPI + SQLite |
 | AI | Anthropic Claude (Opus 4.8 + Haiku 4.5) via 中转 |
 | 部署 | Cloudflare Workers (前端) + Cloudflare Tunnel (后端) |
-- **测试**: pytest (487 passed)
+- **测试**: pytest (567 passed)
 
 ## 🚀 本地启动
 
