@@ -201,6 +201,11 @@
                     <span class="value" id="s-rel">--</span>
                     <span class="sub" id="s-rel-sub">友好 -- · 敌对 --</span>
                 </div>
+                <div class="stat-card" style="border-color: var(--accent-cyan);">
+                    <span class="label">🧬 涌现分数</span>
+                    <span class="value" id="s-ems">--</span>
+                    <span class="sub" id="s-ems-sub">Agents: -- · Events: --</span>
+                </div>
             </section>
 
             <section class="panels">
@@ -234,10 +239,40 @@
                     </ul>
                 </div>
             </section>
+
+            <section class="panels" style="margin-top: 16px;">
+                <div class="panel">
+                    <h2>🧬 社交网络 (Social Network)</h2>
+                    <ul class="kv-list" id="em-network">
+                        <li class="empty">加载中…</li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h2>🎯 行为多样性 (Behavioral Diversity)</h2>
+                    <ul class="kv-list" id="em-behavior">
+                        <li class="empty">加载中…</li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h2>💭 情绪景观 (Emotional Landscape)</h2>
+                    <ul class="kv-list" id="em-mood">
+                        <li class="empty">加载中…</li>
+                    </ul>
+                </div>
+
+                <div class="panel">
+                    <h2>⚡ 涌现事件 (Emergent Events)</h2>
+                    <ul class="kv-list" id="em-events">
+                        <li class="empty">加载中…</li>
+                    </ul>
+                </div>
+            </section>
         </main>
 
         <footer>
-            <p>每 10 秒自动刷新 · 指标由多个接口聚合 · DIGIMON WORLD Phase 5</p>
+            <p>每 10 秒自动刷新 · 指标由多个接口聚合 · DIGIMON WORLD Phase 11</p>
         </footer>
     </div>
 
@@ -290,6 +325,13 @@
             relLegend: document.getElementById('rel-legend'),
             lbBattle: document.getElementById('lb-battle'),
             evtTypes: document.getElementById('evt-types'),
+            // Phase 11: 涌现指标
+            ems: document.getElementById('s-ems'),
+            emsSub: document.getElementById('s-ems-sub'),
+            emNetwork: document.getElementById('em-network'),
+            emBehavior: document.getElementById('em-behavior'),
+            emMood: document.getElementById('em-mood'),
+            emEvents: document.getElementById('em-events'),
         };
 
         function esc(s) {
@@ -411,6 +453,69 @@
                 : `<span class="dot off">●</span> ${esc(msg || '后端不可达')}`;
         }
 
+        // ─── Phase 11: 涌现指标渲染 ───
+
+        function renderEmergence(em) {
+            if (!em || em.agent_count === 0) {
+                el.ems.textContent = '--';
+                el.emsSub.textContent = '暂无数据';
+                el.emNetwork.innerHTML = '<li class="empty">暂无数据</li>';
+                el.emBehavior.innerHTML = '<li class="empty">暂无数据</li>';
+                el.emMood.innerHTML = '<li class="empty">暂无数据</li>';
+                el.emEvents.innerHTML = '<li class="empty">暂无数据</li>';
+                return;
+            }
+
+            // 涌现分数大卡
+            el.ems.textContent = (em.emergence_score ?? '--').toFixed(1);
+            el.emsSub.textContent = `Agents: ${em.agent_count} · 涌现事件: ${em.emergent_event_count ?? 0}`;
+
+            // 社交网络
+            const clsCoef = (em.clustering_coefficient ?? 0).toFixed(4);
+            const density = (em.network_density ?? 0).toFixed(4);
+            const avgPath = (em.avg_path_length ?? 0).toFixed(2);
+            const modul = (em.modularity ?? 0).toFixed(4);
+            el.emNetwork.innerHTML = [
+                { k: '聚类系数', v: clsCoef, hint: '邻居抱团程度' },
+                { k: '网络密度', v: density, hint: '实际边/可能边' },
+                { k: '平均路径', v: avgPath, hint: '六度分隔?' },
+                { k: '模块度', v: modul, hint: '社区结构强度' },
+            ].map(r => `<li><span class="k" title="${esc(r.hint)}">${esc(r.k)}</span><span class="v">${r.v}</span></li>`).join('');
+
+            // 行为多样性
+            const entropy = (em.plan_entropy ?? 0).toFixed(4);
+            const types = em.dominant_plan_types || [];
+            el.emBehavior.innerHTML = [
+                { k: '行为熵', v: entropy, hint: '越高越多樣' },
+                { k: '类型数', v: em.plan_type_count ?? 0, hint: '不同行为种类' },
+                { k: '主导行为', v: types.length ? types.slice(0, 3).join(', ') : '--', hint: 'Top 3 行为模式' },
+            ].map(r => `<li><span class="k" title="${esc(r.hint)}">${esc(r.k)}</span><span class="v">${typeof r.v === 'number' ? r.v : esc(r.v)}</span></li>`).join('');
+
+            // 情绪景观
+            const joy = (em.avg_mood_joy ?? 0).toFixed(3);
+            const fear = (em.avg_mood_fear ?? 0).toFixed(3);
+            const anger = (em.avg_mood_anger ?? 0).toFixed(3);
+            const sadness = (em.avg_mood_sadness ?? 0).toFixed(3);
+            const contagion = (em.emotional_contagion ?? 0).toFixed(4);
+            const variance = (em.emotional_variance ?? 0).toFixed(4);
+            el.emMood.innerHTML = [
+                { k: 'Joy', v: joy, cls: 'pos' },
+                { k: 'Fear', v: fear, cls: '' },
+                { k: 'Anger', v: anger, cls: '' },
+                { k: 'Sadness', v: sadness, cls: '' },
+                { k: '情绪传染', v: contagion, hint: '相邻相似度' },
+                { k: '情绪方差', v: variance, hint: '多样性' },
+            ].map(r => `<li><span class="k" title="${esc(r.hint || '')}">${esc(r.k)}</span><span class="v${r.cls ? ' ' + r.cls : ''}">${r.v}</span></li>`).join('');
+
+            // 涌现事件
+            const evts = em.recent_emergent_events || [];
+            el.emEvents.innerHTML = evts.length
+                ? evts.map((e, i) => `<li><span class="k">${i + 1}. ${esc(e)}</span></li>`).join('')
+                : '<li class="empty">暂无涌现事件</li>';
+        }
+
+        // ─── 数据获取 ───
+
         async function fetchJSON(path) {
             const res = await fetch(`${API_BASE}${path}`);
             if (!res.ok) throw new Error(`HTTP ${res.status} @ ${path}`);
@@ -420,13 +525,14 @@
         async function refresh() {
             try {
                 // 并行取多个接口; 用 allSettled 让个别接口挂掉不至于整页失败。
-                const [status, state, battles, rels, world, board] = await Promise.allSettled([
+                const [status, state, battles, rels, world, board, emergence] = await Promise.allSettled([
                     fetchJSON('/api/scheduler/status'),
                     fetchJSON('/api/director/state'),
                     fetchJSON('/api/battle/recent?limit=20'),
                     fetchJSON('/api/relationships'),
                     fetchJSON('/api/world'),
                     fetchJSON('/api/leaderboard?top=5'),
+                    fetchJSON('/api/emergence'),
                 ]);
 
                 // 至少调度器/导演状态之一要成功, 否则视为后端不可达
@@ -478,6 +584,11 @@
                 // 战斗胜场榜
                 if (board.status === 'fulfilled') {
                     renderBattleBoard(board.value.battle || []);
+                }
+
+                // Phase 11: 涌现指标
+                if (emergence.status === 'fulfilled') {
+                    renderEmergence(emergence.value);
                 }
 
                 const now = new Date();
