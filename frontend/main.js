@@ -403,6 +403,22 @@
                 ctx.arc(x, dy, 16, 0, Math.PI * 2);
                 ctx.stroke();
 
+                // Phase 13-②: 移动轨迹拖尾 — 运动时画 2 个渐隐残影
+                if (animSt && animSt.isMoving()) {
+                    const angle = animSt.moveAngle();
+                    const cosA = Math.cos(angle);
+                    const sinA = Math.sin(angle);
+                    for (let i = 1; i <= 2; i++) {
+                        const alpha = 0.18 - i * 0.06;
+                        const tx = x - cosA * i * 10;
+                        const ty = dy - sinA * i * 10;
+                        ctx.fillStyle = spriteAccent + Math.round(alpha * 255).toString(16).padStart(2, '0');
+                        ctx.beginPath();
+                        ctx.arc(tx, ty, 6 - i, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
                 // Emoji 缩小 (with idle scale for breathing effect)
                 ctx.save();
                 ctx.translate(x, dy);

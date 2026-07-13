@@ -230,6 +230,12 @@ window.ANIM = (function () {
             return this.moveTween !== null && !this.moveTween.finished();
         },
 
+        /** 移动方向角度 (弧度), 静止时返回 0 */
+        moveAngle: function () {
+            if (!this.isMoving()) return 0;
+            return Math.atan2(this.targetY - this.fromY, this.targetX - this.fromX);
+        },
+
         /** 渲染位置 (插值后) */
         renderX: function () { return this.currentX; },
         renderY: function () { return this.currentY; },
