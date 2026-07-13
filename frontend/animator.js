@@ -334,6 +334,7 @@ window.ANIM = (function () {
         FrameAnimator: FrameAnimator,
         TweenAnimator: TweenAnimator,
         DigimonAnimState: DigimonAnimState,
+        AnimManager: AnimManager,
         manager: animManager,
     };
 })();
