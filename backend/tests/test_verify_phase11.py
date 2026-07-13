@@ -6,7 +6,6 @@ Phase 11 CI 兜底测试 — 30-Agent 一致性验证
 用于 CI pipeline,零网络依赖。
 """
 
-import asyncio
 
 import pytest
 

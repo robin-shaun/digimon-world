@@ -2,7 +2,6 @@
 import pytest
 from digimon_world.world.world_state import (
     FILE_ISLAND,
-    SubRegion,
     get_world,
     reset_world,
 )

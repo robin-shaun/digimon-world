@@ -15,6 +15,7 @@ WorldState - 内存中的世界状态
 
 from __future__ import annotations
 
+import random as _random
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -477,7 +478,7 @@ class WorldState:
         agent.current_plan = "从数码蛋中苏醒,感受创始村的温暖"
 
         # 写重生记忆
-        desc = f"I was defeated but reborn as a Digitama at the Village of Beginnings."
+        desc = "I was defeated but reborn as a Digitama at the Village of Beginnings."
         agent.memory.add(
             event={"description": desc, "type": "rebirth"},
             importance=10,
@@ -602,8 +603,6 @@ _LATENT_DESIRES = (
     "想组建团队", "想复仇", "想学习新技能", "想守护同伴",
     "想支配数码世界", "想找到训练师", "想到达进化神殿", "想回到创始村",
 )
-
-import random as _random
 
 def _spawn_from_seed(world: WorldState, seed: dict) -> DigimonAgent:
     """从种子数据创建一只数码兽,附随机欲望。"""

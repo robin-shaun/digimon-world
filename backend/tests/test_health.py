@@ -73,7 +73,7 @@ async def test_persistence_indexes_applied() -> None:
     import tempfile
 
     import aiosqlite
-    from digimon_world.world.persistence import _SCHEMA, _INDEXES, PRAGMA_OPTIMIZE, _ensure_schema
+    from digimon_world.world.persistence import _INDEXES, _ensure_schema
 
     # 临时数据库
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)

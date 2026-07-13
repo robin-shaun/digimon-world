@@ -37,24 +37,20 @@ from pydantic import BaseModel, Field
 from .. import __version__
 from .pokedex import router as pokedex_router
 from ..agents.achievements import AchievementSystem
-from ..agents.badges import Badge, BadgeSystem
+from ..agents.badges import BadgeSystem
 from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
 from ..agents.healing import get_healing_system
 from ..battle import BattleEngine, BattleResult, spar
 from ..llm.client import get_client
 from ..world import (
-    VitalitySnapshot,
     WorldClock,
     WorldScheduler,
-    WorldState,
     compute_vitality,
     get_dark_gear_system,
     get_daynight_system,
     get_director,
     get_ecology_system,
-    get_env_events_system,
-    get_festival_system,
     get_landmark_system,
     get_multiverse,
     get_registry,

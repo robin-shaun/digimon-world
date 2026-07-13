@@ -3,13 +3,10 @@
 =====================================
 """
 
-import pytest
 from digimon_world.agents.meme import (
     CATEGORY_SPREAD_RATE,
-    Meme,
     MemeCategory,
     MemePool,
-    _make_meme_id,
 )
 
 
@@ -258,7 +255,7 @@ class TestCulturalMetrics:
     def test_agent_memes(self):
         """查看 agent 的模因列表。"""
         pool = MemePool()
-        m1 = pool.create("A知道的消息", MemeCategory.RUMOR, "Agumon")
+        pool.create("A知道的消息", MemeCategory.RUMOR, "Agumon")
         agent_memes = pool.agent_memes("Agumon")
         assert len(agent_memes) == 1
         assert agent_memes[0]["content"] == "A知道的消息"

@@ -29,7 +29,6 @@ from typing import Iterable, Optional
 
 from .digimon_agent import (
     DigimonAgent,
-    DigimonAttribute,
     DigimonStats,
     EvolutionStage,
 )

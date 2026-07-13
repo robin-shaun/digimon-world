@@ -3,12 +3,10 @@
 import pytest
 from digimon_world.world.ecology import (
     EcologySystem,
-    RegionEcology,
-    FOOD_REGEN_PER_TICK,
     HUNGER_THRESHOLD,
     reset_ecology_system,
 )
-from digimon_world.world.world_state import WorldState, get_world, reset_world
+from digimon_world.world.world_state import get_world, reset_world
 from digimon_world.agents.digimon_agent import DigimonAgent
 
 
@@ -120,8 +118,6 @@ def test_ecology_drought_detection(fresh_world):
 
 
 def test_ecology_season_vegetation_effect():
-    eco = EcologySystem()
-
     # 冬天植被下降
     from digimon_world.world.ecology import _season_vegetation_mult
     assert _season_vegetation_mult("winter") == 0.80

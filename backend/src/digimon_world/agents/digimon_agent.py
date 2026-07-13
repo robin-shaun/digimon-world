@@ -15,7 +15,6 @@ DigimonAgent - 数码兽智能体核心循环
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import random
 from collections import Counter

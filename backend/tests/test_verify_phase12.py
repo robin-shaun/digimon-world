@@ -244,7 +244,6 @@ async def test_no_memory_leak_on_many_ticks(fake_client):
 
     # 后 50 tick 的记忆增长应 <= 前 50 tick
     if len(mem_samples) >= 3:
-        growth_0_50 = mem_samples[0][1]  # 初始采样
         growth_50_100 = mem_samples[1][1] - mem_samples[0][1]
         growth_100_150 = mem_samples[2][1] - mem_samples[1][1]
         # 后期增长不应超过初期的 3 倍 (给冷启动留空间)

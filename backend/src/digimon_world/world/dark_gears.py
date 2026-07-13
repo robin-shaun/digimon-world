@@ -33,7 +33,7 @@ DarkGearSystem - 黑色齿轮感染机制
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:

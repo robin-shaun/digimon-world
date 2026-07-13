@@ -144,7 +144,7 @@ def test_evolve_changes_stage_and_species(agumon, evo_system):
 
 def test_evolve_scales_stats(agumon, evo_system):
     """进化后 hp/max_hp/attack 应该是 1.5 倍 (int 截断)。"""
-    result = evo_system.evolve(agumon, reason=EvolutionReason.BATTLE_VICTORIES)
+    evo_system.evolve(agumon, reason=EvolutionReason.BATTLE_VICTORIES)
     assert agumon.stats.max_hp == 150       # 100 * 1.5
     assert agumon.stats.hp == 150            # 当前 HP 也按上限放
     assert agumon.stats.attack == 45         # 30 * 1.5

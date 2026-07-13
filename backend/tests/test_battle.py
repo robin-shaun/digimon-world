@@ -19,7 +19,7 @@ from digimon_world.agents.digimon_agent import (
 from digimon_world.battle import llm_ai
 from digimon_world.battle.damage import DamageCalculator, is_strong_against
 from digimon_world.battle.engine import BattleEngine, MAX_ROUNDS
-from digimon_world.battle.types import ActionType, BattleResult
+from digimon_world.battle.types import BattleResult
 from digimon_world.llm.client import FakeLlmClient, LlmModel
 
 

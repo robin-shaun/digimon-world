@@ -26,7 +26,6 @@ from digimon_world.agents.achievements import (
     FIFTY_BATTLES_VICTORIES,
     FIRST_BATTLE_VICTORIES,
     HUNDRED_TICKS_MEMORY_COUNT,
-    SOCIAL_BUTTERFLY_MIN_UNIQUE,
     TEN_BATTLES_VICTORIES,
     Milestone,
 )

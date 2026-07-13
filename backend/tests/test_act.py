@@ -151,7 +151,6 @@ def test_act_sleep_triggers_rest(agumon: DigimonAgent) -> None:
 
 def test_act_fallback_when_no_plan(agumon: DigimonAgent) -> None:
     agumon.current_plan = None
-    old = agumon.location
     event = agumon.act()
     # 无计划 → 兜底走一步
     assert event["type"] == "moved"
@@ -393,8 +392,10 @@ async def test_act_fallback_4_directions_diverse(agumon: DigimonAgent) -> None:
             dy = to_xy[1] - from_xy[1]
             if (dx, dy) != (0, 0):
                 # 归一化到 4 方向
-                if dx != 0: dx = 1 if dx > 0 else -1
-                if dy != 0: dy = 1 if dy > 0 else -1
+                if dx != 0:
+                    dx = 1 if dx > 0 else -1
+                if dy != 0:
+                    dy = 1 if dy > 0 else -1
                 seen_dirs.add((dx, dy))
     # 至少看到 2 个不同方向
     assert len(seen_dirs) >= 2, f"只看到一个方向 {seen_dirs}, fallback 退化"

@@ -16,7 +16,7 @@ from digimon_world.world.multiverse import (
     get_multiverse,
     reset_multiverse,
 )
-from digimon_world.world.world_state import get_world, reset_world
+from digimon_world.world.world_state import reset_world
 
 
 @pytest.fixture(autouse=True)
@@ -725,7 +725,6 @@ class TestMultiverseStats:
         mv = get_multiverse()
         prime = mv.get_world("prime")
         assert prime is not None
-        before_count = prime.count()
         custom = DigimonAgent(
             name="测试兽",
             species="testmon",

@@ -5,7 +5,7 @@
 
 详细设计: docs/DESIGN.md 第 3 节
 """
-from .digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
+from .digimon_agent import DigimonAgent
 from .chosen_child import ChosenChildAgent, Crest
 from .dialogue import Dialogue
 from .evolution import (

@@ -1,8 +1,6 @@
 """DayNightSystem 单元测试。"""
 
-import pytest
 from digimon_world.world.daynight import (
-    BEHAVIOR_KEYS,
     DayNightSystem,
     DayPeriod,
     reset_daynight_system,

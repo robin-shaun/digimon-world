@@ -18,12 +18,9 @@ from fastapi.testclient import TestClient
 from digimon_world.api import app as fastapi_app
 from digimon_world.world import get_world, reset_world
 from digimon_world.world.relationships import (
-    BATTLE_AWE_DELTA,
-    BATTLE_DELTA,
     DIALOGUE_DELTA,
     MAX_SCORE,
     MIN_SCORE,
-    PROXIMITY_DELTA,
     RelationshipTracker,
     reset_tracker,
 )

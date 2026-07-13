@@ -3,13 +3,11 @@ import random
 
 import pytest
 from digimon_world.world.dark_gears import (
-    BASE_PLACEMENT_CHANCE,
     GEAR_DAMAGE_PER_BATTLE,
     GEAR_DEFAULT_HP,
     INFECTION_ATTACK_BONUS,
     INFECTION_DEFENSE_PENALTY,
     MAX_ACTIVE_GEARS,
-    PLACEMENT_COOLDOWN_TICKS,
     DarkGear,
     DarkGearSystem,
     get_dark_gear_system,
@@ -126,18 +124,18 @@ class TestDarkGearSystem:
         assert len(self.system.active_gears) == 0
 
     def test_is_sub_region_infected(self):
-        gear = self.system.force_place_gear(sub_region_id="confusion_forest")
+        self.system.force_place_gear(sub_region_id="confusion_forest")
         assert self.system.is_sub_region_infected("confusion_forest") is True
         assert self.system.is_sub_region_infected("beach_of_departure") is False
 
     def test_is_agent_infected(self):
-        gear = self.system.force_place_gear(sub_region_id="confusion_forest")
+        self.system.force_place_gear(sub_region_id="confusion_forest")
         assert self.system.is_agent_infected("confusion_forest") is True
         assert self.system.is_agent_infected("toy_town") is False
         assert self.system.is_agent_infected(None) is False
 
     def test_get_infection_stats(self):
-        gear = self.system.force_place_gear(sub_region_id="confusion_forest")
+        self.system.force_place_gear(sub_region_id="confusion_forest")
         attack, defense, infected = self.system.get_infection_stats(
             100, 100, "confusion_forest"
         )

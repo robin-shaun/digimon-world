@@ -17,7 +17,6 @@ from fastapi.testclient import TestClient
 from digimon_world.api import app
 from digimon_world.world import get_world, reset_world
 from digimon_world.world.timeline import (
-    MAX_LIMIT,
     SIGNIFICANT_TYPES,
     TimelineSystem,
     get_timeline_system,

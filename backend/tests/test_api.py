@@ -135,7 +135,7 @@ def test_websocket_snapshot() -> None:
 def test_scheduler_starts_on_startup() -> None:
     """startup hook 应启动 scheduler task。"""
     # 用 context manager 形式的 TestClient 触发 startup/shutdown 事件
-    with TestClient(app) as client:
+    with TestClient(app):
         task = getattr(app.state, "scheduler_task", None)
         assert task is not None
         assert not task.done()

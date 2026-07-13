@@ -25,21 +25,10 @@ from .daynight import (
     get_daynight_system,
     reset_daynight_system,
 )
-from .disasters import (
-    Disaster,
-    DisasterSystem,
-    get_disaster_system,
-    reset_disaster_system,
-)
 from .ecology import (
     EcologySystem,
-    RegionEcology,
     get_ecology_system,
     reset_ecology_system,
-)
-from .emergence_metrics import (
-    EmergenceSnapshot,
-    compute_emergence_metrics,
 )
 from .environmental_events import (
     EnvironmentalEventSystem,
@@ -49,7 +38,6 @@ from .environmental_events import (
 from .economy import (
     EconomySystem,
     get_economy_system,
-    reset_economy_system,
 )
 from .events import StoryDirector, StoryEvent, get_director, reset_director
 from .factions import Faction, FactionRegistry, get_registry, reset_registry
@@ -164,6 +152,7 @@ __all__ = [
     "get_landmark_system",
     "get_multiverse",
     "get_registry",
+    "get_snapshot_manager",
     "get_season_system",
     "get_timeline_system",
     "get_tracker",

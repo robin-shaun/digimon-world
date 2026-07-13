@@ -1,13 +1,12 @@
 """Smoke test: 验证 digimon_world 包能 import,基本数据结构能工作。"""
 
-from datetime import datetime
 
 import pytest
 
 from digimon_world import __version__
 from digimon_world.agents import DigimonAgent
 from digimon_world.agents.digimon_agent import DigimonAttribute, EvolutionStage
-from digimon_world.memory import MemoryNode, MemoryStream
+from digimon_world.memory import MemoryStream
 
 
 def test_version():

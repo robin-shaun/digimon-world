@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from digimon_world.agents import DigimonAgent
 from digimon_world.world import (
-    FILE_ISLAND,
-    INFINITY_MOUNTAIN,
     Region,
     WorldState,
     get_world,

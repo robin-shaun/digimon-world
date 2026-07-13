@@ -26,7 +26,7 @@ Phase 8: 物种特定进化树 + 8 枚徽章 + 经典动画路线
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 

@@ -18,7 +18,6 @@ from fastapi.testclient import TestClient
 
 from digimon_world import __version__  # noqa: F401  (sanity import)
 from digimon_world.api import app as fastapi_app  # FastAPI instance
-from digimon_world.api import app as _app_module  # same name — actually the FastAPI obj
 from digimon_world.world import get_world, reset_world
 
 

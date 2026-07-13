@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from digimon_world.world import WorldState, reset_world
+from digimon_world.world import WorldState
 
 
 def test_append_event_assigns_event_id() -> None:

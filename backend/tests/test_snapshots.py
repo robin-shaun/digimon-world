@@ -16,7 +16,7 @@ from digimon_world.world.snapshots import (
     get_snapshot_manager,
     reset_snapshot_manager,
 )
-from digimon_world.world.world_state import WorldState, get_world, reset_world
+from digimon_world.world.world_state import get_world, reset_world
 from digimon_world.world.relationships import get_tracker, reset_tracker
 from digimon_world.world import persistence
 

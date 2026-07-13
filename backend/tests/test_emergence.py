@@ -23,7 +23,7 @@ from digimon_world.agents.digimon_agent import (
     DigimonAttribute,
     DigimonStats,
 )
-from digimon_world.world.world_state import WorldState, get_world, reset_world
+from digimon_world.world.world_state import WorldState, reset_world
 from digimon_world.world.emergence_metrics import (
     EmergenceSnapshot,
     _classify_plan,
