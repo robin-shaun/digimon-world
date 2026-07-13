@@ -119,38 +119,76 @@
     let pollTimer = null;
 
     // ══════════════════════════════════════════════
-    //  绘 制
+    //  Phase 13 ④: 离屏 Canvas 缓存 — 静态背景画一次, 每帧只 blit
     // ══════════════════════════════════════════════
+    let bgCache = null;
+    let bgCacheValid = false;
+    // 缓存渐变对象, 避免每帧 new LinearGradient
+    let skyGradDay = null;
+    let skyGradNight = null;
 
-    function drawSky() {
-        const isNight = !state.env.daynight.is_daytime;
-        const grad = ctx.createLinearGradient(0, 0, 0, H);
-        if (isNight) {
-            // 夜晚: 深蓝黑渐变
-            grad.addColorStop(0, '#020518');
-            grad.addColorStop(0.6, '#0a1535');
-            grad.addColorStop(1, '#15082a');
-        } else {
-            // 白天: 蓝紫渐变
-            grad.addColorStop(0, '#0a1233');
-            grad.addColorStop(0.6, '#1e2a5a');
-            grad.addColorStop(1, '#3a1a4a');
+    function ensureBgCache() {
+        if (!bgCache) {
+            bgCache = document.createElement('canvas');
+            bgCache.width = W;
+            bgCache.height = H;
+            // 预创建天空渐变
+            skyGradDay = bgCache.getContext('2d').createLinearGradient(0, 0, 0, H);
+            skyGradDay.addColorStop(0, '#0a1233');
+            skyGradDay.addColorStop(0.6, '#1e2a5a');
+            skyGradDay.addColorStop(1, '#3a1a4a');
+            skyGradNight = bgCache.getContext('2d').createLinearGradient(0, 0, 0, H);
+            skyGradNight.addColorStop(0, '#020518');
+            skyGradNight.addColorStop(0.6, '#0a1535');
+            skyGradNight.addColorStop(1, '#15082a');
         }
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, W, H);
     }
 
-    function drawStars() {
-        // 简单伪随机星空 (1200×800 比例)
+    function invalidateBgCache() {
+        bgCacheValid = false;
+    }
+
+    /** 将静态内容(天空/星星/地形/POI/标题)预渲染到离屏 Canvas */
+    function cacheBackground() {
+        ensureBgCache();
+        const c = bgCache.getContext('2d');
+
+        // 天空 (用预创建的渐变)
+        const isNight = !state.env.daynight.is_daytime;
+        c.fillStyle = isNight ? skyGradNight : skyGradDay;
+        c.fillRect(0, 0, W, H);
+
+        // 星星
         for (let i = 0; i < 60; i++) {
             const x = (i * 73 + 50) % W;
             const y = ((i * 41) % (H * 0.5)) + 10;
             const alpha = 0.2 + (i % 5) * 0.12;
-            ctx.fillStyle = `rgba(200, 220, 255, ${alpha})`;
-            ctx.beginPath();
-            ctx.arc(x, y, 1, 0, Math.PI * 2);
-            ctx.fill();
+            c.fillStyle = `rgba(200, 220, 255, ${alpha})`;
+            c.beginPath();
+            c.arc(x, y, 1, 0, Math.PI * 2);
+            c.fill();
         }
+
+        // 地形
+        drawRegionsTo(c);
+        // POI
+        drawPOIsTo(c);
+        // 标题
+        drawTitleTo(c);
+
+        bgCacheValid = true;
+    }
+
+    // ══════════════════════════════════════════════
+    //  绘 制
+    // ══════════════════════════════════════════════
+
+    function drawSky() {
+        // 静态 — 走缓存, 保留函数签名兼容旧调用
+    }
+
+    function drawStars() {
+        // 静态 — 走缓存
     }
 
     /** Phase 10: 天气粒子特效 (雨滴/雾气) */
@@ -189,100 +227,100 @@
         }
     }
 
-    /** 根据后端 regions 数据画地图 */
-    function drawRegions() {
+    /** 根据后端 regions 数据画地图 (参数化版本, 接受目标 context) */
+    function drawRegionsTo(c) {
         // 无限山 (1200×800 比例调整)
-        ctx.fillStyle = '#2a1f4a';
-        ctx.beginPath();
-        ctx.moveTo(W * 0.35, H * 0.55);
-        ctx.lineTo(W * 0.5, H * 0.15);
-        ctx.lineTo(W * 0.65, H * 0.55);
-        ctx.closePath();
-        ctx.fill();
+        c.fillStyle = '#2a1f4a';
+        c.beginPath();
+        c.moveTo(W * 0.35, H * 0.55);
+        c.lineTo(W * 0.5, H * 0.15);
+        c.lineTo(W * 0.65, H * 0.55);
+        c.closePath();
+        c.fill();
 
         // 山顶光晕
-        const peakGrad = ctx.createRadialGradient(W * 0.5, H * 0.15, 8, W * 0.5, H * 0.15, 100);
+        const peakGrad = c.createRadialGradient(W * 0.5, H * 0.15, 8, W * 0.5, H * 0.15, 100);
         peakGrad.addColorStop(0, 'rgba(124, 58, 237, 0.5)');
         peakGrad.addColorStop(1, 'rgba(124, 58, 237, 0)');
-        ctx.fillStyle = peakGrad;
-        ctx.beginPath();
-        ctx.arc(W * 0.5, H * 0.15, 100, 0, Math.PI * 2);
-        ctx.fill();
+        c.fillStyle = peakGrad;
+        c.beginPath();
+        c.arc(W * 0.5, H * 0.15, 100, 0, Math.PI * 2);
+        c.fill();
 
         // 远山
-        ctx.fillStyle = '#1a1f3a';
-        ctx.beginPath();
-        ctx.moveTo(0, H * 0.6);
+        c.fillStyle = '#1a1f3a';
+        c.beginPath();
+        c.moveTo(0, H * 0.6);
         for (let x = 0; x <= W; x += 40) {
             const y = H * 0.55 + Math.sin(x * 0.012) * 25 + Math.sin(x * 0.025) * 12;
-            ctx.lineTo(x, y);
+            c.lineTo(x, y);
         }
-        ctx.lineTo(W, H * 0.75);
-        ctx.lineTo(0, H * 0.75);
-        ctx.closePath();
-        ctx.fill();
+        c.lineTo(W, H * 0.75);
+        c.lineTo(0, H * 0.75);
+        c.closePath();
+        c.fill();
 
         // 海面
-        ctx.fillStyle = '#0a2a4a';
-        ctx.fillRect(0, H * 0.75, W, H * 0.25);
+        c.fillStyle = '#0a2a4a';
+        c.fillRect(0, H * 0.75, W, H * 0.25);
 
         // 岛屿地面
-        ctx.fillStyle = '#1a4a3a';
-        ctx.beginPath();
-        ctx.ellipse(W * 0.5, H * 0.78, W * 0.42, 80, 0, 0, Math.PI * 2);
-        ctx.fill();
+        c.fillStyle = '#1a4a3a';
+        c.beginPath();
+        c.ellipse(W * 0.5, H * 0.78, W * 0.42, 80, 0, 0, Math.PI * 2);
+        c.fill();
 
         // 沙滩
-        ctx.fillStyle = '#5a4a2a';
-        ctx.beginPath();
-        ctx.ellipse(W * 0.2, H * 0.8, 100, 32, -0.2, 0, Math.PI * 2);
-        ctx.fill();
+        c.fillStyle = '#5a4a2a';
+        c.beginPath();
+        c.ellipse(W * 0.2, H * 0.8, 100, 32, -0.2, 0, Math.PI * 2);
+        c.fill();
 
         // 区域名称标签
         for (const region of state.regions) {
             const style = REGION_STYLE[region.id] || DEFAULT_STYLE;
-            ctx.fillStyle = style.label;
-            ctx.font = 'bold 13px monospace';
-            ctx.textAlign = 'left';
-            ctx.globalAlpha = 0.7;
-            ctx.fillText(region.name, style.labelAt.x, style.labelAt.y);
-            ctx.globalAlpha = 1.0;
+            c.fillStyle = style.label;
+            c.font = 'bold 13px monospace';
+            c.textAlign = 'left';
+            c.globalAlpha = 0.7;
+            c.fillText(region.name, style.labelAt.x, style.labelAt.y);
+            c.globalAlpha = 1.0;
         }
     }
 
-    /** 画 POI 标记 */
-    function drawPOIs() {
+    /** 画 POI 标记 (参数化版本) */
+    function drawPOIsTo(c) {
         for (const region of state.regions) {
             if (!region.pois) continue;
             for (const [, poi] of Object.entries(region.pois)) {
                 const { x, y, label } = poi;
 
                 // 标记点
-                ctx.fillStyle = 'rgba(255, 215, 0, 0.85)';
-                ctx.beginPath();
-                ctx.arc(x, y, 4, 0, Math.PI * 2);
-                ctx.fill();
+                c.fillStyle = 'rgba(255, 215, 0, 0.85)';
+                c.beginPath();
+                c.arc(x, y, 4, 0, Math.PI * 2);
+                c.fill();
 
                 // 旗子
-                ctx.strokeStyle = 'rgba(255, 215, 0, 0.7)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x, y - 16);
-                ctx.stroke();
-                ctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
-                ctx.beginPath();
-                ctx.moveTo(x, y - 16);
-                ctx.lineTo(x + 10, y - 13);
-                ctx.lineTo(x, y - 10);
-                ctx.closePath();
-                ctx.fill();
+                c.strokeStyle = 'rgba(255, 215, 0, 0.7)';
+                c.lineWidth = 1;
+                c.beginPath();
+                c.moveTo(x, y);
+                c.lineTo(x, y - 16);
+                c.stroke();
+                c.fillStyle = 'rgba(255, 215, 0, 0.8)';
+                c.beginPath();
+                c.moveTo(x, y - 16);
+                c.lineTo(x + 10, y - 13);
+                c.lineTo(x, y - 10);
+                c.closePath();
+                c.fill();
 
                 // 标签文字
-                ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
-                ctx.font = '11px monospace';
-                ctx.textAlign = 'left';
-                ctx.fillText(label, x + 14, y - 8);
+                c.fillStyle = 'rgba(255, 215, 0, 0.9)';
+                c.font = '11px monospace';
+                c.textAlign = 'left';
+                c.fillText(label, x + 14, y - 8);
             }
         }
     }
@@ -370,18 +408,32 @@
         ctx.textBaseline = 'alphabetic';
     }
 
-    /** 画标题 */
-    function drawTitle() {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.font = '13px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('— DIGITAL WORLD · FILE ISLAND —', W / 2, H - 14);
+    /** 画标题 (参数化版本) */
+    function drawTitleTo(c) {
+        c.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        c.font = '13px monospace';
+        c.textAlign = 'center';
+        c.fillText('— DIGITAL WORLD · FILE ISLAND —', W / 2, H - 14);
     }
 
     /** 后端不可达时的 placeholder */
     function drawPlaceholder() {
-        drawSky();
-        drawStars();
+        // 画自己的天空 (不依赖缓存, 离线也能看)
+        const isNight = !state.env.daynight.is_daytime;
+        ensureBgCache();
+        ctx.fillStyle = isNight ? skyGradNight : skyGradDay;
+        ctx.fillRect(0, 0, W, H);
+
+        // 星空
+        for (let i = 0; i < 60; i++) {
+            const x = (i * 73 + 50) % W;
+            const y = ((i * 41) % (H * 0.5)) + 10;
+            const alpha = 0.2 + (i % 5) * 0.12;
+            ctx.fillStyle = `rgba(200, 220, 255, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(x, y, 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         // 大标题
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
@@ -413,13 +465,12 @@
             drawPlaceholder();
             return;
         }
-        drawSky();
-        drawStars();
-        drawRegions();
-        drawPOIs();
+        // Phase 13 ④: 静态背景走离屏缓存 (daynight 变化时自动重建)
+        if (!bgCacheValid) cacheBackground();
+        ctx.drawImage(bgCache, 0, 0);
+        // 动态内容: 数码兽位置 + 天气粒子
         drawDigimon();
-        drawWeatherParticles();  // Phase 10: 天气粒子特效
-        drawTitle();
+        drawWeatherParticles();
     }
 
     // render() 可能在一帧内被多次触发 (轮询 / 点击 / 加载), 用 rAF 防抖:
@@ -473,6 +524,7 @@
             state.regions = data.regions || [];
             state.connected = true;
             state.error = null;
+            invalidateBgCache();  // Phase 13 ④: regions 变化 → 重建背景
             console.log('[api] /api/world OK, regions:', state.regions.length);
         } catch (err) {
             console.warn('[api] /api/world 不可达:', err.message);
@@ -1429,10 +1481,13 @@
             const resp = await fetchWithTimeout(API_BASE + '/api/environment', { cache: 'no-store' });
             if (!resp.ok) return;
             const data = await resp.json();
+            const prevIsDaytime = state.env.daynight.is_daytime;
             if (data.daynight) state.env.daynight = data.daynight;
             if (data.weather) state.env.weather = data.weather;
             if (data.ecology) state.env.ecology = data.ecology;
             if (data.season) state.env.season = data.season;
+            // Phase 13 ④: 昼夜切换 → 重建天空背景
+            if (state.env.daynight.is_daytime !== prevIsDaytime) invalidateBgCache();
         } catch (e) {
             // 静默失败
         }
@@ -1477,8 +1532,9 @@
     // 暴露调试接口
     window.DigimonWorld = {
         version: '1.0.0',
-        phase: 12,
+        phase: 13,
         getState: () => state,
         refresh: async () => { await fetchDigimon(); render(); },
+        invalidateBgCache: () => { invalidateBgCache(); render(); },
     };
 })();
