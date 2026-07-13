@@ -36,8 +36,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
 
-logger = logging.getLogger("digimon.api")
-
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -72,6 +70,7 @@ from ..world import (
     persistence,
 )
 
+logger = logging.getLogger("digimon.api")
 
 # ---- Pydantic models ----
 class Position(BaseModel):

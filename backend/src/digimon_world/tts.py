@@ -21,10 +21,7 @@ API:
 
 from __future__ import annotations
 
-import asyncio
-import io
 import logging
-from typing import Optional
 
 logger = logging.getLogger("digimon.tts")
 
