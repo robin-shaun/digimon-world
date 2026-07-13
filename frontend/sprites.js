@@ -318,7 +318,7 @@ window.SPRITE_DATA = (function () {
             },
         },
         dorumon: {
-            color: '#4682B4',    // 钢蓝 — 多路兽
+            color: '#5B9BD5',    // 天蓝 — 多路兽 (与守卫兽区分)
             accent: '#87CEFA',
             size: 17,
             actions: {
