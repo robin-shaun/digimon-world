@@ -331,7 +331,12 @@
         const densityMode = count > DENSITY_MODE_THRESHOLD;
 
         for (const d of state.digimon) {
-            const { x, y } = d.position;
+            // Phase 13-②: use interpolated position from animation engine
+            const animSt = window.ANIM ? ANIM.manager.get(d.name) : null;
+            const x = animSt ? animSt.renderX() : d.position.x;
+            const y = animSt ? animSt.renderY() : d.position.y;
+            const bounce = animSt ? animSt.idleBounce() : 0;
+            const idleScale = animSt ? animSt.idleScale() : 1.0;
             const isSelected = d.name === state.selectedName;
             const isHovered = d.name === hoveredDigimon;
             const emoji = getDigimonEmoji(d.name, d.species, d.stage);
@@ -345,6 +350,7 @@
                 // 属性颜色: vaccine=蓝, data=绿, virus=红, free=紫
                 const attrColors = { vaccine: '#4ae8c4', data: '#4ae84a', virus: '#e84a4a', free: '#b86aff' };
                 const dotColor = attrColors[d.attribute] || '#aabbcc';
+                const dy = y + bounce;  // Phase 13-②: idle bounce
 
                 ctx.fillStyle = dotColor.replace(')', `, ${dotAlpha})`).replace('rgb', 'rgba');
                 if (dotColor.startsWith('#')) {
@@ -352,7 +358,7 @@
                     ctx.fillStyle = dotColor;
                 }
                 ctx.beginPath();
-                ctx.arc(x, y, dotSize, 0, Math.PI * 2);
+                ctx.arc(x, dy, dotSize, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.globalAlpha = 1.0;
 
@@ -362,7 +368,7 @@
                     ctx.font = '10px monospace';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'bottom';
-                    ctx.fillText(nameShort + ' ' + emoji, x, y - 6);
+                    ctx.fillText(nameShort + ' ' + emoji, x, dy - 6);
                     ctx.textBaseline = 'alphabetic';
                 }
 
@@ -370,37 +376,42 @@
                     ctx.strokeStyle = '#ffd700';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(x, y, 10, 0, Math.PI * 2);
+                    ctx.arc(x, dy, 10, 0, Math.PI * 2);
                     ctx.stroke();
                 }
             } else {
                 // ═══ 普通模式: 小emoji + 首字 ═══
-                const aura = ctx.createRadialGradient(x, y, 3, x, y, 18);
+                const dy = y + bounce;  // Phase 13-②: idle bounce
+                const aura = ctx.createRadialGradient(x, dy, 3, x, dy, 18);
                 aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.8)' : 'rgba(0, 212, 255, 0.5)');
                 aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = aura;
                 ctx.beginPath();
-                ctx.arc(x, y, 18, 0, Math.PI * 2);
+                ctx.arc(x, dy, 18, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Emoji 缩小
+                // Emoji 缩小 (with idle scale for breathing effect)
+                ctx.save();
+                ctx.translate(x, dy);
+                ctx.scale(idleScale, idleScale);
                 ctx.font = '18px serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(emoji, x, y);
+                ctx.fillText(emoji, 0, 0);
+                ctx.restore();
 
                 // 首字 + 心情
                 ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
                 ctx.font = '10px monospace';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
-                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, y - 14);
+                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, dy - 14);
 
                 if (isSelected) {
                     ctx.strokeStyle = '#ffd700';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(x, y, 15, 0, Math.PI * 2);
+                    ctx.arc(x, dy, 15, 0, Math.PI * 2);
                     ctx.stroke();
                 }
             }
@@ -476,11 +487,17 @@
     // render() 可能在一帧内被多次触发 (轮询 / 点击 / 加载), 用 rAF 防抖:
     // 同一帧内的多次调用合并成一次绘制, 且绘制与浏览器刷新对齐。
     let rafPending = false;
+    // Phase 13-②: delta-time tracker for animation engine
+    let lastFrameTime = performance.now();
     function render() {
         if (rafPending) return;
         rafPending = true;
-        requestAnimationFrame(() => {
+        requestAnimationFrame((now) => {
             rafPending = false;
+            const delta = Math.min((now - lastFrameTime) / 1000, 0.1); // cap at 100ms
+            lastFrameTime = now;
+            // Update animation engine before drawing
+            if (window.ANIM) ANIM.manager.updateAll(delta);
             renderNow();
         });
     }
@@ -548,6 +565,11 @@
             state.digimon = data.digimon || [];
             state.connected = true;
             state.error = null;
+            // Phase 13-②: sync animation targets for smooth movement
+            if (window.ANIM) {
+                ANIM.manager.syncPositions(state.digimon);
+                ANIM.manager.prune(state.digimon.map(function (d) { return d.name; }));
+            }
         } catch (err) {
             if (err.name === 'AbortError') return;  // 被新请求主动取消, 不算失败
             console.warn('[api] /api/digimon 不可达:', err.message);
@@ -568,8 +590,10 @@
         const my = (ev.clientY - rect.top) * (H / rect.height);
 
         for (const d of state.digimon) {
-            const dx = mx - d.position.x;
-            const dy = my - d.position.y;
+            // Phase 13-②: use interpolated position for click hit-test
+            const animSt = window.ANIM ? ANIM.manager.get(d.name) : null;
+            const dx = mx - (animSt ? animSt.renderX() : d.position.x);
+            const dy = my - (animSt ? animSt.renderY() : d.position.y);
             if (dx * dx + dy * dy < 22 * 22) {
                 state.selectedName = d.name;
                 showSidebar(d);
@@ -1505,6 +1529,13 @@
         await fetchWorld();
         // 2. 拉数码兽
         await fetchDigimon();
+        // Phase 13-②: initialize animation positions (instant, no tween on first load)
+        if (window.ANIM) {
+            for (const d of state.digimon) {
+                const st = ANIM.manager.get(d.name);
+                st.setTarget(d.position.x, d.position.y);
+            }
+        }
         // 3. 首次渲染
         render();
         updateStatusBar();
