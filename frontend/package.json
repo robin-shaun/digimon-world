@@ -5,7 +5,8 @@
   "description": "Frontend placeholder for Cloudflare Pages (Phase 0). No build step. Real UI comes in Phase 1+.",
   "scripts": {
     "build": "echo 'No build step needed - static HTML' && exit 0",
-    "test": "node tests/test_animator.js",
-    "test:animator": "node tests/test_animator.js"
+    "test": "node tests/test_animator.js && node tests/test_sprites.js",
+    "test:animator": "node tests/test_animator.js",
+    "test:sprites": "node tests/test_sprites.js"
   }
 }
