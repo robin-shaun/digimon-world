@@ -382,7 +382,7 @@
             } else {
                 // ═══ 普通模式: 小emoji + 首字 + 精灵色光环 ═══
                 const dy = y + bounce;  // Phase 13-②: idle bounce
-                const spriteCfg = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.name) : null;
+                const spriteCfg = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.species || d.name) : null;
                 const spriteColor = spriteCfg ? spriteCfg.color : '#00d4ff';
                 const spriteAccent = spriteCfg ? spriteCfg.accent : '#00d4ff';
 
