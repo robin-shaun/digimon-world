@@ -254,6 +254,12 @@ footer {
     filter: brightness(1.2);
 }
 
+.sidebar .tts-speak-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+    filter: brightness(0.8);
+}
+
 /* ---- Phase 3 追加: 进化全屏动画 (多阶段) ---- */
 .evo-overlay {
     position: absolute;

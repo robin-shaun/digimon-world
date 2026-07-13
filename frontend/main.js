@@ -658,6 +658,7 @@
             <p class="meta">${escapeHtml(d.species || '')} · ${escapeHtml(STAGE_LABEL[d.stage] || d.stage || '')} · ${escapeHtml(d.attribute || '')}</p>
             <p class="meta">区域: ${escapeHtml(d.region_id || '未知')}</p>
             <p class="plan">📍 ${escapeHtml(d.current_plan || '暂无计划')}</p>
+            <button class="poke tts-speak-btn" data-name="${escapeHtml(d.name)}" title="让数码兽说话">🔊 让我说话</button>
             <p class="dir-hint" id="detail-loading">加载详情中…</p>
         `;
         sb.classList.add('open');
@@ -1525,6 +1526,27 @@
         setInterval(fetchEnvironment, ENV_POLL_MS);
         // 11. Phase 10: 天气粒子动画循环 (每 100ms 重新绘制粒子)
         setInterval(render, 100);
+        // 12. Phase 13: TTS 语音按钮 (事件委托, sidebar 内动态渲染)
+        setupTTSSpeakButton();
+    }
+
+    /** Phase 13: 绑定 sidebar 内的 TTS 按钮点击事件 (事件委托) */
+    function setupTTSSpeakButton() {
+        const sb = document.getElementById('sidebar');
+        if (!sb) return;
+        sb.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('.tts-speak-btn');
+            if (!btn) return;
+            const name = btn.dataset.name;
+            if (name && window.TTS) {
+                btn.textContent = '🔊 说话中…';
+                btn.disabled = true;
+                window.TTS.speak(name).finally(() => {
+                    btn.textContent = '🔊 让我说话';
+                    btn.disabled = false;
+                });
+            }
+        });
     }
 
     start();

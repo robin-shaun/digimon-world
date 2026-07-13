@@ -17,6 +17,11 @@ Phase 1-11 接口:
 - POST /api/multiverse/migrate — 批量跨世界迁移 (Phase 12)
 - POST /api/multiverse/auto-migrate — 自动跨世界迁移 (Phase 12)
 
+Phase 13 新增 (多模态):
+- GET  /api/tts/{name}        — 数码兽 TTS 语音 (wav)
+- POST /api/tts/speak         — 让数码兽说指定文本
+- GET  /api/tts/voices        — 可用数码兽声音列表
+
 详细设计: docs/DESIGN.md 第 7 节
 """
 
@@ -24,14 +29,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
 
+logger = logging.getLogger("digimon.api")
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from .. import __version__
@@ -43,6 +52,7 @@ from ..agents.evolution import EvolutionSystem
 from ..agents.healing import get_healing_system
 from ..battle import BattleEngine, BattleResult, spar
 from ..llm.client import get_client
+from .. import tts as tts_module
 from ..world import (
     WorldClock,
     WorldScheduler,
@@ -109,6 +119,14 @@ class BroadcastRequest(BaseModel):
     """导演向全服所有数码兽发布一条广播通知。"""
 
     message: str = Field(..., min_length=1, description="广播内容")
+
+
+# ---- Phase 13: TTS 配音 API 模型 ----
+class SpeakRequest(BaseModel):
+    """让指定数码兽说出一段文本。"""
+
+    name: str = Field(..., min_length=1, description="数码兽名称 (如 agumon)")
+    text: str = Field(..., min_length=1, max_length=500, description="要说的话")
 
 
 # ---- Phase 3: 战斗 API 模型 ----
@@ -1435,6 +1453,58 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+# ---- Phase 13: TTS 配音 API ----
+@app.get("/api/tts/voices")
+async def list_tts_voices() -> dict[str, Any]:
+    """列出所有支持 TTS 配音的数码兽及其声音配置。"""
+    voices = {}
+    for name, profile in tts_module.DIGIMON_VOICE_PROFILES.items():
+        voices[name] = {
+            "voice": profile["voice"],
+            "pitch": profile["pitch"],
+            "rate": profile["rate"],
+            "description": profile["description"],
+            "greetings": tts_module.DIGIMON_GREETINGS.get(name, []),
+        }
+    return {"count": len(voices), "voices": voices}
+
+
+@app.get("/api/tts/{name}")
+async def get_digimon_tts(name: str, text: str | None = None) -> Response:
+    """获取指定数码兽的 TTS 语音 (wav 格式)。
+
+    如果未指定 text, 则使用该数码兽的随机问候语。
+    例如: GET /api/tts/agumon?text=你好我是亚古兽
+    """
+    if not text:
+        text = tts_module.get_random_greeting(name)
+    if not text:
+        raise HTTPException(status_code=400, detail="无法生成问候语, 请提供 text 参数")
+
+    try:
+        audio = await tts_module.speak_digimon(name, text)
+        if not audio:
+            raise HTTPException(status_code=500, detail="TTS 生成失败 (空音频)")
+        return Response(content=audio, media_type="audio/wav")
+    except Exception as e:
+        logger.error(f"TTS 端点异常: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"TTS 生成失败: {e}")
+
+
+@app.post("/api/tts/speak")
+async def speak_digimon_api(req: SpeakRequest) -> Response:
+    """POST 方式让数码兽说话, 返回 wav 音频。"""
+
+    try:
+        audio = await tts_module.speak_digimon(req.name, req.text)
+        if not audio:
+            raise HTTPException(status_code=500, detail="TTS 生成失败 (空音频)")
+        return Response(content=audio, media_type="audio/wav")
+    except Exception as e:
+        logger.error(f"TTS speak 端点异常: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"TTS 生成失败: {e}")
 
 
 async def _position_broadcaster() -> None:
