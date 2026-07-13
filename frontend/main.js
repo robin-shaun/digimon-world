@@ -325,10 +325,41 @@
         }
     }
 
-    /** Phase 11: 画数码兽 — 支持密度模式(>15只→圆点, hover看详情) */
+    /** Phase 11: 画数码兽 — 支持密度模式(>15只→圆点, hover看详情)
+     *  Phase 13-②: + walk cycle animation + proximity glow lines */
     function drawDigimon() {
         const count = state.digimon.length;
         const densityMode = count > DENSITY_MODE_THRESHOLD;
+
+        // Phase 13-②: 近距离数码兽连线 — 距离 < 80px 时画半透明连线
+        if (!densityMode && state.digimon.length >= 2) {
+            for (let i = 0; i < state.digimon.length; i++) {
+                const a = state.digimon[i];
+                const aSt = window.ANIM ? ANIM.manager.get(a.name) : null;
+                const ax = aSt ? aSt.renderX() : a.position.x;
+                const ay = aSt ? aSt.renderY() : a.position.y;
+                for (let j = i + 1; j < state.digimon.length; j++) {
+                    const b = state.digimon[j];
+                    const bSt = window.ANIM ? ANIM.manager.get(b.name) : null;
+                    const bx = bSt ? bSt.renderX() : b.position.x;
+                    const by = bSt ? bSt.renderY() : b.position.y;
+                    const dx = bx - ax;
+                    const dy2 = by - ay;
+                    const dist = Math.sqrt(dx * dx + dy2 * dy2);
+                    if (dist < 80) {
+                        const alpha = Math.max(0, (1 - dist / 80) * 0.2);
+                        ctx.strokeStyle = `rgba(255,215,0,${alpha.toFixed(2)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.setLineDash([3, 6]);
+                        ctx.beginPath();
+                        ctx.moveTo(ax, ay);
+                        ctx.lineTo(bx, by);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                }
+            }
+        }
 
         for (const d of state.digimon) {
             // Phase 13-②: use interpolated position from animation engine
@@ -336,6 +367,8 @@
             const x = animSt ? animSt.renderX() : d.position.x;
             const y = animSt ? animSt.renderY() : d.position.y;
             const bounce = animSt ? animSt.idleBounce() : 0;
+            const walkBounce = animSt ? animSt.walkBounce() : 0;  // Phase 13-②: walk cycle
+            const walkLean = animSt ? animSt.walkLean() : 0;      // Phase 13-②: tilt during walk
             const idleScale = animSt ? animSt.idleScale() : 1.0;
             const isSelected = d.name === state.selectedName;
             const isHovered = d.name === hoveredDigimon;
@@ -381,7 +414,8 @@
                 }
             } else {
                 // ═══ 普通模式: 小emoji + 首字 + 精灵色光环 ═══
-                const dy = y + bounce;  // Phase 13-②: idle bounce
+                // Phase 13-②: walk cycle bounce on top of idle bounce
+                const dy = y + bounce + walkBounce;
                 const spriteCfg = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.species || d.name) : null;
                 const spriteColor = spriteCfg ? spriteCfg.color : '#00d4ff';
                 const spriteAccent = spriteCfg ? spriteCfg.accent : '#00d4ff';
@@ -419,9 +453,10 @@
                     }
                 }
 
-                // Emoji 缩小 (with idle scale for breathing effect)
+                // Emoji (with idle scale + walk lean + walk bounce)
                 ctx.save();
                 ctx.translate(x, dy);
+                ctx.rotate(walkLean);  // Phase 13-②: tilt body during movement
                 ctx.scale(idleScale, idleScale);
                 ctx.font = '18px serif';
                 ctx.textAlign = 'center';

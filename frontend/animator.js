@@ -236,6 +236,29 @@ window.ANIM = (function () {
             return Math.atan2(this.targetY - this.fromY, this.targetX - this.fromX);
         },
 
+        /**
+         * 行走弹跳偏移 (Phase 13-② walk cycle)
+         * 移动时产生 4px 幅度的高频正弦波, 模拟步伐
+         * @returns {number} 像素偏移
+         */
+        walkBounce: function () {
+            if (!this.isMoving()) return 0;
+            // 用累加的 idleAnim phase 产生高频波 (~8Hz 步伐感)
+            var phase = this.idleAnim.progress() * 8;
+            return Math.abs(Math.sin(phase * Math.PI * 2)) * 4;
+        },
+
+        /**
+         * 行走倾斜角度 (Phase 13-②)
+         * 移动时身体微倾 3° 朝运动方向
+         * @returns {number} 弧度
+         */
+        walkLean: function () {
+            if (!this.isMoving()) return 0;
+            var lean = Math.sin(this.idleAnim.progress() * Math.PI * 2) * 0.05; // ±0.05 rad ≈ ±3°
+            return lean;
+        },
+
         /** 渲染位置 (插值后) */
         renderX: function () { return this.currentX; },
         renderY: function () { return this.currentY; },
