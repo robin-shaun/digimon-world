@@ -1,13 +1,16 @@
 /**
- * DIGIMON WORLD - 前端 Phase 1
+ * DIGIMON WORLD - 前端主入口 (Phase 13)
  *
- * 1. 启动时 fetch GET /api/world → 画地图(regions + POIs)
- * 2. fetch GET /api/digimon → 画 3 只数码兽(emoji + 名字)
- * 3. 每 3 秒轮询 GET /api/digimon 更新位置
- * 4. 后端不可达时显示 placeholder + 提示
- * 5. API_BASE: Cloudflare 部署时通过 window.API_BASE 注入; 本地默认 http://localhost:8000
+ * 纯 canvas, 无第三方框架.
+ * 集成动画引擎 (animator.js) + 精灵数据 (sprites.js) + TTS (tts.js).
  *
- * 纯 canvas, 无第三方框架
+ * 功能:
+ *   1. fetch /api/world + /api/digimon → 画地图 + 数码兽
+ *   2. 轮询 /api/digimon 更新位置, 动画引擎平滑插值
+ *   3. WebSocket 实时推送 + HTTP 降级轮询
+ *   4. 点击数码兽 → 侧栏详情 + "戳一下" / TTS 发言
+ *   5. 密度模式 (>15 只→圆点), 离屏缓存, 天气粒子
+ *   6. API_BASE: Cloudflare 注入 > 同源 > localhost:8000
  */
 
 (function () {

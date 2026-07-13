@@ -164,6 +164,14 @@ window.ANIM = (function () {
         this.currentX = 0;
         this.currentY = 0;
         this._initialized = false;
+        // 随机相位偏移 — 避免所有数码兽呼吸同步
+        // idleAnim 共 120 帧, 每个数码兽从随机帧开始, 视觉上更自然
+        this._idleOffset = Math.floor(Math.random() * 120);
+        if (this._idleOffset > 0) {
+            for (var _i = 0; _i < this._idleOffset; _i++) {
+                this.idleAnim.update(1 / 12);
+            }
+        }
     }
 
     DigimonAnimState.prototype = {
@@ -243,9 +251,11 @@ window.ANIM = (function () {
          */
         walkBounce: function () {
             if (!this.isMoving()) return 0;
-            // 用累加的 idleAnim phase 产生高频波 (~8Hz 步伐感)
+            // 用累加的 idleAnim phase 产生高频振荡 (~8Hz)
+            // 使用 cos² 产生平滑的 0→4→0 步伐感 (天然平滑, 无尖角)
             var phase = this.idleAnim.progress() * 8;
-            return Math.abs(Math.sin(phase * Math.PI * 2)) * 4;
+            var t = Math.cos(phase * Math.PI * 2);  // -1..1
+            return (t * t) * 4;  // 0..4, 脚落地最低/抬腿最高
         },
 
         /**
