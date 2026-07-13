@@ -380,15 +380,28 @@
                     ctx.stroke();
                 }
             } else {
-                // ═══ 普通模式: 小emoji + 首字 ═══
+                // ═══ 普通模式: 小emoji + 首字 + 精灵色光环 ═══
                 const dy = y + bounce;  // Phase 13-②: idle bounce
+                const spriteCfg = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.name) : null;
+                const spriteColor = spriteCfg ? spriteCfg.color : '#00d4ff';
+                const spriteAccent = spriteCfg ? spriteCfg.accent : '#00d4ff';
+
+                // 精灵色光环 (Phase 13-②: 使用 sprites.js 颜色数据)
                 const aura = ctx.createRadialGradient(x, dy, 3, x, dy, 18);
-                aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.8)' : 'rgba(0, 212, 255, 0.5)');
+                aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.8)' : spriteColor + 'cc');
+                aura.addColorStop(0.5, spriteColor + '44');
                 aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = aura;
                 ctx.beginPath();
                 ctx.arc(x, dy, 18, 0, Math.PI * 2);
                 ctx.fill();
+
+                // 精灵色细环
+                ctx.strokeStyle = isSelected ? '#ffd700' : spriteAccent + '66';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(x, dy, 16, 0, Math.PI * 2);
+                ctx.stroke();
 
                 // Emoji 缩小 (with idle scale for breathing effect)
                 ctx.save();
