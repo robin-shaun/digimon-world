@@ -246,7 +246,13 @@
             </div>
         </div>
 
-        <!-- Panel 2: Multiverse -->
+        <!-- Panel 2: Performance (Phase 13③) -->
+        <div class="panel">
+            <h2><span class="icon">📈</span>Performance</h2>
+            <div id="perfPanel"><span class="spinner"></span> Loading...</div>
+        </div>
+
+        <!-- Panel 3: Multiverse -->
         <div class="panel">
             <h2><span class="icon">🌌</span>Multiverse</h2>
             <div class="input-group">
@@ -499,6 +505,40 @@
         }
     }
 
+    // ---- Performance (Phase 13③) ----
+    async function loadPerf() {
+        try {
+            var data = await fetchJSON('/health/perf');
+            var el = document.getElementById('perfPanel');
+            var mb = function(b) { return (b / 1048576).toFixed(2); };
+            var pct = function(used, total) {
+                if (!total) return '-%';
+                return (used / total * 100).toFixed(1) + '%';
+            };
+            var html = '<table class="data-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>' +
+                '<tr><td>⏱ Uptime</td><td>' + (data.uptime_seconds > 3600
+                    ? (data.uptime_seconds / 3600).toFixed(1) + 'h'
+                    : (data.uptime_seconds / 60).toFixed(1) + 'min') + '</td></tr>' +
+                '<tr><td>🧠 Memory (RSS)</td><td>' + data.memory.rss_mb + ' MB</td></tr>' +
+                '<tr><td>💾 DB Size</td><td>' + data.database.size_mb + ' MB</td></tr>' +
+                '<tr><td>🐾 Agents</td><td>' + data.world.agent_count + '</td></tr>' +
+                '<tr><td>🧩 Memories</td><td>' + data.world.total_memories +
+                    ' <span class="badge attribute">' + (data.world.agent_count
+                        ? (data.world.total_memories / data.world.agent_count).toFixed(0) + '/agent'
+                        : 'N/A') + '</span></td></tr>' +
+                '<tr><td>📋 Events</td><td>' + data.world.event_count + '</td></tr>' +
+                '<tr><td>🔌 WS Conn</td><td>' + (data.world.ws_connections || 0) + '</td></tr>' +
+                '<tr><td>🕐 Clock Tick</td><td>#' + (data.world.clock_tick || 0) + '</td></tr>' +
+                '<tr><td>🐍 Python</td><td>' + (data.python_version || '').split('\\n')[0] + '</td></tr>' +
+                '<tr><td>🆔 PID</td><td>' + data.pid + '</td></tr>' +
+                '</tbody></table>';
+            el.innerHTML = html;
+        } catch (e) {
+            document.getElementById('perfPanel').innerHTML =
+                '<p style="color:var(--text-muted);">Perf endpoint not available</p>';
+        }
+    }
+
     // ---- Actions ----
     async function action(cmd) {
         try {
@@ -549,6 +589,7 @@
     async function loadAll() {
         await Promise.allSettled([
             loadSystem(),
+            loadPerf(),
             loadMultiverse(),
             loadAgents(),
             loadGears(),
