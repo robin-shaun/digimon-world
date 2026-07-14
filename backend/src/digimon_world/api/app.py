@@ -61,6 +61,7 @@ from ..world import (
     get_ecology_system,
     get_landmark_system,
     get_multiverse,
+    get_narrator,
     get_registry,
     get_snapshot_manager,
     get_timeline_system,
@@ -427,6 +428,38 @@ def get_scheduler_status() -> dict[str, Any]:
         "tick_count": scheduler.tick_count if scheduler is not None else 0,
         "current_world_time": clock.format_clock() if clock is not None else None,
     }
+
+
+# ---- Phase 14: 世界叙事 API ----
+@app.get("/api/narratives")
+def get_narratives(limit: int = 10) -> dict[str, Any]:
+    """获取最近 N 条世界叙事条目。
+
+    Args:
+        limit: 返回条数 (默认 10)。
+
+    Returns:
+        {count: 总篇数, entries: [最近 limit 篇]}。
+    """
+    n = get_narrator()
+    journal = n.journal[-max(1, limit):]
+    return {"count": n.narration_count, "entries": journal}
+
+
+@app.get("/api/narratives/latest")
+def get_latest_narrative() -> dict[str, Any]:
+    """获取最新一篇世界叙事。
+
+    Returns:
+        最新叙事条目 dict。
+
+    Raises:
+        404: 尚未生成任何叙事。
+    """
+    n = get_narrator()
+    if not n.journal:
+        raise HTTPException(status_code=404, detail="No narratives yet — 世界故事正在酝酿中…")
+    return n.journal[-1]
 
 
 @app.get("/api/digimon/{name}/memories")

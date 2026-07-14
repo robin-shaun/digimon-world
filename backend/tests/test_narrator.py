@@ -349,3 +349,82 @@ async def test_scheduler_integration_no_crash():
     # 不应抛出异常
 
     set_client(FakeLlmClient())
+
+
+# ---- Phase 14: API 端点测试 ----
+def test_get_narratives_empty():
+    """测试 /api/narratives 在无叙事时返回空列表。"""
+    from fastapi.testclient import TestClient
+    from digimon_world.api.app import app
+    from digimon_world.world.narrator import reset_narrator
+
+    reset_narrator()
+    client = TestClient(app)
+    resp = client.get("/api/narratives")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 0
+    assert data["entries"] == []
+
+
+def test_get_narratives_latest_404():
+    """测试 /api/narratives/latest 在无叙事时返回 404。"""
+    from fastapi.testclient import TestClient
+    from digimon_world.api.app import app
+    from digimon_world.world.narrator import reset_narrator
+
+    reset_narrator()
+    client = TestClient(app)
+    resp = client.get("/api/narratives/latest")
+    assert resp.status_code == 404
+    data = resp.json()
+    assert "No narratives yet" in data["detail"]
+
+
+def test_get_narratives_with_data():
+    """测试 /api/narratives 和 /latest 在有叙事时返回数据。"""
+    from fastapi.testclient import TestClient
+    from digimon_world.api.app import app
+    from digimon_world.world.narrator import reset_narrator, get_narrator
+
+    reset_narrator()
+    n = get_narrator()
+    n.journal.append({
+        "tick": 100,
+        "title": "进化之光",
+        "story": "亚古兽进化成了暴龙兽！",
+        "events_count": 3,
+        "evolution_count": 1,
+        "battle_count": 1,
+    })
+    n.journal.append({
+        "tick": 200,
+        "title": "黑暗降临",
+        "story": "黑暗齿轮感染了数码世界……",
+        "events_count": 5,
+        "evolution_count": 0,
+        "battle_count": 3,
+    })
+
+    client = TestClient(app)
+
+    # /api/narratives
+    resp = client.get("/api/narratives")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 2
+    assert len(data["entries"]) == 2
+
+    # /api/narratives?limit=1
+    resp = client.get("/api/narratives?limit=1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["entries"]) == 1
+
+    # /api/narratives/latest
+    resp = client.get("/api/narratives/latest")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["title"] == "黑暗降临"
+    assert data["tick"] == 200
+    assert "story" in data
