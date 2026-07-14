@@ -1747,6 +1747,9 @@
         setInterval(render, 100);
         // 12. Phase 13: TTS 语音按钮 (事件委托, sidebar 内动态渲染)
         setupTTSSpeakButton();
+        // 13. Phase 14: 世界叙事轮询 (30s)
+        fetchNarrative();
+        setInterval(fetchNarrative, 30000);
     }
 
     /** Phase 13: 绑定 sidebar 内的 TTS 按钮点击事件 (事件委托) */
@@ -1768,12 +1771,35 @@
         });
     }
 
+    /** Phase 14: 拉取最新世界叙事并更新面板 */
+    async function fetchNarrative() {
+        try {
+            const resp = await fetchWithTimeout(API_BASE + '/api/narratives/latest', {}, 8000);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const titleEl = document.querySelector('.narrative-title');
+            const storyEl = document.querySelector('.narrative-story');
+            const metaEl = document.querySelector('.narrative-meta');
+            if (titleEl) titleEl.textContent = data.title || '世界叙事';
+            if (storyEl) storyEl.textContent = data.story || '';
+            if (metaEl) {
+                const parts = [];
+                if (data.tick) parts.push(`tick ${data.tick}`);
+                if (data.evolution_count) parts.push(`${data.evolution_count}次进化`);
+                if (data.battle_count) parts.push(`${data.battle_count}场战斗`);
+                metaEl.textContent = parts.join(' · ') || '';
+            }
+        } catch (e) {
+            // 叙事未生成时静默忽略
+        }
+    }
+
     start();
 
     // 暴露调试接口
     window.DigimonWorld = {
         version: '1.0.0',
-        phase: 13,
+        phase: 14,
         getState: () => state,
         refresh: async () => { await fetchDigimon(); render(); },
         invalidateBgCache: () => { invalidateBgCache(); render(); },

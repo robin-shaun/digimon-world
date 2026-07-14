@@ -1000,6 +1000,34 @@ footer {
     }
 }
 
+/* ---- Phase 14: 世界叙事面板 ---- */
+.narrative-panel {
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.9), rgba(22, 33, 62, 0.9));
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-gold);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 16px 8px;
+    max-width: 960px;
+}
+.narrative-title {
+    font-size: 1.15em;
+    color: var(--accent-gold);
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+.narrative-story {
+    color: var(--text-primary);
+    line-height: 1.7;
+    margin: 8px 0;
+    font-style: italic;
+}
+.narrative-meta {
+    color: var(--text-muted);
+    font-size: 0.82em;
+    margin-top: 6px;
+}
+
 /* 小屏手机 (< 400px) 额外收紧 */
 @media (max-width: 400px) {
     h1 { font-size: 22px; }
