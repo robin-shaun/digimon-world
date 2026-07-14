@@ -121,6 +121,9 @@
 
     let pollTimer = null;
 
+    // Phase 13-②: 粒子特效系统 (进化火花 / 战斗爆裂 / 戳一下涟漪)
+    const particles = window.PARTICLE ? new PARTICLE.ParticleSystem() : null;
+
     // ══════════════════════════════════════════════
     //  Phase 13 ④: 离屏 Canvas 缓存 — 静态背景画一次, 每帧只 blit
     // ══════════════════════════════════════════════
@@ -549,6 +552,8 @@
         // 动态内容: 数码兽位置 + 天气粒子
         drawDigimon();
         drawWeatherParticles();
+        // Phase 13-②: 粒子特效 (进化火花 / 战斗爆裂等)
+        if (particles) particles.draw(ctx);
     }
 
     // render() 可能在一帧内被多次触发 (轮询 / 点击 / 加载), 用 rAF 防抖:
@@ -579,6 +584,8 @@
                     if (anyMoving) SFX.play('footstep');
                 }
             }
+            // Phase 13-②: 粒子特效更新
+            if (particles) particles.update(delta);
             renderNow();
         });
     }
@@ -678,6 +685,11 @@
             if (dx * dx + dy * dy < 22 * 22) {
                 state.selectedName = d.name;
                 showSidebar(d);
+                // Phase 13-②: 戳一下涟漪粒子 + 音效
+                const px = animSt ? animSt.renderX() : d.position.x;
+                const py = animSt ? animSt.renderY() : d.position.y;
+                if (particles) particles.poke(px, py);
+                if (window.SFX) window.SFX.play('notify');
                 render();
                 return;
             }
@@ -1507,6 +1519,28 @@
                 window.SFX.play('evolution');
             } else {
                 window.SFX.play('notify');
+            }
+        }
+        // Phase 13-②: 粒子特效 — 进化金光 / 战斗火花
+        if (particles && state.digimon.length > 0) {
+            // 从事件描述中提取数码兽名字并定位
+            const desc = e.description || '';
+            for (const d of state.digimon) {
+                if (desc.includes(d.name)) {
+                    const animSt = window.ANIM ? ANIM.manager.get(d.name) : null;
+                    const px = animSt ? animSt.renderX() : d.position.x;
+                    const py = animSt ? animSt.renderY() : d.position.y;
+                    if (e.type === 'evolution') {
+                        particles.evolution(px, py);
+                    } else if (e.type === 'battle' || e.type === 'battle_victory') {
+                        particles.battle(px, py);
+                    }
+                }
+            }
+            // 如果没匹配到名字, 在屏幕中心放一个
+            if (particles.alive === 0) {
+                if (e.type === 'evolution') particles.evolution(W * 0.5, H * 0.5);
+                else if (e.type === 'battle' || e.type === 'battle_victory') particles.battle(W * 0.5, H * 0.5);
             }
         }
         const stack = ensureNotifyStack();
