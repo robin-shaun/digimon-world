@@ -107,6 +107,7 @@
         regions: [],          // [{id, name, description, bounds, pois}]
         digimon: [],          // [{name, species, stage, attribute, region_id, position:{x,y}, current_plan}]
         selectedName: null,
+        keyboardFocusIndex: -1,  // Phase 13-②: 键盘导航焦点索引 (-1 = 无)
         connected: false,
         error: null,          // 后端不可达时的错误信息
         vitality: null,       // Phase 7: 世界活力分数 (0-100)
@@ -418,6 +419,19 @@
                     ctx.arc(x, dy, 10, 0, Math.PI * 2);
                     ctx.stroke();
                 }
+
+                // 键盘焦点: 青色虚线环 (区别于选中金环)
+                const kfIdx = state.keyboardFocusIndex;
+                if (!isSelected && kfIdx >= 0 && state.digimon[kfIdx] === d) {
+                    const pulse = 0.6 + 0.4 * Math.sin(Date.now() * 0.005);
+                    ctx.strokeStyle = `rgba(0, 212, 255, ${pulse.toFixed(2)})`;
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([4, 3]);
+                    ctx.beginPath();
+                    ctx.arc(x, dy, 11, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
             } else {
                 // ═══ 普通模式: 小emoji + 首字 + 精灵色光环 ═══
                 // Phase 13-②: walk cycle bounce on top of idle bounce
@@ -483,6 +497,19 @@
                     ctx.beginPath();
                     ctx.arc(x, dy, 15, 0, Math.PI * 2);
                     ctx.stroke();
+                }
+
+                // 键盘焦点: 青色虚线环
+                const kfIdx2 = state.keyboardFocusIndex;
+                if (!isSelected && kfIdx2 >= 0 && state.digimon[kfIdx2] === d) {
+                    const pulse2 = 0.6 + 0.4 * Math.sin(Date.now() * 0.005);
+                    ctx.strokeStyle = `rgba(0, 212, 255, ${pulse2.toFixed(2)})`;
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([4, 3]);
+                    ctx.beginPath();
+                    ctx.arc(x, dy, 19, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
                 }
             }
         }
@@ -684,6 +711,7 @@
             const dy = my - (animSt ? animSt.renderY() : d.position.y);
             if (dx * dx + dy * dy < 22 * 22) {
                 state.selectedName = d.name;
+                state.keyboardFocusIndex = state.digimon.indexOf(d);  // 同步键盘焦点
                 showSidebar(d);
                 // Phase 13-②: 戳一下涟漪粒子 + 音效
                 const px = animSt ? animSt.renderX() : d.position.x;
@@ -696,6 +724,7 @@
         }
         // 点空白取消选中
         state.selectedName = null;
+        state.keyboardFocusIndex = -1;
         hideSidebar();
         render();
     });
@@ -736,15 +765,59 @@
             const dy = my - d.position.y;
             if (dx * dx + dy * dy < 28 * 28) {  // 触控用更大的碰撞半径
                 state.selectedName = d.name;
+                state.keyboardFocusIndex = state.digimon.indexOf(d);  // 同步键盘焦点
                 showSidebar(d);
                 render();
                 return;
             }
         }
         state.selectedName = null;
+        state.keyboardFocusIndex = -1;
         hideSidebar();
         render();
     }, { passive: false });
+
+    // ══════════════════════════════════════════════
+    //  键盘导航: 方向键选数码兽, Enter 打开侧栏, Esc 取消
+    // ══════════════════════════════════════════════
+
+    document.addEventListener('keydown', (ev) => {
+        // 在输入框/按钮等聚焦时不拦截
+        const tag = document.activeElement ? document.activeElement.tagName : '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+
+        const n = state.digimon.length;
+        if (n === 0) return;
+
+        if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown' || (ev.key === 'Tab' && !ev.shiftKey)) {
+            ev.preventDefault();
+            state.keyboardFocusIndex = state.keyboardFocusIndex < 0 ? 0
+                : (state.keyboardFocusIndex + 1) % n;
+            state.selectedName = null;  // 仅焦点,不选中
+            hideSidebar();
+            render();
+        } else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' || (ev.key === 'Tab' && ev.shiftKey)) {
+            ev.preventDefault();
+            state.keyboardFocusIndex = state.keyboardFocusIndex < 0 ? n - 1
+                : (state.keyboardFocusIndex - 1 + n) % n;
+            state.selectedName = null;
+            hideSidebar();
+            render();
+        } else if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            if (state.keyboardFocusIndex >= 0 && state.keyboardFocusIndex < n) {
+                const d = state.digimon[state.keyboardFocusIndex];
+                state.selectedName = d.name;
+                showSidebar(d);
+                render();
+            }
+        } else if (ev.key === 'Escape') {
+            state.selectedName = null;
+            state.keyboardFocusIndex = -1;
+            hideSidebar();
+            render();
+        }
+    });
 
     // ══════════════════════════════════════════════
     //  侧栏
