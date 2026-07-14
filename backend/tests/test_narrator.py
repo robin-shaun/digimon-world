@@ -24,7 +24,7 @@ def test_narrator_singleton():
 
 def test_narrator_tick_skips_when_not_interval():
     """验证 tick 在未到间隔时不采集事件。"""
-    from digimon_world.world.narrator import get_narrator, NarratorSystem
+    from digimon_world.world.narrator import get_narrator
     from digimon_world.world import reset_narrator
 
     reset_narrator()
@@ -336,7 +336,6 @@ async def test_scheduler_integration_no_crash():
     NarratorSystem(interval=1)  # 切换单例
     reset_narrator()
     # 重新设置小间隔
-    from digimon_world.world.narrator import _narrator
     from digimon_world.world.narrator import NarratorSystem as NS
     import digimon_world.world.narrator as narratormod
     narratormod._narrator = NS(interval=1)
