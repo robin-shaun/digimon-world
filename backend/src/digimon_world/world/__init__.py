@@ -62,6 +62,11 @@ from .multiverse import (
     get_multiverse,
     reset_multiverse,
 )
+from .narrator import (
+    NarratorSystem,
+    get_narrator,
+    reset_narrator,
+)
 from .relationships import RelationshipTracker, get_tracker, reset_tracker
 from .scheduler import DEFAULT_TICK_SECONDS, WorldScheduler
 from .seasons import (
@@ -124,6 +129,8 @@ __all__ = [
     "LandmarkEffect",
     "LandmarkSystem",
     "MultiverseManager",
+    "NarratorSystem",
+    "PRIME_WORLD_ID",
     "Region",
     "SubRegion",
     "RelationshipTracker",
@@ -151,6 +158,7 @@ __all__ = [
     "get_festival_system",
     "get_landmark_system",
     "get_multiverse",
+    "get_narrator",
     "get_registry",
     "get_snapshot_manager",
     "get_season_system",
@@ -166,6 +174,7 @@ __all__ = [
     "reset_festival_system",
     "reset_landmark_system",
     "reset_multiverse",
+    "reset_narrator",
     "reset_registry",
     "reset_season_system",
     "reset_snapshot_manager",
