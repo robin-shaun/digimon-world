@@ -1,12 +1,15 @@
 {
   "name": "digimon-world-frontend",
-  "version": "0.1.0",
+  "version": "0.13.0",
   "private": true,
-  "description": "Frontend placeholder for Cloudflare Pages (Phase 0). No build step. Real UI comes in Phase 1+.",
+  "description": "Digimon World frontend — Canvas + PixiJS-free animation engine, particle FX, TTS, and sprite system. Phase 13.",
   "scripts": {
     "build": "echo 'No build step needed - static HTML' && exit 0",
-    "test": "node tests/test_animator.js && node tests/test_sprites.js",
+    "test": "node tests/test_animator.js && node tests/test_sprites.js && node tests/test_particles.js && node tests/test_audio.js && node tests/test_integration.js",
     "test:animator": "node tests/test_animator.js",
-    "test:sprites": "node tests/test_sprites.js"
+    "test:sprites": "node tests/test_sprites.js",
+    "test:particles": "node tests/test_particles.js",
+    "test:audio": "node tests/test_audio.js",
+    "test:integration": "node tests/test_integration.js"
   }
 }
