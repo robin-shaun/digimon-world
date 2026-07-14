@@ -564,7 +564,21 @@
             const delta = Math.min((now - lastFrameTime) / 1000, 0.1); // cap at 100ms
             lastFrameTime = now;
             // Update animation engine before drawing
-            if (window.ANIM) ANIM.manager.updateAll(delta);
+            if (window.ANIM) {
+                ANIM.manager.updateAll(delta);
+                // Phase 13-②: footstep SFX while digimon are moving
+                if (window.SFX && state.digimon.length > 0) {
+                    let anyMoving = false;
+                    for (const d of state.digimon) {
+                        const st = ANIM.manager.get(d.name);
+                        if (st && st.isMoving()) {
+                            anyMoving = true;
+                            break;
+                        }
+                    }
+                    if (anyMoving) SFX.play('footstep');
+                }
+            }
             renderNow();
         });
     }

@@ -314,6 +314,99 @@ assert(r2 === true, 'toggle→unmuted returns old state (true)');
 assert(SFX.isMuted() === false, 'now unmuted');
 
 // ═══════════════════════════════════════
+//  音量控制测试
+// ═══════════════════════════════════════
+
+section('Volume control');
+
+assert(typeof SFX.setVolume === 'function', 'setVolume is a function');
+assert(typeof SFX.getVolume === 'function', 'getVolume is a function');
+
+// 默认音量 = 1.0
+assert(SFX.getVolume() === 1.0, 'default volume = 1.0');
+
+// 设置音量
+SFX.setVolume(0.5);
+assert(SFX.getVolume() === 0.5, 'setVolume(0.5) → getVolume = 0.5');
+
+// 边界: 小于 0 截断为 0
+SFX.setVolume(-0.3);
+assert(SFX.getVolume() === 0, 'setVolume(-0.3) clamped to 0');
+
+// 边界: 大于 1 截断为 1
+SFX.setVolume(2.5);
+assert(SFX.getVolume() === 1, 'setVolume(2.5) clamped to 1');
+
+// 重置音量
+SFX.setVolume(1.0);
+
+// 音量降低后 play 增益应缩放 (验证不崩溃)
+SFX.setVolume(0.3);
+mockCalls.length = 0;
+SFX.play('notify');
+assert(mockCalls.filter(c => c === 'createOscillator').length >= 2,
+    'notify at 0.3 volume: still creates oscillators');
+
+SFX.setVolume(1.0);
+
+// ═══════════════════════════════════════
+//  新音效 — footstep
+// ═══════════════════════════════════════
+
+section('New SFX — footstep');
+
+mockCalls.length = 0;
+SFX.play('footstep');
+assert(mockCalls.includes('createOscillator'), 'footstep: creates oscillator (thud)');
+assert(mockCalls.includes('createBuffer'), 'footstep: creates noise buffer');
+assert(mockCalls.includes('createBiquadFilter'), 'footstep: uses highpass filter');
+
+// 节流: 200ms 内第二次调用应被忽略
+mockCalls.length = 0;
+SFX.play('footstep');
+SFX.play('footstep');  // 立即第二次, 应被节流
+const footstepOscCount = mockCalls.filter(c => c === 'createOscillator').length;
+assert(footstepOscCount <= 1, `footstep throttle: ≤1 oscillator (got ${footstepOscCount})`);
+
+// ═══════════════════════════════════════
+//  新音效 — digivice
+// ═══════════════════════════════════════
+
+section('New SFX — digivice');
+
+mockCalls.length = 0;
+SFX.play('digivice');
+// 三连音 (3 oscillators) + shimmer (1 oscillator) = 4 total
+const digiviceOscCount = mockCalls.filter(c => c === 'createOscillator').length;
+assert(digiviceOscCount >= 3, `digivice: ≥3 oscillators (got ${digiviceOscCount})`);
+
+// ═══════════════════════════════════════
+//  新音效 — heal
+// ═══════════════════════════════════════
+
+section('New SFX — heal');
+
+mockCalls.length = 0;
+SFX.play('heal');
+// 4 主音 + 4 泛音 = 8 oscillators
+const healOscCount = mockCalls.filter(c => c === 'createOscillator').length;
+assert(healOscCount >= 6, `heal: ≥6 oscillators (got ${healOscCount})`);
+
+// ═══════════════════════════════════════
+//  静音时新音效也抑制
+// ═══════════════════════════════════════
+
+section('Muted: new sounds suppressed');
+
+SFX.mute();
+mockCalls.length = 0;
+SFX.play('footstep');
+SFX.play('digivice');
+SFX.play('heal');
+assert(mockCalls.length === 0, 'muted: no audio calls for new sounds');
+SFX.unmute();
+
+// ═══════════════════════════════════════
 //  结果汇总
 // ═══════════════════════════════════════
 
