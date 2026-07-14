@@ -33,6 +33,7 @@ from .daynight import DayNightSystem, get_daynight_system
 from .ecology import EcologySystem, get_ecology_system
 from .environmental_events import EnvironmentalEventSystem, get_env_events_system
 from .events import CHECK_INTERVAL_TICKS, StoryDirector
+from .narrator import get_narrator
 from .factions import FactionRegistry
 from .festivals import FestivalSystem, get_festival_system
 from .interactions import detect_proximity
@@ -290,6 +291,9 @@ class WorldScheduler:
         # 8. Phase 10 环境演化阶段:
         #    昼夜循环、天气切换、生态更新、环境事件检测
         await self._process_environment(agents)
+        # 9. Phase 14 世界叙事阶段:
+        #    每 N tick 收集重大事件 → LLM 生成故事摘要
+        await self._process_narrative()
         self._tick_count += 1
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
@@ -493,6 +497,21 @@ class WorldScheduler:
                     agent.observe(ev)
                 except Exception as e:
                     logger.warning("env_event observe failed for %s: %s", agent.name, e)
+
+    # ---- Phase 14: 世界叙事处理 ----
+    async def _process_narrative(self) -> None:
+        """每 tick 调用,由 NarratorSystem 内部决定是否到叙事间隔。
+
+        失败时优雅降级,不影响世界循环。
+        """
+        try:
+            from .timeline import get_timeline_system
+
+            narrator = get_narrator()
+            timeline = get_timeline_system()
+            await narrator.tick_async(self._world, timeline)
+        except Exception as e:
+            logger.warning("Narrator tick_async failed: %s", e)
 
     @staticmethod
     def _score_event_significance(event: dict[str, Any]) -> int:

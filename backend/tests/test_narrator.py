@@ -9,8 +9,9 @@ import pytest
 
 def test_narrator_singleton():
     """验证 NarratorSystem 单例模式。"""
-    from digimon_world.world.narrator import get_narrator, NarratorSystem
+    from digimon_world.world.narrator import get_narrator, NarratorSystem, reset_narrator
 
+    reset_narrator()
     n1 = get_narrator()
     n2 = get_narrator()
     assert n1 is n2
@@ -303,5 +304,48 @@ async def test_compose_async_empty_events():
     result = await n._compose_async(context)
     assert "story" in result
     assert result["events_count"] == 0
+
+    set_client(FakeLlmClient())
+
+
+@pytest.mark.asyncio
+async def test_scheduler_integration_no_crash():
+    """验证 Scheduler tick_once 在加入 _process_narrative 后不崩溃。"""
+    from digimon_world.llm.client import FakeLlmClient, set_client
+    from digimon_world.world.clock import WorldClock
+    from digimon_world.world.narrator import reset_narrator, NarratorSystem
+    from digimon_world.world.scheduler import WorldScheduler
+    from digimon_world.world.world_state import get_world, reset_world
+
+    # 用 FakeLlmClient 避免真实 LLM 调用
+    set_client(FakeLlmClient(default_reply="标题: 测试\n摘要: 测试故事"))
+
+    reset_world()
+    reset_narrator()
+    world = get_world()
+    clock = WorldClock(real_to_world_ratio=60)
+
+    # 注入一个事件,确保有素材
+    world.events.append({
+        "type": "evolution",
+        "description": "test evolution",
+        "importance": 9,
+    })
+
+    # 用 interval=1 确保首次 tick 就触发
+    NarratorSystem(interval=1)  # 切换单例
+    reset_narrator()
+    # 重新设置小间隔
+    from digimon_world.world.narrator import _narrator
+    from digimon_world.world.narrator import NarratorSystem as NS
+    import digimon_world.world.narrator as narratormod
+    narratormod._narrator = NS(interval=1)
+
+    scheduler = WorldScheduler(world=world, clock=clock)
+
+    # tick_once 不应崩溃
+    events = await scheduler.tick_once(real_seconds=1.0)
+    assert events is not None
+    # 不应抛出异常
 
     set_client(FakeLlmClient())
