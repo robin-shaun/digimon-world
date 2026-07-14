@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+import pytest
+
 
 def test_narrator_singleton():
     """验证 NarratorSystem 单例模式。"""
@@ -147,3 +149,159 @@ def test_narration_count_property():
     assert n.narration_count == 0
     n.journal.append({"tick": 100, "title": "test", "story": "test"})
     assert n.narration_count == 1
+
+
+@pytest.mark.asyncio
+async def test_compose_async_fallback():
+    """验证 _compose_async 在 FakeLlM 环境下工作 (回退到同步版本)。"""
+    from digimon_world.world.narrator import NarratorSystem, reset_narrator
+
+    reset_narrator()
+    n = NarratorSystem()
+    context = {
+        "tick": 500,
+        "agent_count": 30,
+        "events": [
+            {"type": "evolution", "icon": "✨", "title": "亚古兽进化暴龙兽", "importance": 9},
+            {"type": "battle", "icon": "⚔️", "title": "暴龙兽 vs 恶魔兽", "importance": 8},
+        ],
+        "evolution_count": 1,
+        "battle_count": 1,
+        "disaster_count": 0,
+    }
+    result = await n._compose_async(context)
+    assert "story" in result
+    assert "title" in result
+    assert "events_count" in result
+    assert result["evolution_count"] == 1
+    assert result["battle_count"] == 1
+    assert result["tick"] == 500
+
+
+@pytest.mark.asyncio
+async def test_compose_async_with_fake_llm():
+    """验证 _compose_async 用 FakeLlmClient 正确解析 LLM 响应。"""
+    from digimon_world.llm.client import (
+        FakeLlmClient,
+        LlmModel,
+        set_client,
+        get_client,
+    )
+    from digimon_world.world.narrator import NarratorSystem, reset_narrator
+
+    # 注入 FakeClient 预设叙事回复
+    fake = FakeLlmClient()
+    fake.set_reply(
+        model=LlmModel.MINIMAX_TEXT_01,
+        contains="数码世界的说书人",
+        reply="标题: 进化之光\n摘要: 亚古兽绽放出耀眼的光芒,进化成了暴龙兽!与此同时,暴龙兽与恶魔兽展开激烈战斗。",
+    )
+    set_client(fake)
+
+    reset_narrator()
+    n = NarratorSystem()
+    context = {
+        "tick": 800,
+        "agent_count": 30,
+        "events": [
+            {"type": "evolution", "icon": "✨", "title": "亚古兽进化暴龙兽", "importance": 9},
+            {"type": "battle", "icon": "⚔️", "title": "暴龙兽 vs 恶魔兽", "importance": 8},
+        ],
+        "evolution_count": 1,
+        "battle_count": 1,
+        "disaster_count": 0,
+    }
+
+    result = await n._compose_async(context)
+    assert result["title"] == "进化之光"
+    assert "亚古兽" in result["story"]
+    assert result["events_count"] == 2
+    assert result["evolution_count"] == 1
+
+    # 还原
+    set_client(get_client())
+
+
+@pytest.mark.asyncio
+async def test_tick_async_with_world():
+    """验证 tick_async 在有 world 和 timeline 时触发叙事。"""
+    from digimon_world.llm.client import (
+        FakeLlmClient,
+        LlmModel,
+        set_client,
+    )
+    from digimon_world.world.narrator import (
+        NarratorSystem,
+        reset_narrator,
+    )
+    from digimon_world.world.timeline import TimelineSystem
+    from digimon_world.world.world_state import get_world, reset_world
+
+    # 注入 FakeClient
+    fake = FakeLlmClient()
+    fake.set_reply(
+        model=LlmModel.MINIMAX_TEXT_01,
+        contains="数码世界的说书人",
+        reply="标题: 测试叙事\n摘要: 测试故事内容。",
+    )
+    set_client(fake)
+
+    reset_world()
+    reset_narrator()
+    n = NarratorSystem(interval=1)  # 每 tick 都触发
+    world = get_world()
+    timeline = TimelineSystem()
+
+    # 注入一个进化事件到 world.events
+    world.events.append({
+        "type": "evolution",
+        "description": "亚古兽进化暴龙兽",
+        "importance": 9,
+    })
+
+    assert n.narration_count == 0
+    assert n._tick_counter == 0
+
+    result = await n.tick_async(world, timeline)
+    assert result is not None
+    assert n.narration_count == 1
+    assert "story" in n.journal[0]
+
+    # 还原
+    set_client(FakeLlmClient())
+
+
+@pytest.mark.asyncio
+async def test_compose_async_empty_events():
+    """验证 _compose_async 在空事件列表时仍能工作。"""
+    from digimon_world.llm.client import (
+        FakeLlmClient,
+        LlmModel,
+        set_client,
+    )
+    from digimon_world.world.narrator import NarratorSystem, reset_narrator
+
+    fake = FakeLlmClient()
+    fake.set_reply(
+        model=LlmModel.MINIMAX_TEXT_01,
+        contains="数码世界的说书人",
+        reply="标题: 平静之日\n摘要: 数码世界今天很平静。",
+    )
+    set_client(fake)
+
+    reset_narrator()
+    n = NarratorSystem()
+    context = {
+        "tick": 200,
+        "agent_count": 30,
+        "events": [],
+        "evolution_count": 0,
+        "battle_count": 0,
+        "disaster_count": 0,
+    }
+
+    result = await n._compose_async(context)
+    assert "story" in result
+    assert result["events_count"] == 0
+
+    set_client(FakeLlmClient())
