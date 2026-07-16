@@ -31,6 +31,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -509,11 +510,35 @@ def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:
         event["faction_id"] = faction.faction_id
         event["members"] = sorted(faction.members)
 
+    # ---- 查找受影响的数码兽，生成 affected_agents 和 impact_summary ----
+    event_region = req.region_id
+    agents = world.all()
+
+    # 筛选同区域的数码兽；无 region_id 或 "global" 则影响全部
+    if event_region and event_region != "global":
+        affected = [a for a in agents if a.region_id == event_region]
+    else:
+        affected = agents
+
+    reactions = ["惊讶", "好奇", "警惕", "兴奋", "紧张", "观望"]
+    affected_agents = [
+        {"name": a.name, "reaction": random.choice(reactions)}
+        for a in affected
+    ]
+
+    if affected_agents:
+        region_hint = f"（{event_region}）" if event_region and event_region != "global" else ""
+        impact_summary = f"{req.description}{region_hint}，{len(affected_agents)}只数码兽受到影响"
+    else:
+        impact_summary = req.description
+
     # id 用当前列表长度 - 1 (即刚 append 的索引)
     return {
         "id": len(world.events) - 1,
         "type": req.type,
         "description": req.description,
+        "affected_agents": affected_agents,
+        "impact_summary": impact_summary,
     }
 
 
