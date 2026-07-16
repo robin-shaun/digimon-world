@@ -53,6 +53,9 @@ from ..battle import BattleEngine, BattleResult, spar
 from ..llm.client import get_client
 from .. import tts as tts_module
 from ..world import (
+    AffectVector,
+    RelationalCircle,
+    RelationalDistance,
     WorldClock,
     WorldScheduler,
     compute_vitality,
@@ -853,58 +856,72 @@ def get_digimon_relations(name: str) -> dict[str, Any]:
     """返回某数码兽的完整差序格局视图。
 
     遍历所有其他数码兽,用 RelationalDistance 分类到五个圈层
-    (intimate/close/acquaintance/outsider/stranger),并附带
-    VAD 三维情感向量 (valence/arousal/dominance)。
+    (INTIMATE/FRIENDLY/ACQUAINTANCE/NEUTRAL/HOSTILE),并附带
+    情感向量、关系距离、综合得分、合作意愿阈值等数据。
 
     Raises:
         404: 数码兽不存在。
     """
-    from ..world.relational_circle import RelationalDistance
-
     world = get_world()
     agent = world.get(name)
     if agent is None:
-        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
 
     tracker = get_tracker()
     rd = RelationalDistance(name, tracker)
 
-    # 初始化所有圈层为空列表
-    circles: dict[str, list[dict[str, Any]]] = {
-        "intimate": [],
-        "close": [],
-        "acquaintance": [],
-        "outsider": [],
-        "stranger": [],
+    # 对其他每个 agent 计算关系
+    relations: dict[str, dict[str, Any]] = {}
+    summary_counts = {
+        "intimate_count": 0,
+        "friendly_count": 0,
+        "acquaintance_count": 0,
+        "neutral_count": 0,
+        "hostile_count": 0,
     }
 
-    total = 0
     for other in world.all():
         if other.name == name:
             continue
-        total += 1
 
-        # 用 classify 判定圈层
-        circle = rd.classify(other.name)
-        circle_key = _CIRCLE_KEY_MAP.get(circle.name, "outsider")
-
-        # 获取归一化距离
+        circle = rd.get_circle(other.name)
         distance = rd.get_relation_distance(other.name)
-
-        # 获取情感向量并映射到 VAD
         affect = rd.get_affect_vector(other.name)
-        vad = _affect_to_vad(affect)
+        composite = tracker.get_composite_score(name, other.name)
 
-        circles[circle_key].append({
-            "name": other.name,
+        cooperation_threshold = {
+            "low_risk": rd.compute_cooperation_threshold(other.name, task_risk=0.1),
+            "medium_risk": rd.compute_cooperation_threshold(other.name, task_risk=0.5),
+            "high_risk": rd.compute_cooperation_threshold(other.name, task_risk=0.9),
+        }
+
+        relations[other.name] = {
+            "circle": circle.name,
+            "circle_label": circle.label_cn(),
             "distance": distance,
-            "affect": vad,
-        })
+            "affect": affect.to_dict(),
+            "composite_score": round(composite, 2),
+            "cooperation_threshold": cooperation_threshold,
+        }
+
+        # 计数
+        if circle == RelationalCircle.INTIMATE:
+            summary_counts["intimate_count"] += 1
+        elif circle == RelationalCircle.FRIENDLY:
+            summary_counts["friendly_count"] += 1
+        elif circle == RelationalCircle.ACQUAINTANCE:
+            summary_counts["acquaintance_count"] += 1
+        elif circle == RelationalCircle.NEUTRAL:
+            summary_counts["neutral_count"] += 1
+        elif circle == RelationalCircle.HOSTILE:
+            summary_counts["hostile_count"] += 1
 
     return {
-        "name": name,
-        "circles": circles,
-        "total_relations": total,
+        "agent": name,
+        "self_circle": "INTIMATE",
+        "self_circle_label": "至交",
+        "relations": relations,
+        "summary": summary_counts,
     }
 
 
