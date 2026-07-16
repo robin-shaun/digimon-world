@@ -306,7 +306,7 @@
 
 **论文依据**: arXiv:2606.23764 "Emergent Relational Order in LLM Agent Societies: From Collective Affect to Authority Stratification" (ACL 2026)
 
-- [ ] Task 1 — `relational_circle.py` 核心模块: RelationalCircle 枚举 + AffectVector 情感向量 + RelationalDistance 关系距离分类器
+- [x] Task 1 — `relational_circle.py` 核心模块: RelationalCircle 枚举 + AffectVector 情感向量 + RelationalDistance 关系距离分类器 ✅
 - [ ] Task 2 — API 端点 `/api/relations/{name}`: 返回某数码兽的完整差序格局视图（圈层分类 + 关系距离 + 情感向量）
 - [ ] Task 3 — 前端关系圈层可视化: 在数码兽详情侧栏展示差序格局同心圆图（Canvas 绘制）
 - [ ] Task 4 — 情感传播引擎: 当某数码兽情绪剧烈变化时，按关系距离衰减传播至圈内其他数码兽
