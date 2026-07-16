@@ -863,6 +863,19 @@ footer {
     color: var(--accent-gold);
 }
 
+/* ---- Phase 16: 差序格局同心圆可视化 ---- */
+.relation-circle-canvas {
+    display: block;
+    width: 100%;
+    max-width: 300px;
+    height: auto;
+    margin: 8px auto 0 auto;
+    border-radius: 50%;
+    background: rgba(10, 14, 39, 0.5);
+    border: 1px solid rgba(42, 58, 106, 0.5);
+    box-shadow: 0 0 16px rgba(0, 212, 255, 0.08);
+}
+
 /* ══════════════════════════════════════════════
    Phase 12: 移动端 H5 适配 (响应式 + 触控)
    ══════════════════════════════════════════════ */

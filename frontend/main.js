@@ -883,15 +883,18 @@
         let detail = null;
         let pairs = [];
         let achievements = [];
+        let relationData = null;
         try {
-            const [dResp, rResp, aResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/relations/' + encodeURIComponent(name), { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
             if (aResp.ok) achievements = (await aResp.json()).achievements || [];
+            if (relResp.ok) relationData = await relResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -974,11 +977,177 @@
             </div>
         `;
         sb.insertAdjacentHTML('beforeend', detailHtml);
+
+        // Phase 16: 差序格局同心圆可视化
+        if (relationData && relationData.circles) {
+            sb.insertAdjacentHTML('beforeend',
+                '<div class="detail-block">' +
+                '<h4>🎯 关系圈层</h4>' +
+                '<canvas class="relation-circle-canvas" width="300" height="300"></canvas>' +
+                '</div>');
+            const relCanvas = sb.querySelector('.relation-circle-canvas');
+            if (relCanvas) drawRelationCircles(relCanvas, relationData);
+        }
     }
 
     function hideSidebar() {
         const sb = document.getElementById('sidebar');
         if (sb) sb.classList.remove('open');
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 16: 差序格局同心圆可视化
+    // ══════════════════════════════════════════════
+
+    /**
+     * 在 Canvas 上绘制 5 层同心圆差序格局图。
+     * 从内到外: 亲密(intimate) → 亲近(close) → 熟人(acquaintance) → 外人(outsider) → 陌生人(stranger)。
+     * 暖色(内圈) → 冷色(外圈)。
+     */
+    function drawRelationCircles(canvas, data) {
+        const c = canvas.getContext('2d');
+        const w = canvas.width;   // 300
+        const h = canvas.height;  // 300
+        const cx = w / 2;
+        const cy = h / 2;
+
+        // 暗色背景
+        c.fillStyle = 'rgba(10, 14, 39, 0.6)';
+        c.fillRect(0, 0, w, h);
+
+        const layers = [
+            { key: 'intimate',  label: '亲密',   radius: 30,  color: '#ff6b6b', dotColor: '#ff4444', alpha: 1.0 },
+            { key: 'close',     label: '亲近',   radius: 58,  color: '#ffb347', dotColor: '#ff9500', alpha: 0.9 },
+            { key: 'acquaintance', label: '熟人', radius: 86,  color: '#74b9ff', dotColor: '#4da6ff', alpha: 0.8 },
+            { key: 'outsider',  label: '外人',   radius: 114, color: '#6c5ce7', dotColor: '#7c6cff', alpha: 0.65 },
+            { key: 'stranger',  label: '陌生人',  radius: 142, color: '#636e72', dotColor: '#888888', alpha: 0.5 },
+        ];
+
+        // 绘制圆环 (从外到内画填充, 再从内到外画描边)
+        for (let i = layers.length - 1; i >= 0; i--) {
+            const layer = layers[i];
+            const prevR = i > 0 ? layers[i - 1].radius : 10;  // 最内圈: 中心小圆
+
+            // 圈层填充 (从上一圈边缘到本圈边缘)
+            c.fillStyle = layer.color.replace(')', `, ${layer.alpha * 0.08})`).replace('rgb', 'rgba');
+            if (layer.color.startsWith('#')) {
+                const hex = layer.color;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                c.fillStyle = `rgba(${r}, ${g}, ${b}, ${(layer.alpha * 0.08).toFixed(2)})`;
+            }
+            c.beginPath();
+            c.arc(cx, cy, layer.radius, 0, Math.PI * 2);
+            c.arc(cx, cy, prevR, 0, Math.PI * 2, true);
+            c.fill();
+
+            // 圈层边界线
+            c.strokeStyle = layer.color.replace(')', `, ${layer.alpha * 0.55})`).replace('rgb', 'rgba');
+            if (layer.color.startsWith('#')) {
+                const hex = layer.color;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                c.strokeStyle = `rgba(${r}, ${g}, ${b}, ${(layer.alpha * 0.55).toFixed(2)})`;
+            }
+            c.lineWidth = 1;
+            c.beginPath();
+            c.arc(cx, cy, layer.radius, 0, Math.PI * 2);
+            c.stroke();
+        }
+
+        // 圈层标签 (右边缘标注)
+        for (const layer of layers) {
+            const labelAngle = 0.15;  // 标签角度位置
+            const lx = cx + Math.cos(labelAngle) * layer.radius;
+            const ly = cy + Math.sin(labelAngle) * layer.radius;
+            c.fillStyle = layer.color;
+            c.globalAlpha = 0.85;
+            c.font = '9px monospace';
+            c.textAlign = 'left';
+            c.textBaseline = 'middle';
+            c.fillText(layer.label, lx + 5, ly);
+            c.globalAlpha = 1.0;
+        }
+
+        // 中心: 当前数码兽名字 + emoji
+        const centerEmoji = getDigimonEmoji(data.name, '', '');
+        // 中心圆背景
+        const centerGrad = c.createRadialGradient(cx, cy, 2, cx, cy, 14);
+        centerGrad.addColorStop(0, 'rgba(255, 215, 0, 0.25)');
+        centerGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+        c.fillStyle = centerGrad;
+        c.beginPath();
+        c.arc(cx, cy, 14, 0, Math.PI * 2);
+        c.fill();
+
+        // 中心 emoji
+        c.font = '16px serif';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillStyle = '#ffd700';
+        c.fillText(centerEmoji, cx, cy - 8);
+
+        // 中心名字 (截断过长的名字)
+        const centerName = data.name.length > 4 ? data.name.slice(0, 4) : data.name;
+        c.font = 'bold 10px monospace';
+        c.fillStyle = '#ffd700';
+        c.fillText(centerName, cx, cy + 10);
+
+        // 散布各圈层的数码兽
+        for (const layer of layers) {
+            const members = data.circles[layer.key] || [];
+            if (members.length === 0) continue;
+
+            const innerR = layer.key === 'intimate' ? 14 : (layers[layers.indexOf(layer) - 1].radius + 3);
+            const outerR = layer.radius - 4;
+            const midR = (innerR + outerR) / 2;
+
+            for (let i = 0; i < members.length && i < 12; i++) {
+                // 使用 golden angle (137.5°) 让分布更均匀
+                const angle = (i * 2.3999633 + layer.key.charCodeAt(0) * 0.5) % (Math.PI * 2);
+                // 交错半径
+                const r = (i % 3 === 0) ? innerR + 4 : (i % 3 === 1) ? midR : outerR - 2;
+                const x = cx + Math.cos(angle) * r;
+                const y = cy + Math.sin(angle) * r;
+
+                // 圆点
+                const dotR = layer.key === 'intimate' ? 4 : (layer.key === 'close' ? 3 : 2.5);
+                c.fillStyle = layer.dotColor;
+                c.globalAlpha = layer.alpha;
+                c.beginPath();
+                c.arc(x, y, dotR, 0, Math.PI * 2);
+                c.fill();
+
+                // 名字 (只在不拥挤时显示)
+                if (members.length <= 8) {
+                    c.fillStyle = layer.color;
+                    c.globalAlpha = layer.alpha * 0.9;
+                    c.font = '7px monospace';
+                    c.textAlign = 'center';
+                    c.textBaseline = 'bottom';
+                    const shortName = members[i].name.length > 3 ? members[i].name.slice(0, 3) : members[i].name;
+                    c.fillText(shortName, x, y - dotR - 1);
+                }
+            }
+
+            // 圈子底部显示数量
+            if (members.length > 8) {
+                c.fillStyle = layer.color;
+                c.globalAlpha = layer.alpha * 0.7;
+                c.font = '7px monospace';
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                const countX = cx + Math.cos(3.5) * (innerR + outerR) / 2;
+                const countY = cy + Math.sin(3.5) * (innerR + outerR) / 2;
+                c.fillText(`×${members.length}`, countX, countY);
+            }
+        }
+
+        c.globalAlpha = 1.0;
+        c.textBaseline = 'alphabetic';
+        c.textAlign = 'left';
     }
 
     // ══════════════════════════════════════════════

@@ -825,32 +825,7 @@ def get_relationships() -> dict[str, Any]:
     return {"count": len(pairs), "pairs": pairs}
 
 
-# ---- 差序格局 API (Phase 16) ----
-
-# RelationalCircle → API 输出键名映射
-_CIRCLE_KEY_MAP: dict[str, str] = {
-    "INTIMATE": "intimate",
-    "FRIENDLY": "close",
-    "ACQUAINTANCE": "acquaintance",
-    "NEUTRAL": "outsider",
-    "HOSTILE": "stranger",
-}
-
-
-def _affect_to_vad(affect: "AffectVector") -> dict[str, float]:  # noqa: F821
-    """将 AffectVector (trust/affection/respect/fear) 映射为 VAD 三维情感向量。
-
-    - valence: 效价, (trust + affection) / 2
-    - arousal: 唤醒度, RMS 强度
-    - dominance: 支配感, (respect + (1 - fear)) / 2
-    """
-    return {
-        "valence": round((affect.trust + affect.affection) / 2.0, 4),
-        "arousal": round(affect.intensity(), 4),
-        "dominance": round((affect.respect + (1.0 - affect.fear)) / 2.0, 4),
-    }
-
-
+# ---- 排行榜 API ----
 @app.get("/api/relations/{name}")
 def get_digimon_relations(name: str) -> dict[str, Any]:
     """返回某数码兽的完整差序格局视图。
