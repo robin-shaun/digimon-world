@@ -822,6 +822,92 @@ def get_relationships() -> dict[str, Any]:
     return {"count": len(pairs), "pairs": pairs}
 
 
+# ---- 差序格局 API (Phase 16) ----
+
+# RelationalCircle → API 输出键名映射
+_CIRCLE_KEY_MAP: dict[str, str] = {
+    "INTIMATE": "intimate",
+    "FRIENDLY": "close",
+    "ACQUAINTANCE": "acquaintance",
+    "NEUTRAL": "outsider",
+    "HOSTILE": "stranger",
+}
+
+
+def _affect_to_vad(affect: "AffectVector") -> dict[str, float]:  # noqa: F821
+    """将 AffectVector (trust/affection/respect/fear) 映射为 VAD 三维情感向量。
+
+    - valence: 效价, (trust + affection) / 2
+    - arousal: 唤醒度, RMS 强度
+    - dominance: 支配感, (respect + (1 - fear)) / 2
+    """
+    return {
+        "valence": round((affect.trust + affect.affection) / 2.0, 4),
+        "arousal": round(affect.intensity(), 4),
+        "dominance": round((affect.respect + (1.0 - affect.fear)) / 2.0, 4),
+    }
+
+
+@app.get("/api/relations/{name}")
+def get_digimon_relations(name: str) -> dict[str, Any]:
+    """返回某数码兽的完整差序格局视图。
+
+    遍历所有其他数码兽,用 RelationalDistance 分类到五个圈层
+    (intimate/close/acquaintance/outsider/stranger),并附带
+    VAD 三维情感向量 (valence/arousal/dominance)。
+
+    Raises:
+        404: 数码兽不存在。
+    """
+    from ..world.relational_circle import RelationalDistance
+
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    tracker = get_tracker()
+    rd = RelationalDistance(name, tracker)
+
+    # 初始化所有圈层为空列表
+    circles: dict[str, list[dict[str, Any]]] = {
+        "intimate": [],
+        "close": [],
+        "acquaintance": [],
+        "outsider": [],
+        "stranger": [],
+    }
+
+    total = 0
+    for other in world.all():
+        if other.name == name:
+            continue
+        total += 1
+
+        # 用 classify 判定圈层
+        circle = rd.classify(other.name)
+        circle_key = _CIRCLE_KEY_MAP.get(circle.name, "outsider")
+
+        # 获取归一化距离
+        distance = rd.get_relation_distance(other.name)
+
+        # 获取情感向量并映射到 VAD
+        affect = rd.get_affect_vector(other.name)
+        vad = _affect_to_vad(affect)
+
+        circles[circle_key].append({
+            "name": other.name,
+            "distance": distance,
+            "affect": vad,
+        })
+
+    return {
+        "name": name,
+        "circles": circles,
+        "total_relations": total,
+    }
+
+
 # ---- 排行榜 API ----
 @app.get("/api/leaderboard")
 def get_leaderboard(
