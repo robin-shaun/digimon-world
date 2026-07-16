@@ -1651,6 +1651,22 @@
                 if (ev.key === 'Enter') submit();
             });
         }
+        // Phase 15 Task 4: 选择不同事件类型时，动态切换 input placeholder
+        if (typeSel && input) {
+            var typePlaceholders = {
+                'evolution_event': '描述进化触发条件…',
+                'festival': '描述节日内容和影响…',
+                'battle_event': '描述战斗双方和场景…',
+                'director_event': '事件描述…',
+                'weather': '描述天气变化…',
+                'disaster': '描述灾害详情…',
+                'faction_create': '描述新派系名称…',
+                'encounter': '描述遭遇详情…',
+            };
+            typeSel.addEventListener('change', function () {
+                input.placeholder = typePlaceholders[typeSel.value] || '事件描述…';
+            });
+        }
         // 保存 / 加载
         const saveBtn = document.getElementById('save-btn');
         const loadBtn = document.getElementById('load-btn');
@@ -1686,6 +1702,9 @@
         evolution:      { icon: '✨', label: '进化', color: '#4ae8c4' },
         story_event:    { icon: '📖', label: '剧情', color: '#b68aff' },
         director_event: { icon: '🎬', label: '导演事件', color: '#ffd700' },
+        evolution_event: { icon: '✨', label: '进化事件', color: '#4ae8c4' },
+        festival:       { icon: '🎉', label: '节日', color: '#ff9ff3' },
+        battle_event:   { icon: '⚔️', label: '战斗', color: '#ff6b6b' },
     };
     const NOTIFY_POLL_MS = 3000;   // 轮询间隔
     const NOTIFY_TTL_MS = 3000;    // 每条通知停留时长

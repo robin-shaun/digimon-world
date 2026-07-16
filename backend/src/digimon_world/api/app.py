@@ -514,21 +514,40 @@ def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:
     event_region = req.region_id
     agents = world.all()
 
+    # Phase 15 Task 4: festival 类型强制全局影响
+    if req.type == "festival":
+        event_region = "global"
+
     # 筛选同区域的数码兽；无 region_id 或 "global" 则影响全部
     if event_region and event_region != "global":
         affected = [a for a in agents if a.region_id == event_region]
     else:
         affected = agents
 
-    reactions = ["惊讶", "好奇", "警惕", "兴奋", "紧张", "观望"]
+    # Phase 15 Task 4: 分类型 reaction 列表
+    type_reactions = {
+        "evolution_event": ["兴奋", "期待", "渴望", "不安"],
+        "festival": ["开心", "庆祝", "期待", "放松"],
+        "battle_event": ["紧张", "警惕", "兴奋", "准备战斗"],
+    }
+    reactions = type_reactions.get(req.type, ["惊讶", "好奇", "警惕", "兴奋", "紧张", "观望"])
     affected_agents = [
         {"name": a.name, "reaction": random.choice(reactions)}
         for a in affected
     ]
 
+    # Phase 15 Task 4: evolution_event → 注入进化能量记忆
+    if req.type == "evolution_event":
+        for a in affected:
+            a.observe({"type": "evolution_feel", "message": "数码兽感受到进化能量涌动", "at": datetime.now().isoformat()})
+
     if affected_agents:
-        region_hint = f"（{event_region}）" if event_region and event_region != "global" else ""
-        impact_summary = f"{req.description}{region_hint}，{len(affected_agents)}只数码兽受到影响"
+        if req.type == "festival":
+            region_hint = "（全区域）"
+            impact_summary = f"{req.description}{region_hint}，节日气氛弥漫，{len(affected_agents)}只数码兽沉浸在欢乐中"
+        else:
+            region_hint = f"（{event_region}）" if event_region and event_region != "global" else ""
+            impact_summary = f"{req.description}{region_hint}，{len(affected_agents)}只数码兽受到影响"
     else:
         impact_summary = req.description
 
