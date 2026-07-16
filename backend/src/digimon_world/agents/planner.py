@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
-
 from ..llm.client import ChatMessage, ChatRequest, LlmClient, LlmModel
 
 if TYPE_CHECKING:
@@ -79,6 +78,18 @@ class Planner:
         personality_summary = agent.get_personality_summary()
         if personality_summary:
             personality_line = personality_summary + "\n"
+        # 获取 MBTI 人格类型,注入规划 prompt
+        try:
+            from ..world.personality_engine import get_personality_engine  # noqa: PLC0415
+            engine = get_personality_engine()
+            profile = engine.get(agent.name)
+            if profile and profile.type_code:
+                mbti_type = profile.type_code
+                ei_label = "外向" if mbti_type[0] == "E" else "内向"
+                jp_label = "计划" if mbti_type[3] == "J" else "灵活"
+                personality_line += f"你的MBTI人格: {mbti_type}，倾向以{ei_label}{jp_label}方式行动\n"
+        except Exception:
+            pass
 
         # 构造 prompt
         prompt = (

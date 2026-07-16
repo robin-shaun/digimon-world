@@ -13,13 +13,13 @@ Dialogue - 数码兽对话生成器
 - 用 Haiku 4.5(便宜,对话不需要太聪明)
 - async,不阻塞调度主循环
 - LLM 失败 → 返回 fallback '... (沉默)',绝不抛异常打断 tick
+- Phase 17: 注入 MBTI 人格影响对话语气
 """
 
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
-
 from ..llm.client import ChatMessage, ChatRequest, LlmClient, LlmModel
 
 if TYPE_CHECKING:
@@ -32,6 +32,43 @@ FALLBACK_LINE = "... (沉默)"
 
 # 取每只数码兽最近 N 条记忆作为对话素材
 RECENT_MEMORY_COUNT = 3
+
+# MBTI 类型 → 中文维度描述
+_MBTI_LABELS: dict[str, str] = {
+    "E": "外向", "I": "内向",
+    "S": "感觉", "N": "直觉",
+    "T": "思考", "F": "情感",
+    "J": "判断", "P": "感知",
+}
+
+# 16 种 MBTI 类型 → 对话风格提示
+_MBTI_STYLE: dict[str, str] = {
+    "INTJ": "冷静策略、简洁直接",
+    "INTP": "冷静分析、逻辑探索",
+    "ENTJ": "果断指挥、战略主导",
+    "ENTP": "活泼辩论、好奇探索",
+    "INFJ": "深思熟虑、温和引导",
+    "INFP": "内心丰富、理想主义",
+    "ENFJ": "热情鼓舞、关注他人",
+    "ENFP": "热情探索、创意表达",
+    "ISTJ": "稳重务实、秩序优先",
+    "ISFJ": "温和守护、细致关怀",
+    "ESTJ": "果断务实、效率优先",
+    "ESFJ": "热情关怀、和谐优先",
+    "ISTP": "冷静实操、灵活应对",
+    "ISFP": "温和艺术、感性体验",
+    "ESTP": "大胆行动、冒险精神",
+    "ESFP": "热情活力、感性表达",
+}
+
+
+def _build_mbti_tone_line(name: str, type_code: str) -> str:
+    """根据 MBTI 类型生成对话语气提示。"""
+    desc = "".join(_MBTI_LABELS.get(c, c) for c in type_code)
+    style = _MBTI_STYLE.get(type_code, "")
+    if style:
+        return f"你的MBTI人格: {type_code}({desc})。说话风格: {style}。"
+    return f"你的MBTI人格: {type_code}({desc})。"
 
 
 class Dialogue:
@@ -71,6 +108,22 @@ class Dialogue:
         """
         a_mem = self._recent_memory_text(agent_a)
         b_mem = self._recent_memory_text(agent_b)
+        # 获取说话者的 MBTI 人格,注入对话语气提示
+        mbti_tone_line = ""
+        try:
+            from ..world.personality_engine import get_personality_engine  # noqa: PLC0415
+            engine = get_personality_engine()
+            profile = engine.get(agent_a.name)
+            if profile and profile.type_code:
+                mbti_tone_line = _build_mbti_tone_line(agent_a.name, profile.type_code)
+        except Exception:
+            pass
+
+        system_content = (
+            f"你是{agent_a.name}，一只数码宝贝。"
+            + (f"{mbti_tone_line} " if mbti_tone_line else "")
+            + "只输出你口中说出的一句台词，不要旁白、不要选项、不要引号。"
+        )
 
         prompt = (
             f"我是{agent_a.name}，遇到{agent_b.name}了。"
@@ -81,10 +134,7 @@ class Dialogue:
         try:
             req = ChatRequest(
                 messages=[
-                    ChatMessage(
-                        role="system",
-                        content=f"你是{agent_a.name}，一只数码宝贝。只输出你口中说出的一句台词，不要旁白、不要选项、不要引号。",
-                    ),
+                    ChatMessage(role="system", content=system_content),
                     ChatMessage(role="user", content=prompt),
                 ],
                 model=LlmModel.MINIMAX_TEXT_01,

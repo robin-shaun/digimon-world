@@ -27,6 +27,29 @@ VALID_ACTIONS: frozenset[str] = frozenset({"attack", "defend", "flee"})
 FALLBACK_ACTION: str = "attack"
 
 
+def _build_mbti_strategy(profile) -> str:
+    """根据 MBTI 人格档案生成战斗策略提示。"""
+    hints: list[str] = []
+    # EI 维度: E=主动攻击, I=防守反击
+    if profile.ei >= 0.2:
+        hints.append("倾向主动攻击")
+    elif profile.ei <= -0.2:
+        hints.append("倾向防守反击")
+    # TF 维度: T=理性计算, F=凭直觉
+    if profile.tf >= 0.2:
+        hints.append("偏好理性计算伤害和防御时机")
+    elif profile.tf <= -0.2:
+        hints.append("容易凭直觉冲锋或提前撤退")
+    # JP 维度: J=果断, P=灵活试探
+    if profile.jp >= 0.2:
+        hints.append("果断决策，不犹豫")
+    elif profile.jp <= -0.2:
+        hints.append("灵活应变，倾向试探")
+    if hints:
+        return f"你的战斗风格({profile.type_code}): " + "、".join(hints) + "。"
+    return ""
+
+
 async def decide_action(
     client: LlmClient,
     actor: DigimonAgent,
@@ -46,10 +69,22 @@ async def decide_action(
     Returns:
         'attack' / 'defend' / 'flee' 之一;任何异常都兜底为 'attack'。
     """
+    # 获取 MBTI 战斗策略提示
+    mbti_hint = ""
+    try:
+        from ..world.personality_engine import get_personality_engine  # noqa: PLC0415
+        engine = get_personality_engine()
+        profile = engine.get(actor.name)
+        if profile and profile.type_code:
+            mbti_hint = _build_mbti_strategy(profile)
+    except Exception:
+        pass
+
     prompt = (
         f"你是{actor.name}({actor.species}, 属性 {actor.attribute.value}). "
         f"对手是{opponent.name}({opponent.species}). "
         f"你 HP {hp_pct_self:.0%}, 对手 HP {hp_pct_opp:.0%}. "
+        f"{mbti_hint + ' ' if mbti_hint else ''}"
         f"请决定一个动作: attack / defend / flee. 简短回复, 一个词."
     )
 
