@@ -53,7 +53,6 @@ from ..battle import BattleEngine, BattleResult, spar
 from ..llm.client import get_client
 from .. import tts as tts_module
 from ..world import (
-    AffectVector,
     RelationalCircle,
     RelationalDistance,
     WorldClock,
@@ -825,7 +824,7 @@ def get_relationships() -> dict[str, Any]:
     return {"count": len(pairs), "pairs": pairs}
 
 
-# ---- 排行榜 API ----
+# ---- Phase 16: 差序格局关系视图 ----
 @app.get("/api/relations/{name}")
 def get_digimon_relations(name: str) -> dict[str, Any]:
     """返回某数码兽的完整差序格局视图。

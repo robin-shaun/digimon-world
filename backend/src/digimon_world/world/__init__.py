@@ -13,6 +13,10 @@
 """
 from . import persistence
 from .clock import WorldClock
+from .affect_propagation import (
+    CPM_CHANGE_THRESHOLD,
+    AffectPropagationEngine,
+)
 from .dark_gears import (
     DarkGear,
     DarkGearSystem,
@@ -111,6 +115,8 @@ from .world_state import (
 )
 
 __all__ = [
+    "AffectPropagationEngine",
+    "CPM_CHANGE_THRESHOLD",
     "DAYS_PER_FESTIVAL",
     "DAYS_PER_SEASON",
     "DEFAULT_REGIONS",

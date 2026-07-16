@@ -38,6 +38,7 @@ from .factions import FactionRegistry
 from .festivals import FestivalSystem, get_festival_system
 from .interactions import detect_proximity
 from .landmarks import LandmarkSystem, get_landmark_system
+from .affect_propagation import AffectPropagationEngine
 from .relationships import RelationshipTracker, get_tracker
 from .seasons import SeasonSystem, get_season_system
 from .weather import WeatherSystem, get_weather_system
@@ -133,6 +134,8 @@ class WorldScheduler:
         # 季节系统: Phase 10 — 每 tick 更新季节(无则用进程级单例)
         self._season = season if season is not None else get_season_system()
         self._tick_count = 0
+        # Phase 16: 情感传播引擎 — 检测情绪剧变并按关系距离传播
+        self._affect_engine = AffectPropagationEngine()
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
         self._last_world_day: Optional[int] = None
         # Phase 6: 监控指标 — 跳过 LLM 的事件计数
@@ -211,6 +214,8 @@ class WorldScheduler:
         self._clock.tick(real_seconds=real_seconds)
         # 2. 日记阶段: 检测世界日期是否跨天,跨天则让所有 agent 写日记
         await self._maybe_write_diaries()
+        # 2.5 Phase 16: 情感传播 — 在 step 之前快照所有 agent 的 mood_state
+        self._affect_engine.snapshot_moods(self._world)
         # 3. 并发驱动所有 agent
         agents = self._world.all()
         if not agents:
@@ -230,6 +235,8 @@ class WorldScheduler:
                         logger.warning("on_event callback failed: %s", e)
         # 4.4 Phase 11: 批量思考轮次 — 收集需要反思的 agent 一起调 LLM
         await self._batch_reflect(agents)
+        # 4.45 Phase 16: 情感传播 — 检测情绪剧变并按关系距离传播
+        await self._propagate_affect(agents)
         # 4.5 地标阶段: 移动后检测是否靠近地标并施加效果
         landmark_effects = self._landmarks.process(self._world)
         for ev in landmark_effects:
@@ -629,6 +636,41 @@ class WorldScheduler:
             for r in results:
                 if isinstance(r, Exception):
                     logger.warning("batch reflect failed: %s", r)
+
+    async def _propagate_affect(self, agents: list[DigimonAgent]) -> None:
+        """Phase 16: 情感传播 — 检测情绪剧变并按关系距离传播。
+
+        当某只数码兽的 CPM mood_state 任一维度变化超过阈值时,
+        将其情感按差序格局的圈层距离衰减后传播给其他数码兽。
+        """
+        changed = self._affect_engine.detect_changes(self._world)
+        if not changed:
+            return
+
+        for agent_name, delta in changed:
+            source = self._world.get(agent_name)
+            if source is None:
+                continue
+            affect = self._affect_engine.mood_to_affect(source)
+            result = self._affect_engine.propagate(
+                agent_name, affect, self._world, tracker=self._relationships,
+            )
+            if result:
+                affected_names = [r["name"] for r in result]
+                logger.debug(
+                    "affect propagation: %s → %s (delta joy=%.2f sadness=%.2f anger=%.2f fear=%.2f)",
+                    agent_name, affected_names,
+                    delta.get("joy", 0), delta.get("sadness", 0),
+                    delta.get("anger", 0), delta.get("fear", 0),
+                )
+                # 将传播事件写入世界日志
+                self._world.events.append({
+                    "type": "affect_propagation",
+                    "source": agent_name,
+                    "affected": affected_names,
+                    "delta": delta,
+                    "at": str(self._clock.elapsed_minutes),
+                })
 
     async def run_forever(
         self,
