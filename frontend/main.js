@@ -432,6 +432,15 @@
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
+                // Phase 15: 注入事件高亮 — 金色脉冲光环
+                if (highlightDigimons.has(d.name)) {
+                    const hPulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
+                    ctx.strokeStyle = `rgba(255, 215, 0, ${hPulse.toFixed(2)})`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(x, dy, dotSize + 8, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
             } else {
                 // ═══ 普通模式: 小emoji + 首字 + 精灵色光环 ═══
                 // Phase 13-②: walk cycle bounce on top of idle bounce
@@ -511,6 +520,18 @@
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
+                // Phase 15: 注入事件高亮 — 金色脉冲光环 + 阴影
+                if (highlightDigimons.has(d.name)) {
+                    const hPulse2 = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
+                    ctx.strokeStyle = `rgba(255, 215, 0, ${hPulse2.toFixed(2)})`;
+                    ctx.lineWidth = 2.5;
+                    ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+                    ctx.shadowBlur = 12;
+                    ctx.beginPath();
+                    ctx.arc(x, dy, 22, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
             }
         }
         ctx.textBaseline = 'alphabetic';
@@ -577,6 +598,7 @@
         if (!bgCacheValid) cacheBackground();
         ctx.drawImage(bgCache, 0, 0);
         // 动态内容: 数码兽位置 + 天气粒子
+        pruneHighlights(typeof performance !== 'undefined' ? performance.now() : Date.now());
         drawDigimon();
         drawWeatherParticles();
         // Phase 13-②: 粒子特效 (进化火花 / 战斗爆裂等)
@@ -1269,6 +1291,12 @@
         }).join('');
     }
 
+    /** Phase 15 Task 2: 刷新事件历史 (fetch + render) */
+    async function refreshEventHistory() {
+        await fetchInjectedEvents();
+        renderEventHistory();
+    }
+
     /** GET 排行榜三维数据 */
     async function fetchLeaderboard() {
         try {
@@ -1413,6 +1441,60 @@
         }
     }
 
+    /** Type → region_id 映射: 通用事件=global, 其余=file_island */
+    function getRegionId(type) {
+        return type === 'director_event' ? 'global' : 'file_island';
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 15 Task 3: 注入结果高亮 + Toast 通知
+    // ══════════════════════════════════════════════
+
+    /** 高亮集合: name → 过期时间戳 (performance.now() + durationMs) */
+    const highlightDigimons = new Map();
+
+    /** 将数码兽名字加入高亮集合, durationMs 毫秒后自动移除 */
+    function addDigimonHighlights(names, durationMs) {
+        var expires = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + durationMs;
+        names.forEach(function (name) {
+            highlightDigimons.set(name, expires);
+        });
+    }
+
+    /** 清理过期的高亮条目 (在 drawDigimon 前调用) */
+    function pruneHighlights(now) {
+        highlightDigimons.forEach(function (expires, name) {
+            if (now >= expires) highlightDigimons.delete(name);
+        });
+    }
+
+    /** Task 3: 注入事件后的顶部 toast 通知 (显示受影响数码兽名字) */
+    function showInjectToast(names) {
+        var toast = document.createElement('div');
+        toast.className = 'inject-toast';
+        toast.textContent = '事件影响：' + names.join('、');
+        toast.style.cssText =
+            'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10000;' +
+            'padding:10px 24px;border-radius:8px;background:rgba(255,215,0,0.92);color:#1a1a2e;' +
+            'font:13px monospace;font-weight:bold;box-shadow:0 4px 20px rgba(255,215,0,0.4);' +
+            'transition:opacity 400ms ease;pointer-events:none;';
+        document.body.appendChild(toast);
+        requestAnimationFrame(function () { toast.style.opacity = '1'; });
+        setTimeout(function () {
+            toast.style.opacity = '0';
+            setTimeout(function () { toast.remove(); }, 400);
+        }, 3000);
+    }
+
+    /** Task 3: 注入事件后的 impact_summary 通知 (复用 showNotification 系统) */
+    function showInjectNotification(summary, count) {
+        showNotification({
+            type: 'director_event',
+            description: '📌 已影响 ' + count + ' 只数码兽 — ' + summary,
+            at: new Date().toISOString(),
+        });
+    }
+
     /** POST 注入事件. type 从下拉框读, description 从输入框读 */
     async function injectEvent(type, description) {
         const status = document.getElementById('inject-status');
@@ -1424,29 +1506,49 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     type: type || 'director_event',
+                    region_id: getRegionId(type),
                     description,
-                    importance: 7,
+                    importance: 5,
                 }),
             });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            if (status) status.textContent = '✅ 已注入';
+            const data = await resp.json();
+            // Task 3: 提取受影响的数码兽名字 & impact_summary
+            const affected = data.affected_agents || [];
+            const affectedNames = Array.isArray(affected)
+                ? affected.map(function (a) { return typeof a === 'string' ? a : (a.name || ''); }).filter(Boolean)
+                : [];
+            const impactSummary = data.impact_summary || '';
+            if (status) {
+                const n = affectedNames.length;
+                status.textContent = n > 0 ? '✅ 已注入 (影响 ' + n + ' 只数码兽)' : '✅ 已注入';
+            }
             const input = document.getElementById('inject-input');
             if (input) input.value = '';
-            await refreshDirector(); // 立刻反映到事件列表
+            // Task 3: 高亮受影响的数码兽 (3s 金色光环)
+            if (affectedNames.length > 0) {
+                addDigimonHighlights(affectedNames, 3000);
+                showInjectToast(affectedNames);
+            }
+            // Task 3: 弹出 impact_summary 通知
+            if (impactSummary) {
+                showInjectNotification(impactSummary, affectedNames.length);
+            }
+            await refreshEventHistory(); // 立刻反映到事件历史列表
         } catch (e) {
             if (status) status.textContent = '⚠️ 不可用: ' + e.message;
         } finally {
             if (btn) btn.disabled = false;
-            setTimeout(() => { if (status) status.textContent = ''; }, 3000);
+            setTimeout(function () { if (status) status.textContent = ''; }, 3000);
         }
     }
 
     /** POST 保存 / 加载世界状态 */
     async function saveWorld() {
-        await worldPersist('/api/world/save', '💾 已保存');
+        await worldPersist('/api/save', '💾 已保存');
     }
     async function loadWorld() {
-        await worldPersist('/api/world/load', '📂 已加载');
+        await worldPersist('/api/load', '📂 已加载');
         // 加载后世界可能整个换了 — 立刻拉一次数码兽 + 导演数据
         await fetchDigimon();
         render();
@@ -1583,6 +1685,7 @@
         battle_victory: { icon: '🏆', label: '战斗', color: '#ffd93d' },
         evolution:      { icon: '✨', label: '进化', color: '#4ae8c4' },
         story_event:    { icon: '📖', label: '剧情', color: '#b68aff' },
+        director_event: { icon: '🎬', label: '导演事件', color: '#ffd700' },
     };
     const NOTIFY_POLL_MS = 3000;   // 轮询间隔
     const NOTIFY_TTL_MS = 3000;    // 每条通知停留时长
