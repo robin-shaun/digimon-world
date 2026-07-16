@@ -1080,6 +1080,7 @@
         leaderboard: { battle: [], bond: [], badges: [] }, // 三维排行榜数据
         lbTab: 'battle', // 当前选中的排行榜 tab
         lbOk: true,     // GET /api/leaderboard 最近一次是否成功
+        injectedEvents: [], // Phase 15: 导演注入事件历史
     };
 
     // 排行榜每个维度的显示配置: 数值字段名 + 单位后缀
@@ -1213,6 +1214,61 @@
         }).join('');
     }
 
+    /** Phase 15: 事件类型 → 图标映射 */
+    const EVENT_TYPE_ICONS = {
+        director_event: '📌',
+        weather: '🌤️',
+        disaster: '🌋',
+        faction_create: '🏴',
+        encounter: '👋',
+        broadcast: '📢',
+    };
+
+    /** Phase 15: 拉取导演注入事件历史 */
+    async function fetchInjectedEvents() {
+        try {
+            const resp = await fetch(API_BASE + '/api/director/injected-events?limit=10', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            director.injectedEvents = data.events || [];
+        } catch (e) {
+            console.warn('[director] /api/director/injected-events 不可达:', e.message);
+            // 失败不清空旧数据
+        }
+    }
+
+    /** Phase 15: 渲染事件历史列表 */
+    function renderEventHistory() {
+        const el = document.getElementById('event-history-list');
+        if (!el) return;
+        const list = director.injectedEvents;
+        if (list.length === 0) {
+            el.innerHTML = '<p class="dir-hint">暂无注入事件</p>';
+            return;
+        }
+        // 截取最近10条
+        const items = list.slice(0, 10);
+        el.innerHTML = items.map((e) => {
+            const icon = EVENT_TYPE_ICONS[e.type] || '📌';
+            const desc = e.description || '(无描述)';
+            // 格式化时间: ISO → HH:MM:SS
+            let timeStr = '';
+            if (e.at) {
+                try {
+                    const d = new Date(e.at);
+                    timeStr = d.toLocaleTimeString('zh-CN', { hour12: false });
+                } catch (_) {
+                    timeStr = e.at.slice(11, 19) || e.at;
+                }
+            }
+            return `<div class="eh-item">` +
+                `<span class="eh-icon">${icon}</span>` +
+                `<span class="eh-desc">${escapeHtml(desc)}</span>` +
+                `<span class="eh-time">${timeStr}</span>` +
+                `</div>`;
+        }).join('');
+    }
+
     /** GET 排行榜三维数据 */
     async function fetchLeaderboard() {
         try {
@@ -1328,11 +1384,12 @@
         }
     }
     async function refreshDirectorInner() {
-        await Promise.all([fetchRelationships(), fetchDirectorState(), fetchLeaderboard()]);
+        await Promise.all([fetchRelationships(), fetchDirectorState(), fetchLeaderboard(), fetchInjectedEvents()]);
         drawRelationshipGraph();
         renderFactions();
         renderDirectorEvents();
         renderLeaderboard();
+        renderEventHistory();
         updateSpeedButtons();
         updateDirectorConn();
     }

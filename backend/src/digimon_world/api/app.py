@@ -594,6 +594,33 @@ def director_state() -> dict[str, Any]:
     }
 
 
+@app.get("/api/director/injected-events")
+def get_injected_events(limit: int = 10) -> dict[str, Any]:
+    """返回最近 N 条来源为 'director' 的世界事件。
+
+    Args:
+        limit: 返回条数 (默认 10)。
+
+    Returns:
+        {count: 总导演事件数, events: [最近 limit 条, 最新在前]}。
+    """
+    world = get_world()
+    injected = [
+        {
+            "id": idx,
+            "type": e.get("type", ""),
+            "description": e.get("description", ""),
+            "at": e.get("at", ""),
+            "importance": e.get("importance", 0),
+            "region_id": e.get("region_id"),
+        }
+        for idx, e in enumerate(world.events)
+        if e.get("source") == "director"
+    ]
+    recent = injected[-max(1, limit):]
+    return {"count": len(injected), "events": list(reversed(recent))}
+
+
 # ---- Phase 3: 战斗 API ----
 
 # 内存里的战斗历史(轻量,只存最近 20 场,够前端调试 / Director 视角看)
