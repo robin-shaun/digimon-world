@@ -167,9 +167,13 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
     assert tracker.get_relationship("甲兽", "乙兽") == 0.0
     await sched.tick_once()
     # Phase 6: proximity 显著性 5 ≥ 阈值 4 → 触发 LLM 对话
-    # → record_dialogue_with_desire(DIALOGUE_DELTA=3.0) + 节日 RELATIONSHIP_BOOST(5.0)
-    from digimon_world.world.relationships import DIALOGUE_DELTA
-    assert tracker.get_relationship("甲兽", "乙兽") == DIALOGUE_DELTA + RELATIONSHIP_BOOST
+    # → record_dialogue_with_personality(基础 + 欲望加成 + MBTI 加成) + 节日加成
+    # 基础: DIALOGUE_DELTA=3.0, 节日: RELATIONSHIP_BOOST=5.0
+    # 欲望为空 → 0, MBTI 随机 → 区间 [0, MBTI_BONUS_CAP=4.0]
+    # 因此结果区间 [8.0, 12.0]
+    score = tracker.get_relationship("甲兽", "乙兽")
+    assert score >= DIALOGUE_DELTA + RELATIONSHIP_BOOST, f"Expected >= {DIALOGUE_DELTA+RELATIONSHIP_BOOST}, got {score}"
+    assert score <= DIALOGUE_DELTA + RELATIONSHIP_BOOST + 4.0, f"Expected <= {DIALOGUE_DELTA+RELATIONSHIP_BOOST+4.0}, got {score}"
 
 
 # ---- 6. 隐性欲望(latent desire)测试 ----
@@ -223,4 +227,80 @@ def test_record_dialogue_with_same_category_desires() -> None:
     # affinity=0.6, bonus=min(4.0*0.6, 6.0)=2.4
     expected = DIALOGUE_DELTA + 2.4
     got = rt.record_dialogue_with_desire("亚古兽", "变强", "暴龙兽", "想变强")
+    assert got == expected
+
+
+# ---- 7. MBTI 人格兼容加成 (Phase 17 Task 4) ----
+
+
+def test_mbti_compatibility_bonus_empty() -> None:
+    """空 MBTI 类型 → bonus 为 0。"""
+    assert RelationshipTracker.mbti_compatibility_bonus("", "") == 0.0
+    assert RelationshipTracker.mbti_compatibility_bonus("INTJ", "") == 0.0
+    assert RelationshipTracker.mbti_compatibility_bonus("", "ENFP") == 0.0
+
+
+def test_mbti_compatibility_bonus_max() -> None:
+    """最佳配对 INTJ + ENFP → 兼容度 1.0 → bonus = MBTI_BONUS_FACTOR。"""
+    from digimon_world.world.relationships import MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    expected = min(MBTI_BONUS_FACTOR * 1.0, MBTI_BONUS_CAP)
+    assert RelationshipTracker.mbti_compatibility_bonus("INTJ", "ENFP") == expected
+
+
+def test_mbti_compatibility_bonus_moderate() -> None:
+    """中等兼容 INTJ + INTP (0.8) → bonus = MBTI_BONUS_FACTOR * 0.8。"""
+    from digimon_world.world.relationships import MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    expected = min(MBTI_BONUS_FACTOR * 0.8, MBTI_BONUS_CAP)
+    assert RelationshipTracker.mbti_compatibility_bonus("INTJ", "INTP") == expected
+
+
+def test_mbti_compatibility_bonus_low() -> None:
+    """低兼容 INTJ + ESFJ (0.2) → bonus = MBTI_BONUS_FACTOR * 0.2。"""
+    from digimon_world.world.relationships import MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    expected = min(MBTI_BONUS_FACTOR * 0.2, MBTI_BONUS_CAP)
+    assert RelationshipTracker.mbti_compatibility_bonus("INTJ", "ESFJ") == expected
+
+
+def test_record_dialogue_with_personality_full_bonus() -> None:
+    """欲望完全匹配 + MBTI 最佳配对 → 最大加成。"""
+    from digimon_world.world.relationships import DESIRE_BONUS_FACTOR, MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    rt = RelationshipTracker()
+    # desire: 1.0 → DESIRE_BONUS_FACTOR*1.0=4.0, capped at DESIRE_BONUS_CAP=6.0 → 4.0
+    # mbti: INTJ+ENFP=1.0 → MBTI_BONUS_FACTOR*1.0=3.0, capped at MBTI_BONUS_CAP=4.0 → 3.0
+    # total: 3.0 + 4.0 + 3.0 = 10.0
+    expected = DIALOGUE_DELTA + DESIRE_BONUS_FACTOR + min(MBTI_BONUS_FACTOR * 1.0, MBTI_BONUS_CAP)
+    got = rt.record_dialogue_with_personality(
+        "亚古兽", "想变强", "暴龙兽", "想变强",
+        mbti_a="INTJ", mbti_b="ENFP",
+    )
+    assert got == expected
+    assert rt.get_relationship("亚古兽", "暴龙兽") == expected
+
+
+def test_record_dialogue_with_personality_no_mbti() -> None:
+    """MBTI 为空 → 行为与 record_dialogue_with_desire 一致。"""
+    # 使用独立 tracker 避免互相影响
+    rt1 = RelationshipTracker()
+    got = rt1.record_dialogue_with_personality(
+        "亚古兽", "想变强", "暴龙兽", "想变强",
+    )
+    rt2 = RelationshipTracker()
+    expected = rt2.record_dialogue_with_desire("亚古兽", "想变强", "暴龙兽", "想变强")
+    assert got == expected
+
+
+def test_record_proximity_with_personality() -> None:
+    """相遇含欲望+MBTI 加成（打折）。"""
+    from digimon_world.world.relationships import PROXIMITY_DELTA, DESIRE_BONUS_FACTOR, MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    rt = RelationshipTracker()
+    # desire: 1.0 → 4.0*0.5=2.0
+    # mbti: 1.0 → 3.0*0.5=1.5
+    # total: 1.0 + 2.0 + 1.5 = 4.5
+    desire_bonus = min(DESIRE_BONUS_FACTOR * 1.0 * 0.5, 6.0 * 0.5)
+    mbti_bonus = min(MBTI_BONUS_FACTOR * 1.0 * 0.5, MBTI_BONUS_CAP * 0.5)
+    expected = PROXIMITY_DELTA + desire_bonus + mbti_bonus
+    got = rt.record_proximity_with_personality(
+        "亚古兽", "想变强", "暴龙兽", "想变强",
+        mbti_a="INTJ", mbti_b="ENFP",
+    )
     assert got == expected

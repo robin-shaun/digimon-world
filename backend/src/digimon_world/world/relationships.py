@@ -43,6 +43,10 @@ BATTLE_AWE_DELTA: float = 5.0     # 旧版敬畏回补(保留兼容)
 DESIRE_BONUS_FACTOR: float = 4.0   # 欲望兼容时额外加成的系数
 DESIRE_BONUS_CAP: float = 6.0      # 欲望加成上限(一次互动最多加 6 分)
 
+# MBTI 人格兼容加成
+MBTI_BONUS_FACTOR: float = 3.0     # MBTI 兼容时额外加成的系数
+MBTI_BONUS_CAP: float = 4.0        # MBTI 加成上限(一次互动最多加 4 分)
+
 
 def _key(a: str, b: str) -> tuple[str, str]:
     """把一对名字规范成排序后的 key,保证 (a,b) 与 (b,a) 命中同一条记录。"""
@@ -330,6 +334,70 @@ class RelationshipTracker:
         affinity = self.desire_affinity(a_desire, b_desire)
         bonus = min(DESIRE_BONUS_FACTOR * affinity * 0.5, DESIRE_BONUS_CAP * 0.5)
         return self.update(a_name, b_name, PROXIMITY_DELTA + bonus)
+
+    # ---- MBTI 人格兼容加成 (Phase 17 Task 4) ----
+
+    @staticmethod
+    def mbti_compatibility_bonus(mbti_a: str, mbti_b: str) -> float:
+        """计算 MBTI 人格兼容度带来的关系加成值。
+
+        调用 personality_engine 的兼容矩阵, 返回 [0, MBTI_BONUS_CAP] 的加成。
+        若任一 MBTI 类型为空, 返回 0。
+
+        Args:
+            mbti_a: agent A 的 MBTI 类型码 (如 "INTJ")
+            mbti_b: agent B 的 MBTI 类型码 (如 "ENFP")
+
+        Returns:
+            MBTI 兼容加成值 (0 ~ MBTI_BONUS_CAP)
+        """
+        if not mbti_a or not mbti_b:
+            return 0.0
+        try:
+            from .personality_engine import get_personality_engine
+            engine = get_personality_engine()
+            compat = engine.compatibility(mbti_a, mbti_b)
+        except Exception:
+            compat = 0.5  # 出错则默认中等兼容
+        return min(MBTI_BONUS_FACTOR * compat, MBTI_BONUS_CAP)
+
+    def record_dialogue_with_personality(
+        self, a_name: str, a_desire: str, b_name: str, b_desire: str,
+        mbti_a: str = "", mbti_b: str = "",
+    ) -> float:
+        """一次对话后调用: 基础亲和 + 欲望兼容加成 + MBTI 人格加成。
+
+        Args:
+            a_name: agent A 名称
+            a_desire: agent A 的隐性欲望
+            b_name: agent B 名称
+            b_desire: agent B 的隐性欲望
+            mbti_a: agent A 的 MBTI 类型 (可选)
+            mbti_b: agent B 的 MBTI 类型 (可选)
+
+        Returns:
+            更新后的亲和度
+        """
+        desire_aff = self.desire_affinity(a_desire, b_desire)
+        desire_bonus = min(DESIRE_BONUS_FACTOR * desire_aff, DESIRE_BONUS_CAP)
+        mbti_bonus = self.mbti_compatibility_bonus(mbti_a, mbti_b)
+        total_bonus = desire_bonus + mbti_bonus
+        return self.update(a_name, b_name, DIALOGUE_DELTA + total_bonus)
+
+    def record_proximity_with_personality(
+        self, a_name: str, a_desire: str, b_name: str, b_desire: str,
+        mbti_a: str = "", mbti_b: str = "",
+    ) -> float:
+        """相遇(未对话)后调用: 基础亲和 + 欲望加成(打折) + MBTI 加成(打折)。
+
+        Returns:
+            更新后的亲和度
+        """
+        desire_aff = self.desire_affinity(a_desire, b_desire)
+        desire_bonus = min(DESIRE_BONUS_FACTOR * desire_aff * 0.5, DESIRE_BONUS_CAP * 0.5)
+        mbti_bonus = self.mbti_compatibility_bonus(mbti_a, mbti_b) * 0.5
+        total_bonus = desire_bonus + mbti_bonus
+        return self.update(a_name, b_name, PROXIMITY_DELTA + total_bonus)
 
 
 # ---- _ScoreProxy: 向后兼容 tracker._scores ----

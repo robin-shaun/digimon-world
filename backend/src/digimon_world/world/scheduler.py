@@ -399,6 +399,10 @@ class WorldScheduler:
             if a.region_id != b.region_id:
                 continue
 
+            # Phase 17: 获取双方 MBTI 类型用于人格兼容加成
+            mbti_a = self._personality.get_or_create(a.name).type_code
+            mbti_b = self._personality.get_or_create(b.name).type_code
+
             # 隐性欲望冷却减免: 有"想交朋友"类欲望的 agent 冷却窗口减半
             a_cooldown_minutes = DIALOGUE_COOLDOWN_MINUTES
             b_cooldown_minutes = DIALOGUE_COOLDOWN_MINUTES
@@ -407,10 +411,11 @@ class WorldScheduler:
             if b.latent_desire and ("交朋友" in b.latent_desire or "朋友" in b.latent_desire):
                 b_cooldown_minutes = DIALOGUE_COOLDOWN_MINUTES // 2
 
-            # 任一方仍在冷却期 → 不生成对话,但相遇本身也拉近一点关系(含欲望加成)
+            # 任一方仍在冷却期 → 不生成对话,但相遇本身也拉近一点关系(含欲望+MBTI加成)
             if self._in_cooldown(a, now, a_cooldown_minutes) or self._in_cooldown(b, now, b_cooldown_minutes):
-                self._relationships.record_proximity_with_desire(
+                self._relationships.record_proximity_with_personality(
                     a.name, a.latent_desire, b.name, b.latent_desire,
+                    mbti_a=mbti_a, mbti_b=mbti_b,
                 )
                 # Phase 6: 冷却中的相遇是 routine 事件,跳过 LLM
                 self.skipped_llm_events += 1
@@ -426,9 +431,10 @@ class WorldScheduler:
                 sig = max(sig, 7)  # 欲望兼容提升为 significant
 
             if sig < SIGNIFICANCE_LLM_THRESHOLD:
-                # routine 事件: 仅记录亲近度,不调 LLM
-                self._relationships.record_proximity_with_desire(
+                # routine 事件: 仅记录亲近度,不调 LLM (含欲望+MBTI加成)
+                self._relationships.record_proximity_with_personality(
                     a.name, a.latent_desire, b.name, b.latent_desire,
+                    mbti_a=mbti_a, mbti_b=mbti_b,
                 )
                 self.skipped_llm_events += 1
                 continue
@@ -441,8 +447,9 @@ class WorldScheduler:
                 rel_mod = get_interaction_modifier(a.name, b.name, self._relationships, "dialogue")
                 effective_prob = min(1.0, self._dialogue_prob * rel_mod)
             if random.random() > effective_prob:
-                self._relationships.record_proximity_with_desire(
+                self._relationships.record_proximity_with_personality(
                     a.name, a.latent_desire, b.name, b.latent_desire,
+                    mbti_a=mbti_a, mbti_b=mbti_b,
                 )
                 self.skipped_dialogue_probs += 1
                 continue
@@ -466,9 +473,10 @@ class WorldScheduler:
                 "at": now.isoformat() if now is not None else None,
             })
 
-            # 一次成功对话 → 双方关系变友好(含欲望兼容加成)
-            self._relationships.record_dialogue_with_desire(
+            # 一次成功对话 → 双方关系变友好(含欲望兼容+MBTI人格兼容加成)
+            self._relationships.record_dialogue_with_personality(
                 a.name, a.latent_desire, b.name, b.latent_desire,
+                mbti_a=mbti_a, mbti_b=mbti_b,
             )
 
             # 刷新双方冷却时间戳
