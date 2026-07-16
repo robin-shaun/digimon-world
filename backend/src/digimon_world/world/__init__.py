@@ -76,6 +76,14 @@ from .relational_circle import (
     RelationalCircle,
     RelationalDistance,
 )
+from .personality_engine import (
+    MBTI_COMPATIBILITY,
+    MbtiDimension,
+    PersonalityEvolutionEngine,
+    PersonalityProfile,
+    get_personality_engine,
+    reset_personality_engine,
+)
 from .relationships import RelationshipTracker, get_tracker, reset_tracker
 from .scheduler import DEFAULT_TICK_SECONDS, WorldScheduler
 from .seasons import (
@@ -140,8 +148,12 @@ __all__ = [
     "Landmark",
     "LandmarkEffect",
     "LandmarkSystem",
+    "MbtiDimension",
+    "MBTI_COMPATIBILITY",
     "MultiverseManager",
     "NarratorSystem",
+    "PersonalityEvolutionEngine",
+    "PersonalityProfile",
     "PRIME_WORLD_ID",
     "Region",
     "SubRegion",
@@ -173,6 +185,7 @@ __all__ = [
     "get_landmark_system",
     "get_multiverse",
     "get_narrator",
+    "get_personality_engine",
     "get_registry",
     "get_snapshot_manager",
     "get_season_system",
@@ -189,6 +202,7 @@ __all__ = [
     "reset_landmark_system",
     "reset_multiverse",
     "reset_narrator",
+    "reset_personality_engine",
     "reset_registry",
     "reset_season_system",
     "reset_snapshot_manager",

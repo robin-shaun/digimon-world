@@ -40,6 +40,7 @@ from .interactions import detect_proximity
 from .landmarks import LandmarkSystem, get_landmark_system
 from .affect_propagation import AffectPropagationEngine
 from .cooperation_thresholds import get_circle_between, get_interaction_modifier
+from .personality_engine import get_personality_engine
 from .relational_circle import RelationalCircle
 from .relationships import RelationshipTracker, get_tracker
 from .seasons import SeasonSystem, get_season_system
@@ -138,6 +139,8 @@ class WorldScheduler:
         self._tick_count = 0
         # Phase 16: 情感传播引擎 — 检测情绪剧变并按关系距离传播
         self._affect_engine = AffectPropagationEngine()
+        # Phase 17: 人格引擎 — 每 tick 根据事件类型演化数码兽人格
+        self._personality = get_personality_engine()
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
         self._last_world_day: Optional[int] = None
         # Phase 6: 监控指标 — 跳过 LLM 的事件计数
@@ -303,6 +306,9 @@ class WorldScheduler:
         # 9. Phase 14 世界叙事阶段:
         #    每 N tick 收集重大事件 → LLM 生成故事摘要
         await self._process_narrative()
+        # 9.5 Phase 17 人格演化阶段:
+        #    根据本 tick 发生的事件类型,推动数码兽人格维度漂移
+        self._process_personality_events(agents)
         self._tick_count += 1
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
@@ -621,6 +627,83 @@ class WorldScheduler:
         if et in {"proximity", "step_error"}:
             return 5  # proximity 提到 routine，让对话触发
         return 5  # 未知事件默认 routine
+
+    # ---- Phase 17: 人格演化 ----
+
+    def _process_personality_events(self, agents: list[DigimonAgent]) -> None:
+        """每 tick 根据最近事件推动数码兽人格维度漂移。
+
+        扫描本 tick 产生的世界事件，将事件类型映射为人格影响向量，
+        逐个 agent 演化其 MBTI 人格维度。
+
+        人格演化不阻塞世界循环，失败静默降级。
+        """
+        try:
+            # 取本 tick 新增的事件 (粗略策略: 最近 50 条)
+            recent_events = self._world.events[-50:] if len(self._world.events) > 50 else self._world.events
+            if not recent_events:
+                return
+
+            # 事件类型 → 人格事件映射
+            event_to_personality: dict[str, str] = {
+                "battle_victory": "battle_win",
+                "battle_defeat": "battle_loss",
+                "battle_draw": "battle_draw",
+                "dialogue": "social_friendly",
+                "dialogue_conflict": "social_conflict",
+                "friendship_formed": "social_friendly",
+                "faction_create": "social_friendly",
+                "discovery": "explore_discovery",
+                "landmark_discovered": "explore_discovery",
+                "moved": "explore_discovery",
+                "threat": "social_conflict",
+                "near_death": "injury",
+                "evolution": "evolution",
+                "save_other": "save_other",
+                "festival": "social_friendly",
+                "dark_gear_infection": "social_conflict",
+            }
+
+            # 收集每个 agent 应该触发的事件
+            agent_personality_events: dict[str, list[str]] = {}
+            for event in recent_events:
+                p_event = event_to_personality.get(event.get("type", ""))
+                if p_event is None:
+                    continue
+
+                # 找出受影响的 agent(s)
+                agent_name = event.get("agent", "")
+                if agent_name:
+                    agent_personality_events.setdefault(agent_name, []).append(p_event)
+
+                # "target" / "listener" 也受影响
+                for key in ("target", "listener"):
+                    target_name = event.get(key, "")
+                    if target_name:
+                        agent_personality_events.setdefault(target_name, []).append(p_event)
+
+            # 为每个 agent 应用人格事件
+            for agent in agents:
+                p_events = agent_personality_events.get(agent.name, [])
+                if not p_events:
+                    # 没有显著事件 → 微量回归均值 (让极端人格缓慢漂回)
+                    # 不给 alone_time 事件，只靠回归均值自然衰减
+                    continue
+
+                for p_event in p_events:
+                    multiplier = 1.0
+                    # 重大事件加倍影响
+                    if p_event in ("evolution", "save_other", "near_death"):
+                        multiplier = 2.0
+                    self._personality.apply_event(
+                        agent.name,
+                        p_event,
+                        multiplier=multiplier,
+                        description=f"tick #{self._tick_count}",
+                    )
+
+        except Exception as e:
+            logger.debug("Personality evolution tick failed: %s", e)
 
     def _in_cooldown(self, agent: DigimonAgent, now: Any, cooldown_minutes: float | None = None) -> bool:
         """判断 agent 是否仍在互动冷却窗口内。"""
