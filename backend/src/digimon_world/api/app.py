@@ -65,6 +65,7 @@ from ..world import (
     get_landmark_system,
     get_multiverse,
     get_narrator,
+    get_personality_engine,
     get_registry,
     get_snapshot_manager,
     get_timeline_system,
@@ -897,6 +898,56 @@ def get_digimon_relations(name: str) -> dict[str, Any]:
         "relations": relations,
         "summary": summary_counts,
     }
+
+
+# ---- Phase 17: MBTI 人格档案 API ----
+@app.get("/api/digimon/{name}/personality")
+def get_digimon_personality(name: str) -> dict[str, Any]:
+    """返回数码兽的 MBTI 人格档案。
+
+    基于荣格心理学四维度 (EI/SN/TF/JP) 的动态人格系统。
+    包含类型代码、各维度值/强度、演化历史、创建时间等。
+
+    Raises:
+        404: 数码兽不存在。
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+
+    engine = get_personality_engine()
+    profile = engine.get_or_create(name)
+
+    # 人格描述 (基于类型)
+    type_descriptions = {
+        "INTJ": "战略大师 — 独立、果断、擅长长远规划",
+        "INTP": "逻辑学家 — 抽象思维、追求真理、不拘一格",
+        "ENTJ": "指挥官 — 果断领导、善于组织、勇往直前",
+        "ENTP": "辩论家 — 机智敏捷、好奇心强、善变通",
+        "INFJ": "提倡者 — 理想主义、洞察人心、追求意义",
+        "INFP": "调停者 — 诗意善良、忠于价值观、帮助他人",
+        "ENFJ": "主人公 — 鼓舞人心、亲和力强、利他主义",
+        "ENFP": "探索者 — 热情自由、充满可能、社交能量",
+        "ISTJ": "物流师 — 可靠务实、注重事实、稳重诚信",
+        "ISFJ": "守护者 — 专注奉献、保护所爱、细致周到",
+        "ESTJ": "总经理 — 高效组织、管理大师、维护传统",
+        "ESFJ": "执政官 — 关怀他人、社交达人、助人为乐",
+        "ISTP": "鉴赏家 — 冷静务实、动手探索、随机应变",
+        "ISFP": "探险家 — 艺术感性、享受当下、友善随和",
+        "ESTP": "企业家 — 大胆行动、善于应变、享受刺激",
+        "ESFP": "表演者 — 自发热情、活在当下、传播快乐",
+    }
+
+    profile_dict = profile.to_dict()
+    profile_dict["agent_name"] = name
+    profile_dict["type_description"] = type_descriptions.get(
+        profile.type_code, "独特个性 — 尚未定型的人格"
+    )
+    profile_dict["is_clear"] = profile.is_clear_type()
+    profile_dict["dominant_dimension"] = profile.dominant_dimension()
+
+    return profile_dict
 
 
 # ---- 排行榜 API ----

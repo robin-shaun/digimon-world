@@ -229,3 +229,43 @@ def test_director_state(client: TestClient) -> None:
     assert "current_world_time" in data
     assert len(data["recent_events"]) == 10
     assert data["recent_events"][-1]["description"] == "事件 11"
+
+
+# ---- Phase 17: MBTI 人格档案 API ----
+def test_personality_endpoint_returns_profile(client: TestClient) -> None:
+    """GET /api/digimon/{name}/personality 返回 MBTI 人格档案。"""
+    r = client.get("/api/digimon/亚古兽/personality")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["agent_name"] == "亚古兽"
+    assert "type_code" in data
+    assert len(data["type_code"]) == 4  # e.g. "ENFP"
+    assert "type_description" in data
+    assert "ei" in data
+    assert "sn" in data
+    assert "tf" in data
+    assert "jp" in data
+    assert "strengths" in data
+    assert "is_clear" in data
+    assert "dominant_dimension" in data
+    assert "history" in data
+    assert "evolution_count" in data
+    # 所有维度值在 [-1, 1] 范围内
+    for dim in ("ei", "sn", "tf", "jp"):
+        assert -1.0 <= data[dim] <= 1.0
+
+
+def test_personality_endpoint_404(client: TestClient) -> None:
+    """不存在的数码兽返回 404。"""
+    r = client.get("/api/digimon/不存在的数码兽/personality")
+    assert r.status_code == 404
+
+
+def test_personality_endpoint_idempotent(client: TestClient) -> None:
+    """同一数码兽多次请求返回同一档案 (get_or_create 语义)。"""
+    r1 = client.get("/api/digimon/加布兽/personality")
+    r2 = client.get("/api/digimon/加布兽/personality")
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r1.json()["type_code"] == r2.json()["type_code"]
+    assert r1.json()["evolution_count"] == r2.json()["evolution_count"]
