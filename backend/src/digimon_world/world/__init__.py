@@ -67,6 +67,11 @@ from .narrator import (
     get_narrator,
     reset_narrator,
 )
+from .relational_circle import (
+    AffectVector,
+    RelationalCircle,
+    RelationalDistance,
+)
 from .relationships import RelationshipTracker, get_tracker, reset_tracker
 from .scheduler import DEFAULT_TICK_SECONDS, WorldScheduler
 from .seasons import (
@@ -111,6 +116,7 @@ __all__ = [
     "DEFAULT_REGIONS",
     "DEFAULT_TICK_SECONDS",
     "DEFAULT_LANDMARKS",
+    "AffectVector",
     "DarkGear",
     "DarkGearSystem",
     "DayPeriod",
@@ -133,6 +139,8 @@ __all__ = [
     "PRIME_WORLD_ID",
     "Region",
     "SubRegion",
+    "RelationalCircle",
+    "RelationalDistance",
     "RelationshipTracker",
     "Season",
     "SeasonSystem",
