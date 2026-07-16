@@ -39,6 +39,8 @@ from .festivals import FestivalSystem, get_festival_system
 from .interactions import detect_proximity
 from .landmarks import LandmarkSystem, get_landmark_system
 from .affect_propagation import AffectPropagationEngine
+from .cooperation_thresholds import get_circle_between, get_interaction_modifier
+from .relational_circle import RelationalCircle
 from .relationships import RelationshipTracker, get_tracker
 from .seasons import SeasonSystem, get_season_system
 from .weather import WeatherSystem, get_weather_system
@@ -426,7 +428,13 @@ class WorldScheduler:
                 continue
 
             # Phase 11: 对话降频 — 即使满足所有条件,也只有配置概率真正触发对话
-            if random.random() > self._dialogue_prob:
+            # Phase 16: 用关系距离调节对话触发概率 (仅在非强制触发模式下)
+            if self._dialogue_prob >= 1.0:
+                effective_prob = 1.0  # 测试/强制模式: 始终触发
+            else:
+                rel_mod = get_interaction_modifier(a.name, b.name, self._relationships, "dialogue")
+                effective_prob = min(1.0, self._dialogue_prob * rel_mod)
+            if random.random() > effective_prob:
                 self._relationships.record_proximity_with_desire(
                     a.name, a.latent_desire, b.name, b.latent_desire,
                 )
@@ -460,6 +468,72 @@ class WorldScheduler:
             # 刷新双方冷却时间戳
             a.last_interaction_at = now
             b.last_interaction_at = now
+
+        # Phase 16: 战斗触发 — 对每对邻近 agent 独立检查, 与对话解耦
+        # 仅在正常模式(非测试强制触发)下启用
+        if self._dialogue_prob < 1.0:
+            for a, b in pairs:
+                if a.region_id != b.region_id:
+                    continue
+                # 战斗触发不与冷却绑定(战斗冲动 vs 对话倾向是独立系统)
+                battle_mod = get_interaction_modifier(a.name, b.name, self._relationships, "battle")
+                # 基础战斗概率 2%, 乘关系乘数
+                base_battle_prob = 0.02
+                effective_battle_prob = min(0.50, base_battle_prob * battle_mod)
+                if random.random() < effective_battle_prob:
+                    circle = get_circle_between(a.name, b.name, self._relationships)
+                    try:
+                        from ..battle.sparring import spar
+                        spar(a, b)  # 不计返回值, 效果已在 agent 上生效
+                        # 写入世界事件
+                        self._world.events.append({
+                            "type": "spar",
+                            "attacker": a.name,
+                            "defender": b.name,
+                            "circle": circle.label_cn(),
+                            "battle_mod": round(battle_mod, 2),
+                            "at": self._clock.now.isoformat() if self._clock.now is not None else None,
+                        })
+                        # 敌对战斗后关系进一步恶化
+                        if circle == RelationalCircle.HOSTILE:
+                            self._relationships.record_battle(winner=a.name, loser=b.name)
+                    except Exception as e:
+                        logger.warning("spar trigger failed for %s / %s: %s", a.name, b.name, e)
+
+        # Phase 16: 合作倾向 — intimate/close 圈层 agent 互相靠近
+        # 仅在正常模式(非测试强制触发)下启用
+        if self._dialogue_prob < 1.0:
+            self._apply_cooperation_nudge(agents)
+
+    # ---- Phase 16: 合作倾向处理 ----
+    def _apply_cooperation_nudge(self, agents: list[DigimonAgent]) -> None:
+        """对 intimate/close 圈层的 agent 对施加互相靠近的微调。
+
+        在每个 tick 的互动阶段之后, 亲密圈层的 agent 会被轻微吸引向彼此,
+        模拟协同行动倾向。步长为此处定义的 COOP_NUDGE_STEP。
+        """
+        COOP_NUDGE_STEP = 3  # 合作吸引步长(像素), 远小于普通移动步长
+        pairs = detect_proximity(agents, radius=DIALOGUE_RADIUS)
+        for a, b in pairs:
+            if a.region_id != b.region_id:
+                continue
+            coop_mod = get_interaction_modifier(a.name, b.name, self._relationships, "cooperation")
+            if coop_mod <= 1.0:
+                continue  # 仅 intimate(1.5x) / close(1.3x) 有效
+            # coop_mod > 1.0 → 互相靠近
+            ax, ay = a.location
+            bx, by = b.location
+            import math
+            dx = bx - ax
+            dy = by - ay
+            dist = math.sqrt(dx * dx + dy * dy) or 1.0
+            step = COOP_NUDGE_STEP * (coop_mod - 1.0)  # 亲密越高吸引越强
+            nx = dx / dist * step
+            ny = dy / dist * step
+            # a 向 b 靠近
+            a.location = (max(0, int(ax + nx)), max(0, int(ay + ny)))
+            # b 向 a 靠近
+            b.location = (max(0, int(bx - nx)), max(0, int(by - ny)))
 
     # ---- Phase 10: 环境演化处理 ----
     async def _process_environment(self, agents: list[DigimonAgent]) -> None:
