@@ -248,9 +248,9 @@
 |
 |**参考项目**: https://github.com/agent-topia/evolving_personality — 基于荣格心理学的 MBTI 人格动态演化框架
 |
-|- [x] Task 1 — `personality_engine.py` 核心模块: MBTI 四维度 + 动态演化 + 人格兼容矩阵
-|- [ ] Task 2 — API 端点 `/api/digimon/{name}/personality`: 返回人格档案（类型 + 各维度值 + 演化历史）
-|- [ ] Task 3 — 人格集成到对话/战斗/规划: 性格影响决策风格和对话语气
+- [x] Task 1 — `personality_engine.py` 核心模块: MBTI 四维度 + 动态演化 + 人格兼容矩阵
+- [x] Task 2 — API 端点 `/api/digimon/{name}/personality`: 返回人格档案（类型 + 各维度值 + 演化历史）
+- [ ] Task 3 — 人格集成到对话/战斗/规划: 性格影响决策风格和对话语气
 |- [ ] Task 4 — 人格兼容性加成: RelationshipTracker 中 MBTI 兼容度额外加分
 |- [ ] Task 5 — 前端人格雷达图: Canvas 绘制四维度雷达图 + 演化轨迹
 |
