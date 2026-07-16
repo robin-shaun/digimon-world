@@ -884,17 +884,20 @@
         let pairs = [];
         let achievements = [];
         let relationData = null;
+        let personalityData = null;
         try {
-            const [dResp, rResp, aResp, relResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relations/' + encodeURIComponent(name), { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/personality', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
             if (aResp.ok) achievements = (await aResp.json()).achievements || [];
             if (relResp.ok) relationData = await relResp.json();
+            if (pResp.ok) personalityData = await pResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -987,6 +990,18 @@
                 '</div>');
             const relCanvas = sb.querySelector('.relation-circle-canvas');
             if (relCanvas) drawRelationCircles(relCanvas, relationData);
+        }
+
+        // Phase 17: MBTI 人格雷达图
+        if (personalityData) {
+            sb.insertAdjacentHTML('beforeend',
+                '<div class="detail-block">' +
+                '<h4>🧠 MBTI 人格 · ' + escapeHtml(personalityData.type_code || '??') + '</h4>' +
+                '<p class="meta">' + escapeHtml(personalityData.type_description || '') + '</p>' +
+                '<canvas class="personality-radar-canvas" width="260" height="260"></canvas>' +
+                '</div>');
+            const prCanvas = sb.querySelector('.personality-radar-canvas');
+            if (prCanvas) drawPersonalityRadar(prCanvas, personalityData);
         }
     }
 
@@ -1145,10 +1160,227 @@
             }
         }
 
-        c.globalAlpha = 1.0;
-        c.textBaseline = 'alphabetic';
-        c.textAlign = 'left';
-    }
+    c.globalAlpha = 1.0;
+    c.textBaseline = 'alphabetic';
+    c.textAlign = 'left';
+}
+
+// ══════════════════════════════════════════════
+//  Phase 17: MBTI 四维度人格雷达图
+// ══════════════════════════════════════════════
+
+        /**
+         * 在 Canvas 上绘制 MBTI 四维度雷达图 + 演化轨迹。
+         * 4 条轴 (45° 偏移钻石形): 右上=E/I, 左上=S/N, 左下=T/F, 右下=J/P。
+         * 中心=0, 轴两端=±1, 多边形连接四点显示人格轮廓。
+         */
+        function drawPersonalityRadar(canvas, data) {
+            const c = canvas.getContext('2d');
+            const w = canvas.width;   // 260
+            const h = canvas.height;  // 260
+            const cx = w / 2;
+            const cy = h / 2;
+
+            c.clearRect(0, 0, w, h);
+
+            // 暗色背景
+            c.fillStyle = 'rgba(10, 14, 39, 0.55)';
+            c.beginPath();
+            c.roundRect(4, 4, w - 8, h - 8, 8);
+            c.fill();
+
+            // 四轴定义: 角度、正极标签、负极标签、维度 key
+            const maxR = 105;  // 最大半径
+            const axes = [
+                { angle: -Math.PI / 4,  dim: 'ei', pos: 'E', neg: 'I', color: '#ff6b6b' },  // 右上
+                { angle: -Math.PI * 3 / 4, dim: 'sn', pos: 'S', neg: 'N', color: '#ffb347' }, // 左上
+                { angle: Math.PI * 3 / 4, dim: 'tf', pos: 'T', neg: 'F', color: '#74b9ff' },  // 左下
+                { angle: Math.PI / 4,  dim: 'jp', pos: 'J', neg: 'P', color: '#6c5ce7' },     // 右下
+            ];
+
+            // 绘制参考圆环 (0.33, 0.66, 1.0)
+            for (const ring of [1, 0.66, 0.33]) {
+                const r = maxR * ring;
+                c.strokeStyle = 'rgba(139, 149, 199, 0.18)';
+                c.lineWidth = 0.5;
+                c.beginPath();
+                c.arc(cx, cy, r, 0, Math.PI * 2);
+                c.stroke();
+            }
+
+            // 绘制轴线 + 正负极标签
+            for (const ax of axes) {
+                const ex = cx + Math.cos(ax.angle) * maxR;
+                const ey = cy + Math.sin(ax.angle) * maxR;
+                const exn = cx - Math.cos(ax.angle) * maxR;
+                const eyn = cy - Math.sin(ax.angle) * maxR;
+
+                // 轴线
+                c.strokeStyle = 'rgba(139, 149, 199, 0.3)';
+                c.lineWidth = 0.8;
+                c.beginPath();
+                c.moveTo(exn, eyn);
+                c.lineTo(ex, ey);
+                c.stroke();
+
+                // 正极标签 (外侧)
+                c.fillStyle = ax.color;
+                c.font = 'bold 12px monospace';
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                const lblX = cx + Math.cos(ax.angle) * (maxR + 16);
+                const lblY = cy + Math.sin(ax.angle) * (maxR + 16);
+                c.fillText(ax.pos, lblX, lblY);
+
+                // 负极标签
+                c.fillStyle = 'rgba(139, 149, 199, 0.6)';
+                c.font = '11px monospace';
+                const lblXn = cx - Math.cos(ax.angle) * (maxR + 16);
+                const lblYn = cy - Math.sin(ax.angle) * (maxR + 16);
+                c.fillText(ax.neg, lblXn, lblYn);
+            }
+
+            // 人格多边形: 取四维度值, 映射到坐标
+            const points = axes.map((ax) => {
+                const val = data[ax.dim] || 0;  // [-1, 1]
+                const r = val * maxR;
+                return {
+                    x: cx + Math.cos(ax.angle) * r,
+                    y: cy + Math.sin(ax.angle) * r,
+                    color: ax.color,
+                    dim: ax.dim,
+                    val: val,
+                };
+            });
+
+            // 填充多边形 (半透明, 渐变)
+            const grad = c.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+            grad.addColorStop(0, 'rgba(0, 212, 255, 0.12)');
+            grad.addColorStop(1, 'rgba(0, 212, 255, 0.03)');
+            c.fillStyle = grad;
+            c.beginPath();
+            c.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                c.lineTo(points[i].x, points[i].y);
+            }
+            c.closePath();
+            c.fill();
+
+            // 多边形描边
+            c.strokeStyle = 'rgba(0, 212, 255, 0.7)';
+            c.lineWidth = 2;
+            c.stroke();
+
+            // 四个顶点圆点
+            for (const pt of points) {
+                c.fillStyle = pt.color;
+                c.globalAlpha = 0.9;
+                c.beginPath();
+                c.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                c.fill();
+
+                // 顶点光晕
+                const glow = c.createRadialGradient(pt.x, pt.y, 1, pt.x, pt.y, 10);
+                glow.addColorStop(0, pt.color.replace(')', ', 0.4)').replace('rgb', 'rgba'));
+                if (pt.color.startsWith('#')) {
+                    const rr = parseInt(pt.color.slice(1, 3), 16);
+                    const gg = parseInt(pt.color.slice(3, 5), 16);
+                    const bb = parseInt(pt.color.slice(5, 7), 16);
+                    c.fillStyle = `rgba(${rr}, ${gg}, ${bb}, 0.25)`;
+                } else {
+                    c.fillStyle = pt.color.replace(')', ', 0.25)').replace('rgb', 'rgba');
+                }
+                c.beginPath();
+                c.arc(pt.x, pt.y, 10, 0, Math.PI * 2);
+                c.fill();
+                c.globalAlpha = 1.0;
+            }
+
+            // 中心点
+            c.fillStyle = '#ffd700';
+            c.beginPath();
+            c.arc(cx, cy, 3, 0, Math.PI * 2);
+            c.fill();
+
+            // 维度标签 (小字, 在顶点旁偏移)
+            const dimLabels = { ei: 'E/I', sn: 'S/N', tf: 'T/F', jp: 'J/P' };
+            for (const pt of points) {
+                c.fillStyle = 'rgba(224, 230, 255, 0.55)';
+                c.font = '8px monospace';
+                c.textAlign = 'center';
+                c.textBaseline = 'bottom';
+                const offX = pt.x - cx;
+                const offY = pt.y - cy;
+                const dist = Math.sqrt(offX * offX + offY * offY);
+                if (dist > 8) {
+                    const nx = offX / dist;
+                    const ny = offY / dist;
+                    c.fillText(
+                        (pt.val >= 0 ? '+' : '') + pt.val.toFixed(1),
+                        pt.x + nx * 8,
+                        pt.y + ny * 8 - 3
+                    );
+                }
+            }
+
+            // 底部: 类型代码 + 强度百分比
+            c.fillStyle = '#ffd700';
+            c.font = 'bold 13px monospace';
+            c.textAlign = 'center';
+            c.textBaseline = 'top';
+            const typeText = (data.type_code || '??') + '  ' +
+                (data.is_clear ? '✓ 清晰' : '~ 模糊');
+            c.fillText(typeText, cx, maxR + 36);
+
+            // 演化轨迹: 最近 5 条历史用圆点标出方向
+            const history = data.history || [];
+            if (history.length > 0) {
+                c.fillStyle = 'rgba(224, 230, 255, 0.5)';
+                c.font = '9px monospace';
+                c.textAlign = 'center';
+                c.textBaseline = 'top';
+                c.fillText('演化记录 (最近 ' + Math.min(5, history.length) + ' 条)', cx, maxR + 56);
+
+                const recent = history.slice(-5);
+                const dotStart = maxR + 72;
+                for (let i = 0; i < recent.length; i++) {
+                    const entry = recent[i];
+                    const tickX = cx - 50 + i * 26;
+                    const tickY = dotStart;
+
+                    // 小圆点
+                    c.fillStyle = 'rgba(0, 212, 255, 0.7)';
+                    c.beginPath();
+                    c.arc(tickX, tickY + 3, 3.5, 0, Math.PI * 2);
+                    c.fill();
+
+                    // 类型代码 (如果有变化用黄色标出)
+                    if (i > 0 && entry.result_type !== recent[i - 1].result_type) {
+                        c.fillStyle = '#ffd700';
+                    } else {
+                        c.fillStyle = 'rgba(224, 230, 255, 0.6)';
+                    }
+                    c.font = '7px monospace';
+                    c.textAlign = 'center';
+                    c.textBaseline = 'top';
+                    c.fillText(entry.result_type || '', tickX, tickY + 10);
+                }
+
+                // 箭头连线从左到右
+                if (recent.length > 1) {
+                    c.strokeStyle = 'rgba(0, 212, 255, 0.25)';
+                    c.lineWidth = 1;
+                    c.beginPath();
+                    c.moveTo(cx - 50 + 3.5, dotStart + 3);
+                    c.lineTo(cx - 50 + (recent.length - 1) * 26 + 3.5, dotStart + 3);
+                    c.stroke();
+                }
+            }
+
+            c.globalAlpha = 1.0;
+            c.textBaseline = 'alphabetic';
+            c.textAlign = 'left';
+        }
 
     // ══════════════════════════════════════════════
     //  轮询
