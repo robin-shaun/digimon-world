@@ -200,16 +200,16 @@ def test_act_move_clamps_to_non_negative(agumon: DigimonAgent) -> None:
 
 def test_act_clamps_to_region_bounds(agumon: DigimonAgent) -> None:
     """agent 已在地区右下边界,再往右下走,应停在边界不越界。"""
-    # file_island bounds = (0, 0, 960, 600)
+    # file_island bounds = (2900, 2300, 3860, 2900)
     agumon.region_id = "file_island"
-    agumon.location = (960, 600)
+    agumon.location = (3860, 2900)
     agumon.current_plan = "向右下方继续走"
     event = agumon.act(DEFAULT_REGIONS)
     assert event["type"] == "moved"
     # 夹紧在 max_x / max_y,不越界
-    assert event["to"][0] == 960
-    assert event["to"][1] == 600
-    assert agumon.location == (960, 600)
+    assert event["to"][0] == 3860
+    assert event["to"][1] == 2900
+    assert agumon.location == (3860, 2900)
 
 
 def test_act_clamps_to_region_bounds_smaller_region(agumon: DigimonAgent) -> None:
@@ -265,7 +265,7 @@ def test_act_without_regions_preserves_legacy_behavior(agumon: DigimonAgent) -> 
 
 def test_get_bounds_returns_region_bounds(agumon: DigimonAgent) -> None:
     agumon.region_id = "file_island"
-    assert agumon.get_bounds(DEFAULT_REGIONS) == (0, 0, 960, 600)
+    assert agumon.get_bounds(DEFAULT_REGIONS) == (2900, 2300, 3860, 2900)
 
 
 def test_get_bounds_none_when_unknown(agumon: DigimonAgent) -> None:

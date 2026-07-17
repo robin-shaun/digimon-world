@@ -312,6 +312,77 @@ def get_world_snapshot() -> dict[str, Any]:
     return get_world().to_dict()
 
 
+# ---- Phase 17: 区域定义 API (前端地图渲染用) ----
+@app.get("/api/regions")
+def get_regions() -> dict[str, Any]:
+    """返回所有区域定义，包含区域边界、子区域、POI。
+
+    前端用此接口渲染世界地图的各个区域色块和标注。
+    返回格式:
+    {
+      "world_width": 4000,
+      "world_height": 3000,
+      "regions": [
+        {
+          "id": "server_continent",
+          "name": "服务器大陆",
+          "bounds": [200, 200, 3200, 2100],
+          "color": "#4a7c59",  // 前端渲染用的推荐颜色
+          "sub_regions": [...],
+          "pois": [...]
+        },
+        ...
+      ]
+    }
+    """
+    from ..world.world_state import WORLD_WIDTH, WORLD_HEIGHT
+
+    # 区域推荐渲染颜色
+    region_colors = {
+        "file_island": "#5b8c5a",
+        "server_continent": "#4a7c59",
+        "spiral_mountain": "#6b3a5b",
+        "endless_ocean": "#2c5f8a",
+        "infinity_mountain": "#8b7355",
+        "village_of_beginnings": "#c4a45a",
+    }
+
+    world = get_world()
+    regions_data = []
+    for region in world.regions.values():
+        regions_data.append({
+            "id": region.region_id,
+            "name": region.name,
+            "description": region.description,
+            "bounds": list(region.bounds),
+            "color": region_colors.get(region.region_id, "#888888"),
+            "pois": {
+                k: {"x": v[0], "y": v[1], "label": v[2]}
+                for k, v in region.pois.items()
+            },
+            "sub_regions": [
+                {
+                    "id": sr.sub_region_id,
+                    "name": sr.name,
+                    "name_en": sr.name_en,
+                    "description": sr.description,
+                    "bounds": list(sr.bounds),
+                    "pois": {
+                        k: {"x": v[0], "y": v[1], "label": v[2]}
+                        for k, v in sr.pois.items()
+                    },
+                }
+                for sr in region.sub_regions
+            ],
+        })
+
+    return {
+        "world_width": WORLD_WIDTH,
+        "world_height": WORLD_HEIGHT,
+        "regions": regions_data,
+    }
+
+
 # ---- Phase 7: 因果链 & 世界活力 API ----
 @app.get("/api/causality/{event_id}")
 def get_causality_chain(event_id: int) -> dict[str, Any]:

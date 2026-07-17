@@ -12,6 +12,7 @@ import pytest
 from digimon_world.agents.dialogue import Dialogue
 from digimon_world.llm.client import FakeLlmClient, LlmModel, set_client
 from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
+from digimon_world.world.world_state import WORLD_WIDTH, WORLD_HEIGHT
 
 
 def _build_ci_fake_client() -> FakeLlmClient:
@@ -49,11 +50,11 @@ async def test_phase11_30_agent_consistency():
     # 1. Agent count >= 30
     assert len(agents) >= 30, f"Expected >=30 agents, got {len(agents)}"
 
-    # 2. All positions in bounds
+    # 2. All positions in bounds (within world dimensions)
     for a in agents:
         x, y = a.location
-        assert 0 <= x <= 1200, f"{a.name}.x={x} out of bounds"
-        assert 0 <= y <= 800, f"{a.name}.y={y} out of bounds"
+        assert 0 <= x <= WORLD_WIDTH, f"{a.name}.x={x} out of bounds"
+        assert 0 <= y <= WORLD_HEIGHT, f"{a.name}.y={y} out of bounds"
 
     # 3. All have region_id
     for a in agents:
@@ -78,10 +79,12 @@ async def test_phase11_30_agent_consistency():
     for required in ["vaccine", "data", "virus", "free"]:
         assert required in attrs, f"Missing attribute: {required}"
 
-    # 7. Both regions present
+    # 7. Multiple regions present
     regions = {a.region_id for a in agents}
     assert "file_island" in regions, "Missing file_island region"
     assert "infinity_mountain" in regions, "Missing infinity_mountain region"
+    # Phase 17: 服务器大陆和螺旋山也应该有数码兽
+    # (可能不在15 tick后出现，取决于随机移动)
 
     # 8. Scheduler tick_count matches
     assert scheduler.tick_count == 15, f"scheduler.tick_count={scheduler.tick_count}"

@@ -8,7 +8,8 @@ from digimon_world.world.world_state import (
 
 
 class TestFileIslandSubRegions:
-    """文件岛应该有 14 个完全覆盖 960×600 地图的子区域。"""
+    """文件岛应该有 14 个完全覆盖 960x600 地图的子区域。
+    注意 Phase 17 后文件岛平移到右下角 (2900, 2300) 起点。"""
 
     def test_sub_region_count(self):
         """确认文件岛有恰好 14 个子区域。"""
@@ -27,20 +28,20 @@ class TestFileIslandSubRegions:
             assert sr.description, f"{sr.sub_region_id} has empty description"
 
     @pytest.mark.parametrize("x,y,expected", [
-        (160, 520, "beach_of_departure"),
-        (360, 190, "confusion_forest"),
-        (600, 180, "gear_savannah"),
-        (840, 190, "infinity_mountain_peak"),
-        (110, 270, "dark_cave"),
-        (360, 320, "dragon_eye_lake"),
-        (600, 340, "ogremon_fortress"),
-        (830, 320, "factory_area"),
-        (460, 530, "vending_machine_area"),
-        (800, 520, "toy_town"),
-        (120, 50, "freezing_area"),
-        (480, 60, "miharashi_mountain"),
-        (840, 55, "ancient_dino_region"),
-        (100, 170, "shogungekomon_castle"),
+        (3060, 2820, "beach_of_departure"),
+        (3260, 2490, "confusion_forest"),
+        (3500, 2480, "gear_savannah"),
+        (3740, 2490, "infinity_mountain_peak"),
+        (3010, 2570, "dark_cave"),
+        (3260, 2620, "dragon_eye_lake"),
+        (3500, 2640, "ogremon_fortress"),
+        (3730, 2620, "factory_area"),
+        (3360, 2830, "vending_machine_area"),
+        (3700, 2820, "toy_town"),
+        (3020, 2350, "freezing_area"),
+        (3380, 2360, "miharashi_mountain"),
+        (3740, 2355, "ancient_dino_region"),
+        (3000, 2470, "shogungekomon_castle"),
     ])
     def test_coordinate_lookup(self, x, y, expected):
         """每类子区域的代表性坐标应该命中。"""
@@ -51,11 +52,11 @@ class TestFileIslandSubRegions:
         )
 
     def test_full_map_coverage(self):
-        """960×600 地图中的每个像素都应该命中某个子区域。"""
+        """文件岛 960x600 地图中的每个像素都应该命中某个子区域 (Phase 17 平移到 2900,2300)。"""
         # 采样检查: 每 60 像素一个采样点
         misses = []
-        for x in range(0, 961, 60):
-            for y in range(0, 601, 60):
+        for x in range(2900, 3861, 60):
+            for y in range(2300, 2901, 60):
                 sr = FILE_ISLAND.find_sub_region(x, y)
                 if sr is None:
                     misses.append((x, y))

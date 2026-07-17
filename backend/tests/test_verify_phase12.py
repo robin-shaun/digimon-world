@@ -88,8 +88,9 @@ async def test_agent_count_stable(fake_client):
 
 
 async def test_all_agents_in_bounds(fake_client):
-    """校验 3: 所有 agent 位置在画布内。"""
+    """校验 3: 所有 agent 位置在世界边界内 (Phase 17: 4000x3000)。"""
     from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
+    from digimon_world.world.world_state import WORLD_WIDTH, WORLD_HEIGHT
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
 
@@ -102,11 +103,10 @@ async def test_all_agents_in_bounds(fake_client):
     for _ in range(60):
         await scheduler.tick_once(real_seconds=1.0)
 
-    w, h = 1200, 800
     for a in world.all():
         x, y = a.location
-        assert 0 <= x <= w, f"{a.name} x={x} out of bounds"
-        assert 0 <= y <= h, f"{a.name} y={y} out of bounds"
+        assert 0 <= x <= WORLD_WIDTH, f"{a.name} x={x} out of bounds"
+        assert 0 <= y <= WORLD_HEIGHT, f"{a.name} y={y} out of bounds"
 
 
 async def test_all_agents_have_region(fake_client):

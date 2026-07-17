@@ -47,12 +47,12 @@ def test_move_unknown_agent() -> None:
 
 def test_move_writes_event() -> None:
     state = WorldState()
-    a = DigimonAgent(name="E", species="e", region_id="file_island", location=(100, 100))
+    a = DigimonAgent(name="E", species="e", region_id="file_island", location=(3100, 2500))
     state.spawn(a)
     state.move("E", 5, -5)
     assert len(state.events) == 1
     assert state.events[0]["type"] == "moved"
-    assert state.events[0]["to"] == [105, 95]
+    assert state.events[0]["to"] == [3105, 2495]
 
 
 def test_to_dict_roundtrip_fields() -> None:

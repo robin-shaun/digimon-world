@@ -20,8 +20,26 @@
 
     const canvas = document.getElementById('world-map');
     const ctx = canvas.getContext('2d');
-    const W = canvas.width;   // 1200 (Phase 11 expanded)
-    const H = canvas.height;  // 800
+
+    // ---- 世界常量 (Phase 15: 大世界地图) ----
+    const WORLD_W = 4000;
+    const WORLD_H = 3000;
+    const VIEW_W = canvas.width;   // 1200 (视口宽度)
+    const VIEW_H = canvas.height;  // 800  (视口高度)
+
+    // ---- 相机状态 ----
+    let cameraX = WORLD_W / 2;  // 视口中心在世界坐标中的 X
+    let cameraY = WORLD_H / 2;  // 视口中心在世界坐标中的 Y
+    let zoom = 1.0;             // 缩放 (0.5 ~ 2.0)
+    const ZOOM_MIN = 0.5;
+    const ZOOM_MAX = 2.0;
+
+    // ---- 拖拽状态 ----
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragStartCamX = 0;
+    let dragStartCamY = 0;
 
     // Phase 11: 密度模式阈值 — 超过此数只画圆点
     const DENSITY_MODE_THRESHOLD = 15;
@@ -93,7 +111,7 @@
         return MOOD_EMOJI[mood] || '😐';
     }
 
-    // ---- 区域样式 ----
+    // ---- 区域样式 (Phase 15: 区域标签已硬编码到世界地图中) ----
     // 后端两个 region 的 bounds 都是整块 (0,0,960,600) 且重叠,
     // 所以标签位置在前端按语义手动指定,避免堆在左上角。
     const REGION_STYLE = {
@@ -125,65 +143,21 @@
     // Phase 13-②: 粒子特效系统 (进化火花 / 战斗爆裂 / 戳一下涟漪)
     const particles = window.PARTICLE ? new PARTICLE.ParticleSystem() : null;
 
-    // ══════════════════════════════════════════════
-    //  Phase 13 ④: 离屏 Canvas 缓存 — 静态背景画一次, 每帧只 blit
-    // ══════════════════════════════════════════════
-    let bgCache = null;
-    let bgCacheValid = false;
-    // 缓存渐变对象, 避免每帧 new LinearGradient
-    let skyGradDay = null;
-    let skyGradNight = null;
-
-    function ensureBgCache() {
-        if (!bgCache) {
-            bgCache = document.createElement('canvas');
-            bgCache.width = W;
-            bgCache.height = H;
-            // 预创建天空渐变
-            skyGradDay = bgCache.getContext('2d').createLinearGradient(0, 0, 0, H);
-            skyGradDay.addColorStop(0, '#0a1233');
-            skyGradDay.addColorStop(0.6, '#1e2a5a');
-            skyGradDay.addColorStop(1, '#3a1a4a');
-            skyGradNight = bgCache.getContext('2d').createLinearGradient(0, 0, 0, H);
-            skyGradNight.addColorStop(0, '#020518');
-            skyGradNight.addColorStop(0.6, '#0a1535');
-            skyGradNight.addColorStop(1, '#15082a');
+    // Phase 15: 离屏缓存已移除 — 大世界地图直接渲染每帧
+    // 天空渐变懒初始化
+    let _skyGradDay = null;
+    let _skyGradNight = null;
+    function _ensureSkyGrads() {
+        if (!_skyGradDay) {
+            _skyGradDay = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+            _skyGradDay.addColorStop(0, '#0a1233');
+            _skyGradDay.addColorStop(0.6, '#1e2a5a');
+            _skyGradDay.addColorStop(1, '#3a1a4a');
+            _skyGradNight = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+            _skyGradNight.addColorStop(0, '#020518');
+            _skyGradNight.addColorStop(0.6, '#0a1535');
+            _skyGradNight.addColorStop(1, '#15082a');
         }
-    }
-
-    function invalidateBgCache() {
-        bgCacheValid = false;
-    }
-
-    /** 将静态内容(天空/星星/地形/POI/标题)预渲染到离屏 Canvas */
-    function cacheBackground() {
-        ensureBgCache();
-        const c = bgCache.getContext('2d');
-
-        // 天空 (用预创建的渐变)
-        const isNight = !state.env.daynight.is_daytime;
-        c.fillStyle = isNight ? skyGradNight : skyGradDay;
-        c.fillRect(0, 0, W, H);
-
-        // 星星
-        for (let i = 0; i < 60; i++) {
-            const x = (i * 73 + 50) % W;
-            const y = ((i * 41) % (H * 0.5)) + 10;
-            const alpha = 0.2 + (i % 5) * 0.12;
-            c.fillStyle = `rgba(200, 220, 255, ${alpha})`;
-            c.beginPath();
-            c.arc(x, y, 1, 0, Math.PI * 2);
-            c.fill();
-        }
-
-        // 地形
-        drawRegionsTo(c);
-        // POI
-        drawPOIsTo(c);
-        // 标题
-        drawTitleTo(c);
-
-        bgCacheValid = true;
     }
 
     // ══════════════════════════════════════════════
@@ -191,11 +165,22 @@
     // ══════════════════════════════════════════════
 
     function drawSky() {
-        // 静态 — 走缓存, 保留函数签名兼容旧调用
+        _ensureSkyGrads();
+        const isNight = !state.env.daynight.is_daytime;
+        ctx.fillStyle = isNight ? _skyGradNight : _skyGradDay;
+        ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     }
 
     function drawStars() {
-        // 静态 — 走缓存
+        for (let i = 0; i < 60; i++) {
+            const x = (i * 73 + 50) % VIEW_W;
+            const y = ((i * 41) % (VIEW_H * 0.5)) + 10;
+            const alpha = 0.2 + (i % 5) * 0.12;
+            ctx.fillStyle = `rgba(200, 220, 255, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(x, y, 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
     /** Phase 10: 天气粒子特效 (雨滴/雾气) */
@@ -203,12 +188,12 @@
         const weather = state.env.weather.weather;
 
         if (weather === 'rainy' || weather === 'stormy') {
-            // 雨滴: 半透明白色竖线
+            // 雨滴: 半透明白色竖线 — 视口空间
             const intensity = weather === 'stormy' ? 80 : 40;
             const alpha = weather === 'stormy' ? 0.35 : 0.2;
             for (let i = 0; i < intensity; i++) {
-                const x = ((i * 173 + Date.now() * 0.08 + i * 13) % (W + 40)) - 20;
-                const y = ((i * 97 + Date.now() * 0.15) % (H + 20)) - 10;
+                const x = ((i * 173 + Date.now() * 0.08 + i * 13) % (VIEW_W + 40)) - 20;
+                const y = ((i * 97 + Date.now() * 0.15) % (VIEW_H + 20)) - 10;
                 const len = 8 + (i % 12);
                 ctx.strokeStyle = `rgba(180, 210, 255, ${alpha})`;
                 ctx.lineWidth = 1;
@@ -220,10 +205,9 @@
         }
 
         if (weather === 'foggy') {
-            // 雾气: 半透明白色水平飘动的横条
             for (let i = 0; i < 25; i++) {
-                const y = ((i * 89 + 40) % H);
-                const x = ((i * 137 + Date.now() * 0.03) % (W + 100)) - 50;
+                const y = ((i * 89 + 40) % VIEW_H);
+                const x = ((i * 137 + Date.now() * 0.03) % (VIEW_W + 100)) - 50;
                 const w = 80 + (i * 37) % 160;
                 const alpha = 0.04 + (i % 6) * 0.02;
                 ctx.fillStyle = `rgba(200, 210, 230, ${alpha})`;
@@ -234,68 +218,209 @@
         }
     }
 
-    /** 根据后端 regions 数据画地图 (参数化版本, 接受目标 context) */
-    function drawRegionsTo(c) {
-        // 无限山 (1200×800 比例调整)
-        c.fillStyle = '#2a1f4a';
-        c.beginPath();
-        c.moveTo(W * 0.35, H * 0.55);
-        c.lineTo(W * 0.5, H * 0.15);
-        c.lineTo(W * 0.65, H * 0.55);
-        c.closePath();
-        c.fill();
+    /** Phase 15: 大世界地图 — 4000x3000, 程序化渲染区块 */
+    function drawWorldBackground() {
+        // ---- 无尽海 (蓝色底色全覆盖) ----
+        ctx.fillStyle = '#0a2a4a';
+        ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+        // 海面纹理 (浅色波浪线)
+        ctx.strokeStyle = 'rgba(20, 80, 140, 0.25)';
+        ctx.lineWidth = 1;
+        for (let y = 0; y < WORLD_H; y += 40) {
+            ctx.beginPath();
+            for (let x = 0; x < WORLD_W; x += 20) {
+                const wy = y + Math.sin(x * 0.01 + y * 0.005) * 6;
+                if (x === 0) ctx.moveTo(x, wy);
+                else ctx.lineTo(x, wy);
+            }
+            ctx.stroke();
+        }
+
+        // ---- 服务器大陆 (棕色, 左上区域 200-3200, 200-2100) ----
+        const continentGrad = ctx.createLinearGradient(200, 200, 200, 2100);
+        continentGrad.addColorStop(0, '#5a4a2a');
+        continentGrad.addColorStop(0.3, '#6b5b3a');
+        continentGrad.addColorStop(0.7, '#4a3a1a');
+        continentGrad.addColorStop(1, '#3a2a10');
+        ctx.fillStyle = continentGrad;
+        ctx.beginPath();
+        ctx.moveTo(200, 200);
+        ctx.lineTo(3200, 200);
+        ctx.lineTo(3150, 500);
+        ctx.lineTo(3300, 900);
+        ctx.lineTo(3100, 1400);
+        ctx.lineTo(2900, 1800);
+        ctx.lineTo(2600, 2100);
+        ctx.lineTo(400, 2050);
+        ctx.lineTo(200, 1500);
+        ctx.closePath();
+        ctx.fill();
+
+        // 大陆边缘描边
+        ctx.strokeStyle = 'rgba(100, 80, 40, 0.6)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 大陆内部纹理 (随机浅色斑块)
+        for (let i = 0; i < 30; i++) {
+            const cx = 400 + ((i * 317 + 100) % 2600);
+            const cy = 300 + ((i * 197 + 50) % 1700);
+            ctx.fillStyle = `rgba(${80 + (i % 30)}, ${60 + (i % 25)}, ${20 + (i % 15)}, 0.15)`;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, 40 + (i % 80), 20 + (i % 40), i * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // ---- 螺旋山 (紫色, 3300-3950, 800-1500) ----
+        // 山体
+        const mtGrad = ctx.createLinearGradient(3625, 800, 3625, 1500);
+        mtGrad.addColorStop(0, '#7c3aed');
+        mtGrad.addColorStop(0.3, '#5b2d8e');
+        mtGrad.addColorStop(0.7, '#3a1f5a');
+        mtGrad.addColorStop(1, '#2a1540');
+        ctx.fillStyle = mtGrad;
+        ctx.beginPath();
+        ctx.moveTo(3300, 1500);
+        ctx.lineTo(3400, 1300);
+        ctx.lineTo(3500, 1100);
+        ctx.lineTo(3625, 800);
+        ctx.lineTo(3750, 1100);
+        ctx.lineTo(3850, 1300);
+        ctx.lineTo(3950, 1500);
+        ctx.closePath();
+        ctx.fill();
 
         // 山顶光晕
-        const peakGrad = c.createRadialGradient(W * 0.5, H * 0.15, 8, W * 0.5, H * 0.15, 100);
-        peakGrad.addColorStop(0, 'rgba(124, 58, 237, 0.5)');
-        peakGrad.addColorStop(1, 'rgba(124, 58, 237, 0)');
-        c.fillStyle = peakGrad;
-        c.beginPath();
-        c.arc(W * 0.5, H * 0.15, 100, 0, Math.PI * 2);
-        c.fill();
+        const peakGlow = ctx.createRadialGradient(3625, 800, 10, 3625, 800, 200);
+        peakGlow.addColorStop(0, 'rgba(124, 58, 237, 0.7)');
+        peakGlow.addColorStop(0.5, 'rgba(124, 58, 237, 0.2)');
+        peakGlow.addColorStop(1, 'rgba(124, 58, 237, 0)');
+        ctx.fillStyle = peakGlow;
+        ctx.beginPath();
+        ctx.arc(3625, 800, 200, 0, Math.PI * 2);
+        ctx.fill();
 
-        // 远山
-        c.fillStyle = '#1a1f3a';
-        c.beginPath();
-        c.moveTo(0, H * 0.6);
-        for (let x = 0; x <= W; x += 40) {
-            const y = H * 0.55 + Math.sin(x * 0.012) * 25 + Math.sin(x * 0.025) * 12;
-            c.lineTo(x, y);
+        // 螺旋纹理
+        ctx.strokeStyle = 'rgba(180, 130, 255, 0.35)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let a = 0; a < Math.PI * 6; a += 0.1) {
+            const r = 10 + a * 18;
+            const sx = 3625 + Math.cos(a) * r;
+            const sy = 850 + Math.sin(a) * r;
+            if (a === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
         }
-        c.lineTo(W, H * 0.75);
-        c.lineTo(0, H * 0.75);
-        c.closePath();
-        c.fill();
+        ctx.stroke();
 
-        // 海面
-        c.fillStyle = '#0a2a4a';
-        c.fillRect(0, H * 0.75, W, H * 0.25);
+        // ---- 文件岛 (绿色/岛屿色, 右下 2900-3860, 2300-2900) ----
+        const islandGrad = ctx.createLinearGradient(2900, 2300, 2900, 2900);
+        islandGrad.addColorStop(0, '#2a6b3a');
+        islandGrad.addColorStop(0.4, '#3a8b4a');
+        islandGrad.addColorStop(0.8, '#1a4a2a');
+        islandGrad.addColorStop(1, '#0a3a1a');
+        ctx.fillStyle = islandGrad;
+        ctx.beginPath();
+        ctx.moveTo(2900, 2500);
+        ctx.quadraticCurveTo(3000, 2300, 3200, 2350);
+        ctx.quadraticCurveTo(3450, 2280, 3600, 2400);
+        ctx.quadraticCurveTo(3860, 2350, 3800, 2600);
+        ctx.quadraticCurveTo(3900, 2800, 3700, 2900);
+        ctx.quadraticCurveTo(3500, 2950, 3300, 2880);
+        ctx.quadraticCurveTo(3100, 2920, 2950, 2850);
+        ctx.quadraticCurveTo(2880, 2700, 2900, 2500);
+        ctx.fill();
 
-        // 岛屿地面
-        c.fillStyle = '#1a4a3a';
-        c.beginPath();
-        c.ellipse(W * 0.5, H * 0.78, W * 0.42, 80, 0, 0, Math.PI * 2);
-        c.fill();
+        // 岛屿边缘
+        ctx.strokeStyle = 'rgba(74, 180, 120, 0.7)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
 
-        // 沙滩
-        c.fillStyle = '#5a4a2a';
-        c.beginPath();
-        c.ellipse(W * 0.2, H * 0.8, 100, 32, -0.2, 0, Math.PI * 2);
-        c.fill();
+        // 沙滩环
+        ctx.strokeStyle = 'rgba(200, 180, 120, 0.4)';
+        ctx.lineWidth = 8;
+        ctx.stroke();
 
-        // 区域名称标签
-        for (const region of state.regions) {
-            const style = REGION_STYLE[region.id] || DEFAULT_STYLE;
-            c.fillStyle = style.label;
-            c.font = 'bold 13px monospace';
-            c.textAlign = 'left';
-            c.globalAlpha = 0.7;
-            c.fillText(region.name, style.labelAt.x, style.labelAt.y);
-            c.globalAlpha = 1.0;
+        // 岛内树木点缀
+        for (let i = 0; i < 20; i++) {
+            const tx = 3000 + ((i * 257 + 50) % 750);
+            const ty = 2400 + ((i * 163 + 30) % 450);
+            ctx.fillStyle = 'rgba(30, 100, 30, 0.5)';
+            ctx.beginPath();
+            ctx.arc(tx, ty, 6 + (i % 8), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(50, 140, 50, 0.4)';
+            ctx.beginPath();
+            ctx.arc(tx - 2, ty - 3, 4, 0, Math.PI * 2);
+            ctx.fill();
         }
+
+        // ---- 小型岛屿群 (世界各处) ----
+        const smallIsles = [
+            [500, 2400, 60], [700, 2600, 40], [1200, 2550, 50],
+            [1800, 2400, 35], [2200, 2500, 45], [2600, 2600, 55],
+            [150, 500, 30], [400, 300, 25], [1000, 400, 35],
+            [3200, 2200, 35], [3700, 2100, 40],
+        ];
+        for (const [ix, iy, ir] of smallIsles) {
+            ctx.fillStyle = '#1a4a3a';
+            ctx.beginPath();
+            ctx.ellipse(ix, iy, ir, ir * 0.55, 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(90, 160, 100, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            // 小沙滩
+            ctx.fillStyle = 'rgba(180, 150, 100, 0.3)';
+            ctx.beginPath();
+            ctx.arc(ix + ir * 0.3, iy + ir * 0.3, ir * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // ---- 区域名称标注 ----
+        ctx.font = 'bold 24px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // 服务器大陆
+        ctx.fillStyle = 'rgba(200, 170, 120, 0.7)';
+        ctx.fillText('服务器大陆', 1700, 1100);
+        ctx.font = '14px monospace';
+        ctx.fillText('SERVER CONTINENT', 1700, 1130);
+
+        // 螺旋山
+        ctx.font = 'bold 20px monospace';
+        ctx.fillStyle = 'rgba(200, 150, 255, 0.8)';
+        ctx.fillText('螺旋山', 3625, 1000);
+        ctx.font = '12px monospace';
+        ctx.fillText('SPIRAL MOUNTAIN', 3625, 1025);
+
+        // 文件岛
+        ctx.font = 'bold 22px monospace';
+        ctx.fillStyle = 'rgba(100, 220, 150, 0.75)';
+        ctx.fillText('文件岛', 3400, 2580);
+        ctx.font = '13px monospace';
+        ctx.fillText('FILE ISLAND', 3400, 2610);
+
+        // 无尽海标签 (散布)
+        ctx.font = '13px monospace';
+        ctx.fillStyle = 'rgba(80, 160, 220, 0.4)';
+        ctx.fillText('∞ 无尽海', 200, 2800);
+        ctx.fillText('ENDLESS SEA', 200, 2825);
+        ctx.fillText('∞', 3800, 500);
+        ctx.fillText('∞', 100, 1800);
+
+        // 底部标题
+        ctx.font = '18px monospace';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.fillText('— DIGITAL WORLD · FILE ISLAND —', WORLD_W / 2, WORLD_H - 30);
+
+        // ---- POI 标记 (保留) ----
+        drawPOIsTo(ctx);
     }
 
-    /** 画 POI 标记 (参数化版本) */
+    /** 画 POI 标记 */
     function drawPOIsTo(c) {
         for (const region of state.regions) {
             if (!region.pois) continue;
@@ -305,7 +430,7 @@
                 // 标记点
                 c.fillStyle = 'rgba(255, 215, 0, 0.85)';
                 c.beginPath();
-                c.arc(x, y, 4, 0, Math.PI * 2);
+                c.arc(x, y, 5, 0, Math.PI * 2);
                 c.fill();
 
                 // 旗子
@@ -313,21 +438,21 @@
                 c.lineWidth = 1;
                 c.beginPath();
                 c.moveTo(x, y);
-                c.lineTo(x, y - 16);
+                c.lineTo(x, y - 18);
                 c.stroke();
                 c.fillStyle = 'rgba(255, 215, 0, 0.8)';
                 c.beginPath();
-                c.moveTo(x, y - 16);
-                c.lineTo(x + 10, y - 13);
+                c.moveTo(x, y - 18);
+                c.lineTo(x + 12, y - 14);
                 c.lineTo(x, y - 10);
                 c.closePath();
                 c.fill();
 
-                // 标签文字
+                // 标签
                 c.fillStyle = 'rgba(255, 215, 0, 0.9)';
-                c.font = '11px monospace';
+                c.font = '12px monospace';
                 c.textAlign = 'left';
-                c.fillText(label, x + 14, y - 8);
+                c.fillText(label, x + 16, y - 8);
             }
         }
     }
@@ -537,26 +662,20 @@
         ctx.textBaseline = 'alphabetic';
     }
 
-    /** 画标题 (参数化版本) */
-    function drawTitleTo(c) {
-        c.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        c.font = '13px monospace';
-        c.textAlign = 'center';
-        c.fillText('— DIGITAL WORLD · FILE ISLAND —', W / 2, H - 14);
-    }
+    /** Phase 15: 标题已移至 drawWorldBackground 中 */
 
     /** 后端不可达时的 placeholder */
     function drawPlaceholder() {
         // 画自己的天空 (不依赖缓存, 离线也能看)
         const isNight = !state.env.daynight.is_daytime;
-        ensureBgCache();
-        ctx.fillStyle = isNight ? skyGradNight : skyGradDay;
-        ctx.fillRect(0, 0, W, H);
+        _ensureSkyGrads();
+        ctx.fillStyle = isNight ? _skyGradNight : _skyGradDay;
+        ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
         // 星空
         for (let i = 0; i < 60; i++) {
-            const x = (i * 73 + 50) % W;
-            const y = ((i * 41) % (H * 0.5)) + 10;
+            const x = (i * 73 + 50) % VIEW_W;
+            const y = ((i * 41) % (VIEW_H * 0.5)) + 10;
             const alpha = 0.2 + (i % 5) * 0.12;
             ctx.fillStyle = `rgba(200, 220, 255, ${alpha})`;
             ctx.beginPath();
@@ -568,41 +687,68 @@
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.font = 'bold 28px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('🐉 DIGIMON WORLD', W / 2, H / 2 - 40);
+        ctx.fillText('🐉 DIGIMON WORLD', VIEW_W / 2, VIEW_H / 2 - 40);
 
         // 提示信息
         ctx.fillStyle = 'rgba(255, 100, 100, 0.9)';
         ctx.font = '14px monospace';
-        ctx.fillText('⚠ 无法连接后端', W / 2, H / 2 + 10);
+        ctx.fillText('⚠ 无法连接后端', VIEW_W / 2, VIEW_H / 2 + 10);
 
         ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
         ctx.font = '12px monospace';
-        ctx.fillText(`尝试连接: ${API_BASE || '(同源)'}`, W / 2, H / 2 + 40);
-        ctx.fillText('请确认后端已启动: cd backend && uvicorn ...', W / 2, H / 2 + 62);
-        ctx.fillText('或 python -m digimon_world.api.app', W / 2, H / 2 + 82);
+        ctx.fillText(`尝试连接: ${API_BASE || '(同源)'}`, VIEW_W / 2, VIEW_H / 2 + 40);
+        ctx.fillText('请确认后端已启动: cd backend && uvicorn ...', VIEW_W / 2, VIEW_H / 2 + 62);
+        ctx.fillText('或 python -m digimon_world.api.app', VIEW_W / 2, VIEW_H / 2 + 82);
 
         // 离线 placeholder 数码兽
         ctx.font = '36px serif';
         ctx.globalAlpha = 0.3;
-        ctx.fillText('🦖   🐺   🦅', W / 2, H / 2 + 140);
+        ctx.fillText('🦖   🐺   🦅', VIEW_W / 2, VIEW_H / 2 + 140);
         ctx.globalAlpha = 1.0;
     }
 
-    /** 完整渲染 (实际绘制, 只在 rAF 回调里调用) */
+    /** Phase 15: 完整渲染 — 视口空间 + 世界空间 */
     function renderNow() {
         if (!state.connected && state.digimon.length === 0) {
             drawPlaceholder();
             return;
         }
-        // Phase 13 ④: 静态背景走离屏缓存 (daynight 变化时自动重建)
-        if (!bgCacheValid) cacheBackground();
-        ctx.drawImage(bgCache, 0, 0);
-        // 动态内容: 数码兽位置 + 天气粒子
+
+        // ---- 1. 视口空间: 天空 + 星星 (始终覆盖全视口) ----
+        drawSky();
+        drawStars();
+
+        // ---- 2. 世界空间: 地图 + 数码兽 (应用相机偏移) ----
+        ctx.save();
+        // 将视口中心映射到世界坐标 cameraX, cameraY
+        ctx.translate(VIEW_W / 2, VIEW_H / 2);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-cameraX, -cameraY);
+
+        drawWorldBackground();
+
+        // 动态内容: 数码兽位置
         pruneHighlights(typeof performance !== 'undefined' ? performance.now() : Date.now());
         drawDigimon();
+
+        ctx.restore();
+
+        // ---- 3. 视口空间: 天气粒子 + 粒子特效 ----
         drawWeatherParticles();
+
         // Phase 13-②: 粒子特效 (进化火花 / 战斗爆裂等)
-        if (particles) particles.draw(ctx);
+        // 粒子在世界空间位置需要转换到视口
+        if (particles) {
+            ctx.save();
+            ctx.translate(VIEW_W / 2, VIEW_H / 2);
+            ctx.scale(zoom, zoom);
+            ctx.translate(-cameraX, -cameraY);
+            particles.draw(ctx);
+            ctx.restore();
+        }
+
+        // ---- 4. 小地图 + 面板按钮 (视口空间) ----
+        drawMinimap();
     }
 
     // render() 可能在一帧内被多次触发 (轮询 / 点击 / 加载), 用 rAF 防抖:
@@ -637,6 +783,266 @@
             if (particles) particles.update(delta);
             renderNow();
         });
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 15: 视口拖拽
+    // ══════════════════════════════════════════════
+
+    canvas.addEventListener('mousedown', (ev) => {
+        // 忽略小地图区域内的拖拽
+        const rect = canvas.getBoundingClientRect();
+        const mx = (ev.clientX - rect.left) * (VIEW_W / rect.width);
+        const my = (ev.clientY - rect.top) * (VIEW_H / rect.height);
+        if (isClickOnMinimap(mx, my)) {
+            handleMinimapClick(mx, my);
+            return;
+        }
+        isDragging = true;
+        dragStartX = ev.clientX;
+        dragStartY = ev.clientY;
+        dragStartCamX = cameraX;
+        dragStartCamY = cameraY;
+        canvas.style.cursor = 'grabbing';
+    });
+
+    window.addEventListener('mousemove', (ev) => {
+        if (!isDragging) return;
+        const dx = (ev.clientX - dragStartX) / zoom;
+        const dy = (ev.clientY - dragStartY) / zoom;
+        cameraX = dragStartCamX - dx;
+        cameraY = dragStartCamY - dy;
+        // 限制相机在世界范围内
+        clampCamera();
+        render();
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            canvas.style.cursor = '';
+        }
+    });
+
+    canvas.addEventListener('wheel', (ev) => {
+        ev.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const mx = (ev.clientX - rect.left) * (VIEW_W / rect.width);
+        const my = (ev.clientY - rect.top) * (VIEW_H / rect.height);
+
+        // 缩放中心: 鼠标位置对应的世界坐标
+        const worldBefore = screenToWorld(mx, my);
+
+        // 调整缩放
+        const delta = ev.deltaY > 0 ? -0.1 : 0.1;
+        zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom + delta));
+
+        // 缩放后保持鼠标指向的世界坐标不变
+        const worldAfter = screenToWorld(mx, my);
+        cameraX += worldBefore.x - worldAfter.x;
+        cameraY += worldBefore.y - worldAfter.y;
+        clampCamera();
+        render();
+    }, { passive: false });
+
+    /** 限制相机不超出世界边界 */
+    function clampCamera() {
+        const halfVW = VIEW_W / zoom / 2;
+        const halfVH = VIEW_H / zoom / 2;
+        cameraX = Math.max(halfVW, Math.min(WORLD_W - halfVW, cameraX));
+        cameraY = Math.max(halfVH, Math.min(WORLD_H - halfVH, cameraY));
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 15: 小地图
+    // ══════════════════════════════════════════════
+
+    const MINIMAP_W = 180;
+    const MINIMAP_H = 135;
+    const MINIMAP_MARGIN = 12;
+    let minimapVisible = true;
+
+    function isClickOnMinimap(mx, my) {
+        if (!minimapVisible) return false;
+        const mmX = VIEW_W - MINIMAP_W - MINIMAP_MARGIN;
+        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 40; // 40px for toggle button
+        return mx >= mmX && mx <= mmX + MINIMAP_W && my >= mmY && my <= mmY + MINIMAP_H;
+    }
+
+    function handleMinimapClick(mx, my) {
+        const mmX = VIEW_W - MINIMAP_W - MINIMAP_MARGIN;
+        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 40;
+        // 点击在小地图内的位置 (0-1 比例)
+        const rx = (mx - mmX) / MINIMAP_W;
+        const ry = (my - mmY) / MINIMAP_H;
+        // 跳转到对应世界坐标
+        cameraX = rx * WORLD_W;
+        cameraY = ry * WORLD_H;
+        clampCamera();
+        render();
+    }
+
+    function drawMinimap() {
+        if (!minimapVisible) return;
+        const mmX = VIEW_W - MINIMAP_W - MINIMAP_MARGIN;
+        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 40;
+
+        // 半透明背景
+        ctx.fillStyle = 'rgba(5, 10, 30, 0.75)';
+        ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(mmX, mmY, MINIMAP_W, MINIMAP_H, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(mmX, mmY, MINIMAP_W, MINIMAP_H, 6);
+        ctx.clip();
+
+        const scaleX = MINIMAP_W / WORLD_W;
+        const scaleY = MINIMAP_H / WORLD_H;
+
+        // ---- 无尽海 (蓝色底色) ----
+        ctx.fillStyle = '#0a2a4a';
+        ctx.fillRect(mmX, mmY, MINIMAP_W, MINIMAP_H);
+
+        // ---- 服务器大陆 (棕色缩略) ----
+        ctx.fillStyle = '#5a4a2a';
+        ctx.beginPath();
+        ctx.moveTo(mmX + 200 * scaleX, mmY + 200 * scaleY);
+        ctx.lineTo(mmX + 3200 * scaleX, mmY + 200 * scaleY);
+        ctx.lineTo(mmX + 2600 * scaleX, mmY + 2100 * scaleY);
+        ctx.lineTo(mmX + 400 * scaleX, mmY + 2050 * scaleY);
+        ctx.lineTo(mmX + 200 * scaleX, mmY + 1500 * scaleY);
+        ctx.closePath();
+        ctx.fill();
+
+        // ---- 螺旋山 (紫色缩略) ----
+        ctx.fillStyle = '#7c3aed';
+        ctx.beginPath();
+        ctx.moveTo(mmX + 3300 * scaleX, mmY + 1500 * scaleY);
+        ctx.lineTo(mmX + 3625 * scaleX, mmY + 800 * scaleY);
+        ctx.lineTo(mmX + 3950 * scaleX, mmY + 1500 * scaleY);
+        ctx.closePath();
+        ctx.fill();
+
+        // ---- 文件岛 (绿色缩略) ----
+        ctx.fillStyle = '#2a6b3a';
+        ctx.beginPath();
+        ctx.ellipse(mmX + 3400 * scaleX, mmY + 2600 * scaleY, 45, 30, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ---- 当前视口矩形 ----
+        const halfVW = VIEW_W / zoom / 2;
+        const halfVH = VIEW_H / zoom / 2;
+        const vx = mmX + (cameraX - halfVW) * scaleX;
+        const vy = mmY + (cameraY - halfVH) * scaleY;
+        const vw = VIEW_W / zoom * scaleX;
+        const vh = VIEW_H / zoom * scaleY;
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+            Math.max(mmX, vx),
+            Math.max(mmY, vy),
+            Math.min(MINIMAP_W, vw),
+            Math.min(MINIMAP_H, vh)
+        );
+
+        // 中心十字
+        const cx = mmX + cameraX * scaleX;
+        const cy = mmY + cameraY * scaleY;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, cy);
+        ctx.lineTo(cx + 3, cy);
+        ctx.moveTo(cx, cy - 3);
+        ctx.lineTo(cx, cy + 3);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 15: 面板折叠切换
+    // ══════════════════════════════════════════════
+
+    let panelStatsVisible = false;
+    let panelNarrativeVisible = false;
+    let panelSidebarVisible = false;
+
+    function initPanelToggles() {
+        createToggleButton('toggle-stats', '📊', '左上', () => {
+            panelStatsVisible = !panelStatsVisible;
+            const bar = document.getElementById('status-bar');
+            if (bar) bar.classList.toggle('panel-open', panelStatsVisible);
+            updateToggleBtn('toggle-stats', panelStatsVisible);
+        });
+
+        createToggleButton('toggle-narrative', '📖', '右上', () => {
+            panelNarrativeVisible = !panelNarrativeVisible;
+            const panel = document.querySelector('.narrative-panel');
+            if (panel) panel.classList.toggle('panel-open', panelNarrativeVisible);
+            updateToggleBtn('toggle-narrative', panelNarrativeVisible);
+        });
+
+        createToggleButton('toggle-sidebar', '👥', '左下', () => {
+            panelSidebarVisible = !panelSidebarVisible;
+            const sb = document.getElementById('sidebar');
+            if (sb) sb.classList.toggle('open', panelSidebarVisible);
+            updateToggleBtn('toggle-sidebar', panelSidebarVisible);
+        });
+
+        createToggleButton('toggle-minimap', '🗺️', '右下', () => {
+            minimapVisible = !minimapVisible;
+            updateToggleBtn('toggle-minimap', minimapVisible);
+            render();
+        });
+
+        // 小地图按钮放在小地图上方
+        const mmBtn = document.getElementById('toggle-minimap');
+        if (mmBtn) {
+            mmBtn.style.bottom = (MINIMAP_H + MINIMAP_MARGIN + 52) + 'px';
+        }
+    }
+
+    function createToggleButton(id, icon, position, onClick) {
+        if (document.getElementById(id)) return;
+        const btn = document.createElement('button');
+        btn.id = id;
+        btn.className = 'panel-toggle-btn';
+        btn.textContent = icon;
+        btn.title = '切换面板';
+        btn.addEventListener('click', onClick);
+        // 定位
+        switch (position) {
+            case '左上':
+                btn.style.top = '8px';
+                btn.style.left = '8px';
+                break;
+            case '右上':
+                btn.style.top = '8px';
+                btn.style.right = '8px';
+                break;
+            case '左下':
+                btn.style.bottom = '8px';
+                btn.style.left = '8px';
+                break;
+            case '右下':
+                btn.style.right = '8px';
+                // bottom set separately for minimap button
+                btn.style.bottom = '48px';
+                break;
+        }
+        document.body.appendChild(btn);
+    }
+
+    function updateToggleBtn(id, active) {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.toggle('active', active);
     }
 
     // ══════════════════════════════════════════════
@@ -678,7 +1084,7 @@
             state.regions = data.regions || [];
             state.connected = true;
             state.error = null;
-            invalidateBgCache();  // Phase 13 ④: regions 变化 → 重建背景
+            // Phase 15: regions 变化 → 触发重渲染
             console.log('[api] /api/world OK, regions:', state.regions.length);
         } catch (err) {
             console.warn('[api] /api/world 不可达:', err.message);
@@ -721,17 +1127,40 @@
     //  交互: 点击选中数码兽
     // ══════════════════════════════════════════════
 
+    /** Phase 15: 屏幕坐标 → 世界坐标 */
+    function screenToWorld(sx, sy) {
+        return {
+            x: (sx - VIEW_W / 2) / zoom + cameraX,
+            y: (sy - VIEW_H / 2) / zoom + cameraY,
+        };
+    }
+
+    /** 判断世界坐标点是否在视口内 */
+    function isInViewport(wx, wy, margin) {
+        const halfW = VIEW_W / zoom / 2;
+        const halfH = VIEW_H / zoom / 2;
+        const m = margin || 0;
+        return wx >= cameraX - halfW - m && wx <= cameraX + halfW + m &&
+               wy >= cameraY - halfH - m && wy <= cameraY + halfH + m;
+    }
+
     canvas.addEventListener('click', (ev) => {
         const rect = canvas.getBoundingClientRect();
-        const mx = (ev.clientX - rect.left) * (W / rect.width);
-        const my = (ev.clientY - rect.top) * (H / rect.height);
+        const mx = (ev.clientX - rect.left) * (VIEW_W / rect.width);
+        const my = (ev.clientY - rect.top) * (VIEW_H / rect.height);
+
+        // 检查是否点击了小地图 → 忽略
+        if (isClickOnMinimap(mx, my)) return;
+
+        const world = screenToWorld(mx, my);
 
         for (const d of state.digimon) {
             // Phase 13-②: use interpolated position for click hit-test
             const animSt = window.ANIM ? ANIM.manager.get(d.name) : null;
-            const dx = mx - (animSt ? animSt.renderX() : d.position.x);
-            const dy = my - (animSt ? animSt.renderY() : d.position.y);
-            if (dx * dx + dy * dy < 22 * 22) {
+            const dx = world.x - (animSt ? animSt.renderX() : d.position.x);
+            const dy = world.y - (animSt ? animSt.renderY() : d.position.y);
+            const hitRadius = 22 / zoom; // 缩放感知的碰撞半径
+            if (dx * dx + dy * dy < hitRadius * hitRadius) {
                 state.selectedName = d.name;
                 state.keyboardFocusIndex = state.digimon.indexOf(d);  // 同步键盘焦点
                 showSidebar(d);
@@ -754,16 +1183,21 @@
     // Phase 11: hover 支持 — 密度模式下鼠标悬停显示详情
     canvas.addEventListener('mousemove', (ev) => {
         const rect = canvas.getBoundingClientRect();
-        const mx = (ev.clientX - rect.left) * (W / rect.width);
-        const my = (ev.clientY - rect.top) * (H / rect.height);
+        const mx = (ev.clientX - rect.left) * (VIEW_W / rect.width);
+        const my = (ev.clientY - rect.top) * (VIEW_H / rect.height);
+
+        const world = screenToWorld(mx, my);
 
         const prevHovered = hoveredDigimon;
         hoveredDigimon = null;
 
         for (const d of state.digimon) {
-            const dx = mx - d.position.x;
-            const dy = my - d.position.y;
-            if (dx * dx + dy * dy < 18 * 18) {
+            // Phase 15: use interpolated pos for hover
+            const animSt = window.ANIM ? ANIM.manager.get(d.name) : null;
+            const dx = world.x - (animSt ? animSt.renderX() : d.position.x);
+            const dy = world.y - (animSt ? animSt.renderY() : d.position.y);
+            const hoverRadius = 18 / zoom;
+            if (dx * dx + dy * dy < hoverRadius * hoverRadius) {
                 hoveredDigimon = d.name;
                 break;
             }
@@ -779,13 +1213,18 @@
         if (ev.touches.length !== 1) return;  // 忽略多点触控
         ev.preventDefault();  // 防止双击缩放/滚动
         const rect = canvas.getBoundingClientRect();
-        const mx = (ev.touches[0].clientX - rect.left) * (W / rect.width);
-        const my = (ev.touches[0].clientY - rect.top) * (H / rect.height);
+        const mx = (ev.touches[0].clientX - rect.left) * (VIEW_W / rect.width);
+        const my = (ev.touches[0].clientY - rect.top) * (VIEW_H / rect.height);
+
+        if (isClickOnMinimap(mx, my)) return;
+
+        const world = screenToWorld(mx, my);
 
         for (const d of state.digimon) {
-            const dx = mx - d.position.x;
-            const dy = my - d.position.y;
-            if (dx * dx + dy * dy < 28 * 28) {  // 触控用更大的碰撞半径
+            const dx = world.x - d.position.x;
+            const dy = world.y - d.position.y;
+            const hitRadius = 28 / zoom;  // 触控用更大的碰撞半径
+            if (dx * dx + dy * dy < hitRadius * hitRadius) {
                 state.selectedName = d.name;
                 state.keyboardFocusIndex = state.digimon.indexOf(d);  // 同步键盘焦点
                 showSidebar(d);
@@ -2190,10 +2629,10 @@
                     }
                 }
             }
-            // 如果没匹配到名字, 在屏幕中心放一个
+            // 如果没匹配到名字, 在视口中心世界坐标放一个
             if (particles.alive === 0) {
-                if (e.type === 'evolution') particles.evolution(W * 0.5, H * 0.5);
-                else if (e.type === 'battle' || e.type === 'battle_victory') particles.battle(W * 0.5, H * 0.5);
+                if (e.type === 'evolution') particles.evolution(cameraX, cameraY);
+                else if (e.type === 'battle' || e.type === 'battle_victory') particles.battle(cameraX, cameraY);
             }
         }
         const stack = ensureNotifyStack();
@@ -2279,8 +2718,8 @@
             if (data.weather) state.env.weather = data.weather;
             if (data.ecology) state.env.ecology = data.ecology;
             if (data.season) state.env.season = data.season;
-            // Phase 13 ④: 昼夜切换 → 重建天空背景
-            if (state.env.daynight.is_daytime !== prevIsDaytime) invalidateBgCache();
+            // Phase 15: 昼夜切换 → 触发重渲染即可 (天空每帧重绘)
+            if (state.env.daynight.is_daytime !== prevIsDaytime) { /* no-op, sky redrawn each frame */ }
         } catch (e) {
             // 静默失败
         }
@@ -2330,6 +2769,8 @@
         // 13. Phase 14: 世界叙事轮询 (30s)
         fetchNarrative();
         setInterval(fetchNarrative, 30000);
+        // 14. Phase 15: 面板折叠按钮
+        initPanelToggles();
     }
 
     /** Phase 13: 绑定 sidebar 内的 TTS 按钮点击事件 (事件委托) */
@@ -2379,9 +2820,10 @@
     // 暴露调试接口
     window.DigimonWorld = {
         version: '1.0.0',
-        phase: 14,
+        phase: 15,
         getState: () => state,
         refresh: async () => { await fetchDigimon(); render(); },
-        invalidateBgCache: () => { invalidateBgCache(); render(); },
+        getCamera: () => ({ cameraX, cameraY, zoom }),
+        goTo: (wx, wy) => { cameraX = wx; cameraY = wy; render(); },
     };
 })();

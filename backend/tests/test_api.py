@@ -84,17 +84,17 @@ def test_move_digimon(client: TestClient) -> None:
 
 def test_move_clamp_to_bounds(client: TestClient) -> None:
     """移动不能出地图边界(多次移动累积后夹紧)。"""
+    # file_island bounds=(2900, 2300, 3860, 2900)
     # 推到最右
     for _ in range(20):
         client.post("/api/digimon/亚古兽/move", json={"dx": 200, "dy": 0})
     pos = client.get("/api/digimon/亚古兽/position").json()
-    # 文件岛 bounds=(0,0,960,600)
-    assert pos["x"] == 960
+    assert pos["x"] == 3860
     # 推到最左
-    for _ in range(20):
+    for _ in range(40):
         client.post("/api/digimon/亚古兽/move", json={"dx": -200, "dy": 0})
     pos = client.get("/api/digimon/亚古兽/position").json()
-    assert pos["x"] == 0
+    assert pos["x"] == 2900
 
 
 def test_move_not_found(client: TestClient) -> None:

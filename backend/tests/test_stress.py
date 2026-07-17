@@ -22,7 +22,7 @@ from digimon_world.agents.digimon_agent import DigimonAgent, DigimonAttribute  #
 from digimon_world.agents.dialogue import Dialogue  # noqa: E402
 from digimon_world.llm.client import FakeLlmClient, LlmModel, set_client  # noqa: E402
 from digimon_world.world import WorldClock, WorldScheduler  # noqa: E402
-from digimon_world.world.world_state import WorldState  # noqa: E402
+from digimon_world.world.world_state import WorldState, WORLD_WIDTH, WORLD_HEIGHT  # noqa: E402
 
 # ── helpers ────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ def _create_world(n: int) -> WorldState:
         attr = rng.choice(_ATTRIBUTES)
         region = rng.choice(["file_island", "infinity_mountain"])
         if region == "file_island":
-            x, y = rng.randint(50, 1150), rng.randint(50, 750)
+            x, y = rng.randint(2950, 3800), rng.randint(2350, 2850)
         else:
             x, y = rng.randint(150, 750), rng.randint(50, 550)
         agent = DigimonAgent(
@@ -107,8 +107,8 @@ class TestStress100Agents:
         assert len(agents) == 100, f"agent lost: {len(agents)} != 100"
         for a in agents:
             x, y = a.location
-            assert 0 <= x <= 1200, f"{a.name} x={x} OOB"
-            assert 0 <= y <= 800, f"{a.name} y={y} OOB"
+            assert 0 <= x <= WORLD_WIDTH, f"{a.name} x={x} OOB"
+            assert 0 <= y <= WORLD_HEIGHT, f"{a.name} y={y} OOB"
             assert a.region_id and a.region_id.strip(), f"{a.name} no region"
             assert len(a.memory.entries) > 0, f"{a.name} has 0 memories"
 
@@ -156,6 +156,6 @@ class TestStress100Agents:
         assert len(agents) == 200
         oob = sum(
             1 for a in agents
-            if not (0 <= a.location[0] <= 1200 and 0 <= a.location[1] <= 800)
+            if not (0 <= a.location[0] <= WORLD_WIDTH and 0 <= a.location[1] <= WORLD_HEIGHT)
         )
         assert oob == 0, f"{oob} agents out of bounds"
