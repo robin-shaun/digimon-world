@@ -24,15 +24,36 @@
     // ---- 世界常量 (Phase 15: 大世界地图) ----
     const WORLD_W = 4000;
     const WORLD_H = 3000;
-    const VIEW_W = canvas.width;   // 1200 (视口宽度)
-    const VIEW_H = canvas.height;  // 800  (视口高度)
+    let VIEW_W = canvas.width;   // 动态：视口宽度
+    let VIEW_H = canvas.height;  // 动态：视口高度
 
-    // ---- 相机状态 ----
-    let cameraX = WORLD_W / 2;  // 视口中心在世界坐标中的 X
-    let cameraY = WORLD_H / 2;  // 视口中心在世界坐标中的 Y
-    let zoom = 1.0;             // 缩放 (0.5 ~ 2.0)
+    // ---- 全屏Canvas初始化 ----
+    // Phase 21: 云层种子 + 天空渐变 (必须在 resizeCanvas 之前声明)
+    let _cloudSeed = null;
+    let _skyGradDay = null;
+    let _skyGradNight = null;
+    // ---- 相机状态 (必须在 clampCamera 之前声明) ----
+    let cameraX = WORLD_W / 2;
+    let cameraY = WORLD_H / 2;
+    let zoom = 1.0;
     const ZOOM_MIN = 0.5;
     const ZOOM_MAX = 2.0;
+    function resizeCanvas() {
+        VIEW_W = window.innerWidth;
+        VIEW_H = window.innerHeight;
+        canvas.width = VIEW_W;
+        canvas.height = VIEW_H;
+        // 重置天空渐变缓存（尺寸变了）
+        _skyGradDay = null;
+        _skyGradNight = null;
+        _cloudSeed = null;
+        clampCamera();
+    }
+    resizeCanvas();
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        render();
+    });
 
     // ---- 拖拽状态 ----
     let isDragging = false;
@@ -42,7 +63,7 @@
     let dragStartCamY = 0;
 
     // Phase 11: 密度模式阈值 — 超过此数只画圆点
-    const DENSITY_MODE_THRESHOLD = 15;
+    const DENSITY_MODE_THRESHOLD = 999;  // 始终用精灵图模式
 
     // Phase 11: hover 状态(用于密度模式下查看详情)
     let hoveredDigimon = null;
@@ -144,9 +165,6 @@
     const particles = window.PARTICLE ? new PARTICLE.ParticleSystem() : null;
 
     // Phase 15: 离屏缓存已移除 — 大世界地图直接渲染每帧
-    // 天空渐变懒初始化
-    let _skyGradDay = null;
-    let _skyGradNight = null;
     function _ensureSkyGrads() {
         if (!_skyGradDay) {
             _skyGradDay = ctx.createLinearGradient(0, 0, 0, VIEW_H);
@@ -218,95 +236,130 @@
         }
     }
 
-    /** Phase 15: 大世界地图 — 4000x3000, 程序化渲染区块 */
+    /** Phase 21: 大世界地图 — 程序化渲染，海洋渐变+波浪+云层+地形+旗帜 */
     function drawWorldBackground() {
-        // ---- 无尽海 (蓝色底色全覆盖) ----
-        ctx.fillStyle = '#0a2a4a';
+        // ---- 无尽海 (径向渐变蓝色) ----
+        const oceanGrad = ctx.createRadialGradient(WORLD_W/2, WORLD_H/2, 100, WORLD_W/2, WORLD_H/2, 2500);
+        oceanGrad.addColorStop(0, '#1a4a6e');
+        oceanGrad.addColorStop(0.3, '#0e3a5c');
+        oceanGrad.addColorStop(0.7, '#0a2a44');
+        oceanGrad.addColorStop(1, '#051830');
+        ctx.fillStyle = oceanGrad;
         ctx.fillRect(0, 0, WORLD_W, WORLD_H);
 
-        // 海面纹理 (浅色波浪线)
-        ctx.strokeStyle = 'rgba(20, 80, 140, 0.25)';
-        ctx.lineWidth = 1;
-        for (let y = 0; y < WORLD_H; y += 40) {
+        // 海面波浪纹理
+        const waveTime = Date.now() * 0.0003;
+        ctx.strokeStyle = 'rgba(30, 100, 180, 0.15)';
+        ctx.lineWidth = 1.2;
+        for (let y = 0; y < WORLD_H; y += 28) {
             ctx.beginPath();
-            for (let x = 0; x < WORLD_W; x += 20) {
-                const wy = y + Math.sin(x * 0.01 + y * 0.005) * 6;
+            for (let x = 0; x <= WORLD_W; x += 16) {
+                const wy = y + Math.sin(x * 0.006 + y * 0.004 + waveTime) * 5 + Math.sin(x * 0.015 + y * 0.002) * 3;
+                if (x === 0) ctx.moveTo(x, wy);
+                else ctx.lineTo(x, wy);
+            }
+            ctx.stroke();
+        }
+        // 第二层更密波浪
+        ctx.strokeStyle = 'rgba(50, 140, 220, 0.08)';
+        ctx.lineWidth = 0.8;
+        for (let y = 14; y < WORLD_H; y += 28) {
+            ctx.beginPath();
+            for (let x = 0; x <= WORLD_W; x += 12) {
+                const wy = y + Math.cos(x * 0.008 + y * 0.003 - waveTime * 0.7) * 4;
                 if (x === 0) ctx.moveTo(x, wy);
                 else ctx.lineTo(x, wy);
             }
             ctx.stroke();
         }
 
-        // ---- 服务器大陆 (棕色, 左上区域 200-3200, 200-2100) ----
-        const continentGrad = ctx.createLinearGradient(200, 200, 200, 2100);
-        continentGrad.addColorStop(0, '#5a4a2a');
-        continentGrad.addColorStop(0.3, '#6b5b3a');
-        continentGrad.addColorStop(0.7, '#4a3a1a');
-        continentGrad.addColorStop(1, '#3a2a10');
-        ctx.fillStyle = continentGrad;
+        // ---- 服务器大陆 (200-3200, 200-2100) 多层颜色 ----
+        // 沙漠区 (右上): 土黄
+        ctx.fillStyle = 'rgba(180, 150, 90, 0.55)';
         ctx.beginPath();
-        ctx.moveTo(200, 200);
-        ctx.lineTo(3200, 200);
-        ctx.lineTo(3150, 500);
-        ctx.lineTo(3300, 900);
-        ctx.lineTo(3100, 1400);
-        ctx.lineTo(2900, 1800);
-        ctx.lineTo(2600, 2100);
-        ctx.lineTo(400, 2050);
-        ctx.lineTo(200, 1500);
-        ctx.closePath();
+        ctx.moveTo(2200, 200); ctx.lineTo(3200, 200); ctx.lineTo(3150, 500);
+        ctx.lineTo(3100, 700); ctx.lineTo(2800, 750); ctx.lineTo(2500, 500);
+        ctx.lineTo(2300, 300); ctx.closePath();
         ctx.fill();
 
-        // 大陆边缘描边
-        ctx.strokeStyle = 'rgba(100, 80, 40, 0.6)';
-        ctx.lineWidth = 3;
+        // 草原区 (中右): 浅绿
+        ctx.fillStyle = 'rgba(100, 160, 70, 0.5)';
+        ctx.beginPath();
+        ctx.moveTo(2300, 300); ctx.lineTo(2500, 500); ctx.lineTo(2800, 750);
+        ctx.lineTo(3100, 700); ctx.lineTo(3300, 1100); ctx.lineTo(3000, 1400);
+        ctx.lineTo(2600, 1300); ctx.lineTo(2200, 900); ctx.lineTo(2000, 600); ctx.closePath();
+        ctx.fill();
+
+        // 森林区 (左下): 深绿
+        ctx.fillStyle = 'rgba(40, 100, 40, 0.5)';
+        ctx.beginPath();
+        ctx.moveTo(200, 200); ctx.lineTo(2000, 200); ctx.lineTo(2000, 600);
+        ctx.lineTo(2200, 900); ctx.lineTo(1800, 1400); ctx.lineTo(1200, 1600);
+        ctx.lineTo(600, 1800); ctx.lineTo(400, 2050); ctx.lineTo(200, 1500); ctx.closePath();
+        ctx.fill();
+
+        // 山地区 (中部偏左): 灰褐
+        ctx.fillStyle = 'rgba(120, 100, 70, 0.5)';
+        ctx.beginPath();
+        ctx.moveTo(1200, 600); ctx.lineTo(1800, 400); ctx.lineTo(2200, 300);
+        ctx.lineTo(2300, 300); ctx.lineTo(2000, 600); ctx.lineTo(2000, 200);
+        ctx.lineTo(1200, 200); ctx.closePath();
+        ctx.fill();
+
+        // 大陆底色统一叠加
+        ctx.fillStyle = 'rgba(100, 80, 40, 0.25)';
+        ctx.beginPath();
+        ctx.moveTo(200, 200); ctx.lineTo(3200, 200); ctx.lineTo(3150, 500);
+        ctx.lineTo(3300, 1100); ctx.lineTo(3000, 1400); ctx.lineTo(2600, 1800);
+        ctx.lineTo(2100, 2000); ctx.lineTo(1200, 2100); ctx.lineTo(400, 2050);
+        ctx.lineTo(200, 1500); ctx.closePath();
+        ctx.fill();
+
+        // 大陆边界描边
+        ctx.strokeStyle = 'rgba(180, 150, 100, 0.5)';
+        ctx.lineWidth = 2.5;
         ctx.stroke();
 
-        // 大陆内部纹理 (随机浅色斑块)
-        for (let i = 0; i < 30; i++) {
-            const cx = 400 + ((i * 317 + 100) % 2600);
-            const cy = 300 + ((i * 197 + 50) % 1700);
-            ctx.fillStyle = `rgba(${80 + (i % 30)}, ${60 + (i % 25)}, ${20 + (i % 15)}, 0.15)`;
+        // 大陆内部纹理
+        for (let i = 0; i < 50; i++) {
+            const cx = 350 + ((i * 317 + 100) % 2700);
+            const cy = 280 + ((i * 197 + 50) % 1750);
+            const shade = 60 + (i % 40);
+            ctx.fillStyle = `rgba(${shade + 30}, ${shade}, ${shade - 20}, 0.1)`;
             ctx.beginPath();
-            ctx.ellipse(cx, cy, 40 + (i % 80), 20 + (i % 40), i * 0.3, 0, Math.PI * 2);
+            ctx.ellipse(cx, cy, 35 + (i % 70), 18 + (i % 35), i * 0.25, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // ---- 螺旋山 (紫色, 3300-3950, 800-1500) ----
-        // 山体
+        // ---- 螺旋山 (3300-3950, 800-1500) ----
+        // 山体渐变
         const mtGrad = ctx.createLinearGradient(3625, 800, 3625, 1500);
-        mtGrad.addColorStop(0, '#7c3aed');
-        mtGrad.addColorStop(0.3, '#5b2d8e');
-        mtGrad.addColorStop(0.7, '#3a1f5a');
-        mtGrad.addColorStop(1, '#2a1540');
+        mtGrad.addColorStop(0, '#8a4aed');
+        mtGrad.addColorStop(0.3, '#6b30b0');
+        mtGrad.addColorStop(0.7, '#4a2070');
+        mtGrad.addColorStop(1, '#2a1030');
         ctx.fillStyle = mtGrad;
         ctx.beginPath();
-        ctx.moveTo(3300, 1500);
-        ctx.lineTo(3400, 1300);
-        ctx.lineTo(3500, 1100);
-        ctx.lineTo(3625, 800);
-        ctx.lineTo(3750, 1100);
-        ctx.lineTo(3850, 1300);
-        ctx.lineTo(3950, 1500);
-        ctx.closePath();
+        ctx.moveTo(3300, 1500); ctx.lineTo(3400, 1300);
+        ctx.lineTo(3500, 1100); ctx.lineTo(3625, 800);
+        ctx.lineTo(3750, 1100); ctx.lineTo(3850, 1300);
+        ctx.lineTo(3950, 1500); ctx.closePath();
         ctx.fill();
 
         // 山顶光晕
-        const peakGlow = ctx.createRadialGradient(3625, 800, 10, 3625, 800, 200);
-        peakGlow.addColorStop(0, 'rgba(124, 58, 237, 0.7)');
-        peakGlow.addColorStop(0.5, 'rgba(124, 58, 237, 0.2)');
-        peakGlow.addColorStop(1, 'rgba(124, 58, 237, 0)');
+        const peakGlow = ctx.createRadialGradient(3625, 800, 5, 3625, 800, 250);
+        peakGlow.addColorStop(0, 'rgba(140, 70, 255, 0.6)');
+        peakGlow.addColorStop(0.4, 'rgba(100, 40, 200, 0.2)');
+        peakGlow.addColorStop(1, 'rgba(60, 20, 100, 0)');
         ctx.fillStyle = peakGlow;
-        ctx.beginPath();
-        ctx.arc(3625, 800, 200, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(3625, 800, 250, 0, Math.PI * 2); ctx.fill();
 
         // 螺旋纹理
-        ctx.strokeStyle = 'rgba(180, 130, 255, 0.35)';
+        ctx.strokeStyle = 'rgba(200, 150, 255, 0.3)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        for (let a = 0; a < Math.PI * 6; a += 0.1) {
-            const r = 10 + a * 18;
+        for (let a = 0; a < Math.PI * 6; a += 0.08) {
+            const r = 8 + a * 20;
             const sx = 3625 + Math.cos(a) * r;
             const sy = 850 + Math.sin(a) * r;
             if (a === 0) ctx.moveTo(sx, sy);
@@ -314,49 +367,56 @@
         }
         ctx.stroke();
 
-        // ---- 文件岛 (绿色/岛屿色, 右下 2900-3860, 2300-2900) ----
+        // 山体边缘
+        ctx.strokeStyle = 'rgba(140, 100, 200, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(3300, 1500); ctx.lineTo(3400, 1300);
+        ctx.lineTo(3500, 1100); ctx.lineTo(3625, 800);
+        ctx.lineTo(3750, 1100); ctx.lineTo(3850, 1300);
+        ctx.lineTo(3950, 1500);
+        ctx.stroke();
+
+        // ---- 文件岛 (2900-3860, 2300-2900) ----
+        // 岛屿草地
         const islandGrad = ctx.createLinearGradient(2900, 2300, 2900, 2900);
-        islandGrad.addColorStop(0, '#2a6b3a');
-        islandGrad.addColorStop(0.4, '#3a8b4a');
-        islandGrad.addColorStop(0.8, '#1a4a2a');
+        islandGrad.addColorStop(0, '#3a8b4a');
+        islandGrad.addColorStop(0.4, '#4aaa5a');
+        islandGrad.addColorStop(0.8, '#1a5a2a');
         islandGrad.addColorStop(1, '#0a3a1a');
         ctx.fillStyle = islandGrad;
         ctx.beginPath();
         ctx.moveTo(2900, 2500);
-        ctx.quadraticCurveTo(3000, 2300, 3200, 2350);
-        ctx.quadraticCurveTo(3450, 2280, 3600, 2400);
-        ctx.quadraticCurveTo(3860, 2350, 3800, 2600);
+        ctx.quadraticCurveTo(3000, 2280, 3200, 2350);
+        ctx.quadraticCurveTo(3450, 2260, 3620, 2380);
+        ctx.quadraticCurveTo(3860, 2320, 3820, 2580);
         ctx.quadraticCurveTo(3900, 2800, 3700, 2900);
-        ctx.quadraticCurveTo(3500, 2950, 3300, 2880);
-        ctx.quadraticCurveTo(3100, 2920, 2950, 2850);
-        ctx.quadraticCurveTo(2880, 2700, 2900, 2500);
+        ctx.quadraticCurveTo(3500, 2960, 3300, 2880);
+        ctx.quadraticCurveTo(3100, 2940, 2950, 2850);
+        ctx.quadraticCurveTo(2860, 2700, 2900, 2500);
         ctx.fill();
 
-        // 岛屿边缘
-        ctx.strokeStyle = 'rgba(74, 180, 120, 0.7)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
         // 沙滩环
-        ctx.strokeStyle = 'rgba(200, 180, 120, 0.4)';
-        ctx.lineWidth = 8;
+        ctx.strokeStyle = 'rgba(220, 200, 140, 0.55)';
+        ctx.lineWidth = 7;
         ctx.stroke();
 
-        // 岛内树木点缀
-        for (let i = 0; i < 20; i++) {
-            const tx = 3000 + ((i * 257 + 50) % 750);
-            const ty = 2400 + ((i * 163 + 30) % 450);
-            ctx.fillStyle = 'rgba(30, 100, 30, 0.5)';
-            ctx.beginPath();
-            ctx.arc(tx, ty, 6 + (i % 8), 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = 'rgba(50, 140, 50, 0.4)';
-            ctx.beginPath();
-            ctx.arc(tx - 2, ty - 3, 4, 0, Math.PI * 2);
-            ctx.fill();
+        // 岛屿边缘
+        ctx.strokeStyle = 'rgba(80, 200, 130, 0.7)';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // 岛内树木
+        for (let i = 0; i < 28; i++) {
+            const tx = 2980 + ((i * 257 + 50) % 780);
+            const ty = 2380 + ((i * 163 + 30) % 480);
+            ctx.fillStyle = 'rgba(20, 80, 25, 0.5)';
+            ctx.beginPath(); ctx.arc(tx, ty, 7 + (i % 9), 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(40, 130, 45, 0.4)';
+            ctx.beginPath(); ctx.arc(tx - 2, ty - 4, 5, 0, Math.PI * 2); ctx.fill();
         }
 
-        // ---- 小型岛屿群 (世界各处) ----
+        // ---- 小型岛屿群 ----
         const smallIsles = [
             [500, 2400, 60], [700, 2600, 40], [1200, 2550, 50],
             [1800, 2400, 35], [2200, 2500, 45], [2600, 2600, 55],
@@ -364,95 +424,129 @@
             [3200, 2200, 35], [3700, 2100, 40],
         ];
         for (const [ix, iy, ir] of smallIsles) {
-            ctx.fillStyle = '#1a4a3a';
+            ctx.fillStyle = '#2a5a3a';
             ctx.beginPath();
             ctx.ellipse(ix, iy, ir, ir * 0.55, 0.3, 0, Math.PI * 2);
             ctx.fill();
-            ctx.strokeStyle = 'rgba(90, 160, 100, 0.4)';
+            ctx.strokeStyle = 'rgba(100, 180, 110, 0.4)';
             ctx.lineWidth = 1.5;
             ctx.stroke();
-            // 小沙滩
-            ctx.fillStyle = 'rgba(180, 150, 100, 0.3)';
+            ctx.fillStyle = 'rgba(200, 170, 110, 0.3)';
             ctx.beginPath();
             ctx.arc(ix + ir * 0.3, iy + ir * 0.3, ir * 0.35, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // ---- 区域名称标注 ----
-        ctx.font = 'bold 24px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        // ---- 云层效果 (半透明白色椭圆随机分布) ----
+        if (!_cloudSeed) {
+            _cloudSeed = [];
+            for (let i = 0; i < 60; i++) {
+                _cloudSeed.push({
+                    x: 100 + ((i * 437 + 173) % 3800),
+                    y: 50 + ((i * 311 + 89) % 2900),
+                    w: 60 + ((i * 127) % 200),
+                    h: 20 + ((i * 73) % 40),
+                    a: 0.03 + ((i % 8) * 0.02),
+                    speed: 0.5 + (i % 5) * 0.3,
+                });
+            }
+        }
+        for (const cl of _cloudSeed) {
+            const cx = (cl.x + Date.now() * 0.002 * cl.speed) % (WORLD_W + 200) - 100;
+            ctx.fillStyle = `rgba(255, 255, 255, ${cl.a.toFixed(2)})`;
+            ctx.beginPath();
+            ctx.ellipse(cx, cl.y, cl.w, cl.h, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // 云朵副椭圆
+            ctx.fillStyle = `rgba(255, 255, 255, ${(cl.a * 0.7).toFixed(2)})`;
+            ctx.beginPath();
+            ctx.ellipse(cx - cl.w * 0.3, cl.y + 3, cl.w * 0.6, cl.h * 0.7, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
-        // 服务器大陆
-        ctx.fillStyle = 'rgba(200, 170, 120, 0.7)';
-        ctx.fillText('服务器大陆', 1700, 1100);
+        // ---- 区域标注 (半透明大字) ----
+        ctx.font = 'bold 26px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+        ctx.fillStyle = 'rgba(220, 190, 130, 0.5)';
+        ctx.fillText('服务器大陆', 1700, 1050);
         ctx.font = '14px monospace';
-        ctx.fillText('SERVER CONTINENT', 1700, 1130);
+        ctx.fillText('SERVER CONTINENT', 1700, 1085);
 
-        // 螺旋山
-        ctx.font = 'bold 20px monospace';
-        ctx.fillStyle = 'rgba(200, 150, 255, 0.8)';
+        ctx.font = 'bold 22px monospace';
+        ctx.fillStyle = 'rgba(200, 150, 255, 0.55)';
         ctx.fillText('螺旋山', 3625, 1000);
         ctx.font = '12px monospace';
         ctx.fillText('SPIRAL MOUNTAIN', 3625, 1025);
 
-        // 文件岛
-        ctx.font = 'bold 22px monospace';
-        ctx.fillStyle = 'rgba(100, 220, 150, 0.75)';
-        ctx.fillText('文件岛', 3400, 2580);
+        ctx.font = 'bold 24px monospace';
+        ctx.fillStyle = 'rgba(110, 230, 160, 0.5)';
+        ctx.fillText('文件岛', 3400, 2620);
         ctx.font = '13px monospace';
-        ctx.fillText('FILE ISLAND', 3400, 2610);
+        ctx.fillText('FILE ISLAND', 3400, 2648);
 
-        // 无尽海标签 (散布)
         ctx.font = '13px monospace';
-        ctx.fillStyle = 'rgba(80, 160, 220, 0.4)';
-        ctx.fillText('∞ 无尽海', 200, 2800);
-        ctx.fillText('ENDLESS SEA', 200, 2825);
+        ctx.fillStyle = 'rgba(80, 160, 220, 0.3)';
+        ctx.fillText('∞ 无尽海', 200, 2820);
         ctx.fillText('∞', 3800, 500);
         ctx.fillText('∞', 100, 1800);
 
-        // 底部标题
         ctx.font = '18px monospace';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-        ctx.fillText('— DIGITAL WORLD · FILE ISLAND —', WORLD_W / 2, WORLD_H - 30);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.fillText('— DIGITAL WORLD · FILE ISLAND —', WORLD_W / 2, WORLD_H - 25);
 
-        // ---- POI 标记 (保留) ----
+        // ---- POI 旗帜标记 ----
         drawPOIsTo(ctx);
     }
 
-    /** 画 POI 标记 */
+    /** 画 POI 旗帜/星形标记 */
     function drawPOIsTo(c) {
+        // 星形渲染函数
+        function drawStar(cx, cy, r, color) {
+            c.fillStyle = color;
+            c.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+                const x = cx + Math.cos(angle) * r;
+                const y = cy + Math.sin(angle) * r;
+                if (i === 0) c.moveTo(x, y);
+                else c.lineTo(x, y);
+            }
+            c.closePath();
+            c.fill();
+        }
+
         for (const region of state.regions) {
             if (!region.pois) continue;
             for (const [, poi] of Object.entries(region.pois)) {
                 const { x, y, label } = poi;
 
-                // 标记点
-                c.fillStyle = 'rgba(255, 215, 0, 0.85)';
-                c.beginPath();
-                c.arc(x, y, 5, 0, Math.PI * 2);
-                c.fill();
-
-                // 旗子
-                c.strokeStyle = 'rgba(255, 215, 0, 0.7)';
-                c.lineWidth = 1;
+                // 旗杆
+                c.strokeStyle = 'rgba(255, 215, 0, 0.6)';
+                c.lineWidth = 1.5;
                 c.beginPath();
                 c.moveTo(x, y);
-                c.lineTo(x, y - 18);
+                c.lineTo(x, y - 22);
                 c.stroke();
-                c.fillStyle = 'rgba(255, 215, 0, 0.8)';
+
+                // 旗面
+                c.fillStyle = 'rgba(255, 215, 0, 0.7)';
                 c.beginPath();
-                c.moveTo(x, y - 18);
-                c.lineTo(x + 12, y - 14);
-                c.lineTo(x, y - 10);
+                c.moveTo(x, y - 22);
+                c.lineTo(x + 16, y - 18);
+                c.lineTo(x, y - 14);
                 c.closePath();
                 c.fill();
 
-                // 标签
-                c.fillStyle = 'rgba(255, 215, 0, 0.9)';
-                c.font = '12px monospace';
+                // 星形标记在旗杆顶
+                drawStar(x, y - 24, 5, 'rgba(255, 240, 100, 0.9)');
+
+                // 标签 (小字在旗子右侧)
+                c.fillStyle = 'rgba(255, 215, 0, 0.85)';
+                c.font = '11px monospace';
                 c.textAlign = 'left';
-                c.fillText(label, x + 16, y - 8);
+                c.textBaseline = 'middle';
+                c.fillText(label, x + 20, y - 18);
             }
         }
     }
@@ -567,71 +661,77 @@
                     ctx.stroke();
                 }
             } else {
-                // ═══ 普通模式: 小emoji + 首字 + 精灵色光环 ═══
-                // Phase 13-②: walk cycle bounce on top of idle bounce
+                // ═══ 像素精灵图模式: 48×48 精灵图居中 ═══
                 const dy = y + bounce + walkBounce;
-                const spriteCfg = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.species || d.name) : null;
-                const spriteColor = spriteCfg ? spriteCfg.color : '#00d4ff';
-                const spriteAccent = spriteCfg ? spriteCfg.accent : '#00d4ff';
+                const speciesKey = (d.species || d.name).toLowerCase().replace(/[\s\-]/g, '_');
 
-                // 精灵色光环 (Phase 13-②: 使用 sprites.js 颜色数据)
-                const aura = ctx.createRadialGradient(x, dy, 3, x, dy, 18);
-                aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.8)' : spriteColor + 'cc');
-                aura.addColorStop(0.5, spriteColor + '44');
+                // 选中/高亮光环
+                const aura = ctx.createRadialGradient(x, dy, 8, x, dy, 28);
+                aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.7)' : 'rgba(0, 212, 255, 0.6)');
+                aura.addColorStop(0.5, 'rgba(0, 212, 255, 0.2)');
                 aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = aura;
                 ctx.beginPath();
-                ctx.arc(x, dy, 18, 0, Math.PI * 2);
+                ctx.arc(x, dy, 28, 0, Math.PI * 2);
                 ctx.fill();
 
-                // 精灵色细环
-                ctx.strokeStyle = isSelected ? '#ffd700' : spriteAccent + '66';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.arc(x, dy, 16, 0, Math.PI * 2);
-                ctx.stroke();
-
-                // Phase 13-②: 移动轨迹拖尾 — 运动时画 2 个渐隐残影
-                if (animSt && animSt.isMoving()) {
-                    const angle = animSt.moveAngle();
-                    const cosA = Math.cos(angle);
-                    const sinA = Math.sin(angle);
-                    for (let i = 1; i <= 2; i++) {
-                        const alpha = 0.18 - i * 0.06;
-                        const tx = x - cosA * i * 10;
-                        const ty = dy - sinA * i * 10;
-                        ctx.fillStyle = spriteAccent + Math.round(alpha * 255).toString(16).padStart(2, '0');
-                        ctx.beginPath();
-                        ctx.arc(tx, ty, 6 - i, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
-
-                // Emoji (with idle scale + walk lean + walk bounce)
-                ctx.save();
-                ctx.translate(x, dy);
-                ctx.rotate(walkLean);  // Phase 13-②: tilt body during movement
-                ctx.scale(idleScale, idleScale);
-                ctx.font = '18px serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(emoji, 0, 0);
-                ctx.restore();
-
-                // 首字 + 心情
-                ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
-                ctx.font = '10px monospace';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'bottom';
-                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, dy - 14);
-
+                // 选中环
                 if (isSelected) {
                     ctx.strokeStyle = '#ffd700';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(x, dy, 15, 0, Math.PI * 2);
+                    ctx.arc(x, dy, 27, 0, Math.PI * 2);
                     ctx.stroke();
                 }
+
+                // Phase 13-②: 移动轨迹拖尾
+                if (animSt && animSt.isMoving()) {
+                    const spriteCfg = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.species || d.name) : null;
+                    const spriteAccent = spriteCfg ? spriteCfg.accent : '#00d4ff';
+                    const angle = animSt.moveAngle();
+                    const cosA = Math.cos(angle);
+                    const sinA = Math.sin(angle);
+                    for (let i = 1; i <= 2; i++) {
+                        const alpha = 0.15 - i * 0.05;
+                        const tx = x - cosA * i * 12;
+                        const ty = dy - sinA * i * 12;
+                        ctx.fillStyle = spriteAccent + Math.round(alpha * 255).toString(16).padStart(2, '0');
+                        ctx.beginPath();
+                        ctx.arc(tx, ty, 8 - i, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                // Phase 21: 像素精灵图渲染
+                ctx.save();
+                ctx.translate(x, dy);
+                ctx.rotate(walkLean);
+                ctx.scale(idleScale, idleScale);
+
+                const spriteCanvas = window.SPRITE_PIXEL ? SPRITE_PIXEL.getSprite(d.species || d.name) : null;
+                if (spriteCanvas) {
+                    ctx.drawImage(spriteCanvas, -24, -24, 48, 48);
+                } else {
+                    // 兜底：找不到精灵图时用物种色画方块
+                    const spriteCfg2 = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.species || d.name) : null;
+                    const fallbackColor = spriteCfg2 ? spriteCfg2.color : '#aabbcc';
+                    ctx.fillStyle = fallbackColor;
+                    ctx.fillRect(-14, -14, 28, 28);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-6, -6, 4, 4);
+                    ctx.fillRect(2, -6, 4, 4);
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(-4, -5, 2, 3);
+                    ctx.fillRect(3, -5, 2, 3);
+                }
+                ctx.restore();
+
+                // 名字 + 心情
+                ctx.fillStyle = isSelected ? '#ffd700' : '#ffffff';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, dy - 28);
 
                 // 键盘焦点: 青色虚线环
                 const kfIdx2 = state.keyboardFocusIndex;
@@ -865,13 +965,13 @@
     function isClickOnMinimap(mx, my) {
         if (!minimapVisible) return false;
         const mmX = VIEW_W - MINIMAP_W - MINIMAP_MARGIN;
-        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 40; // 40px for toggle button
+        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 36;
         return mx >= mmX && mx <= mmX + MINIMAP_W && my >= mmY && my <= mmY + MINIMAP_H;
     }
 
     function handleMinimapClick(mx, my) {
         const mmX = VIEW_W - MINIMAP_W - MINIMAP_MARGIN;
-        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 40;
+        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 36;
         // 点击在小地图内的位置 (0-1 比例)
         const rx = (mx - mmX) / MINIMAP_W;
         const ry = (my - mmY) / MINIMAP_H;
@@ -885,7 +985,7 @@
     function drawMinimap() {
         if (!minimapVisible) return;
         const mmX = VIEW_W - MINIMAP_W - MINIMAP_MARGIN;
-        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 40;
+        const mmY = VIEW_H - MINIMAP_H - MINIMAP_MARGIN - 36;
 
         // 半透明背景
         ctx.fillStyle = 'rgba(5, 10, 30, 0.75)';
@@ -975,38 +1075,41 @@
     let panelSidebarVisible = false;
 
     function initPanelToggles() {
-        createToggleButton('toggle-stats', '📊', '左上', () => {
+        createToggleButton('toggle-stats', '📊', 'top-left', () => {
             panelStatsVisible = !panelStatsVisible;
             const bar = document.getElementById('status-bar');
-            if (bar) bar.classList.toggle('panel-open', panelStatsVisible);
+            if (bar) bar.classList.toggle('visible', panelStatsVisible);
             updateToggleBtn('toggle-stats', panelStatsVisible);
         });
+        initStatusBar();
+        updateToggleBtn('toggle-stats', true);
 
-        createToggleButton('toggle-narrative', '📖', '右上', () => {
+        createToggleButton('toggle-narrative', '📖', 'top-right', () => {
             panelNarrativeVisible = !panelNarrativeVisible;
             const panel = document.querySelector('.narrative-panel');
             if (panel) panel.classList.toggle('panel-open', panelNarrativeVisible);
             updateToggleBtn('toggle-narrative', panelNarrativeVisible);
         });
 
-        createToggleButton('toggle-sidebar', '👥', '左下', () => {
+        createToggleButton('toggle-sidebar', '👥', 'bottom-left', () => {
             panelSidebarVisible = !panelSidebarVisible;
             const sb = document.getElementById('sidebar');
             if (sb) sb.classList.toggle('open', panelSidebarVisible);
             updateToggleBtn('toggle-sidebar', panelSidebarVisible);
         });
 
-        createToggleButton('toggle-minimap', '🗺️', '右下', () => {
+        createToggleButton('toggle-minimap', '🗺️', 'bottom-right', () => {
             minimapVisible = !minimapVisible;
             updateToggleBtn('toggle-minimap', minimapVisible);
             render();
         });
+    }
 
-        // 小地图按钮放在小地图上方
-        const mmBtn = document.getElementById('toggle-minimap');
-        if (mmBtn) {
-            mmBtn.style.bottom = (MINIMAP_H + MINIMAP_MARGIN + 52) + 'px';
-        }
+    function initStatusBar() {
+        // 全屏模式下默认显示状态栏
+        panelStatsVisible = true;
+        const bar = document.getElementById('status-bar');
+        if (bar) bar.classList.add('visible');
     }
 
     function createToggleButton(id, icon, position, onClick) {
@@ -1019,22 +1122,21 @@
         btn.addEventListener('click', onClick);
         // 定位
         switch (position) {
-            case '左上':
-                btn.style.top = '8px';
-                btn.style.left = '8px';
+            case 'top-left':
+                btn.style.top = '48px';
+                btn.style.left = '12px';
                 break;
-            case '右上':
-                btn.style.top = '8px';
-                btn.style.right = '8px';
+            case 'top-right':
+                btn.style.top = '48px';
+                btn.style.right = '12px';
                 break;
-            case '左下':
-                btn.style.bottom = '8px';
-                btn.style.left = '8px';
-                break;
-            case '右下':
-                btn.style.right = '8px';
-                // bottom set separately for minimap button
+            case 'bottom-left':
                 btn.style.bottom = '48px';
+                btn.style.left = '12px';
+                break;
+            case 'bottom-right':
+                btn.style.bottom = '48px';
+                btn.style.right = '12px';
                 break;
         }
         document.body.appendChild(btn);
@@ -2256,12 +2358,7 @@
             overlay.appendChild(sparkle);
         }
 
-        const wrap = document.querySelector('.canvas-wrap');
-        if (wrap) {
-            wrap.appendChild(overlay);
-        } else {
-            document.body.appendChild(overlay);
-        }
+        document.body.appendChild(overlay);
 
         // 4.5 秒后淡出, 0.5s 过渡后移除
         setTimeout(() => {
@@ -3085,6 +3182,12 @@
     async function start() {
         console.log('[start] API_BASE =', API_BASE || '(同源)');
 
+        // Phase 21: 预加载所有像素精灵图
+        if (window.SPRITE_PIXEL) {
+            SPRITE_PIXEL.preloadAll();
+            console.log('[sprite] 像素精灵图预加载完成');
+        }
+
         // 1. 拉地图
         await fetchWorld();
         // 2. 拉数码兽
@@ -3172,8 +3275,8 @@
 
     // 暴露调试接口
     window.DigimonWorld = {
-        version: '1.0.0',
-        phase: 15,
+        version: '2.0.0',
+        phase: 21,
         getState: () => state,
         refresh: async () => { await fetchDigimon(); render(); },
         getCamera: () => ({ cameraX, cameraY, zoom }),

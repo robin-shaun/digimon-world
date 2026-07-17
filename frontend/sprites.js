@@ -1,387 +1,867 @@
 /**
- * DIGIMON WORLD - 精灵动画数据 (Phase 13-②)
+ * DIGIMON WORLD - 像素精灵图系统 (Phase 21)
  *
- * 为每只数码兽定义动画帧数据。当前使用程序化帧(无外部图片),
- * 后续替换为真实 sprite sheet 时只需修改此文件的帧坐标即可。
+ * 每个数码兽物种有独特的 48×48 像素风格精灵图。
+ * 定义: 16×16 逻辑像素网格 → 每格 3×3 实际像素 → 48×48 最终尺寸。
+ * spriteCache 缓存离屏 Canvas 避免每帧重绘。
  *
- * 动作类型:
- *   idle    — 待机动画 (呼吸/摇摆)
- *   walk    — 行走动画
- *   attack  — 攻击动画
- *   evolve  — 进化动画
- *
- * 帧格式: { x, y, w, h } — sprite sheet 上的裁剪区域 (目前仅用作元数据)
+ * 颜色索引:
+ *   0=透明, 1=主体色, 2=腹部/副色, 3=眼白, 4=瞳孔, 5=细节色,
+ *   6=轮廓/暗部, 7=特征1, 8=特征2, 9=高光
  */
 
-window.SPRITE_DATA = (function () {
+window.SPRITE_PIXEL = (function () {
     'use strict';
 
-    /**
-     * 数码兽通用动画配置
-     * key: 数码兽物种名 (英语, 如 agumon / gabumon)
-     * value: { actions: { actionName: { frames: number, fps: number, loop: bool } } }
-     */
-    const configs = {
-        // ═══ 疫苗种 (Vaccine) — 8 只被选召的数码兽 ═══
+    // ---- 精灵定义: 16×16 网格，每个字符对应颜色索引 ----
+    // 格式: 每行16个字符（空格=0），用 | 或数组表示
+
+    const SPRITES = {
+        // ═══ 疫苗种 — 被选召的数码兽 ═══
         agumon: {
-            color: '#FF8C00',    // 橙色 — 勇气
-            accent: '#FFD700',   // 金色
-            size: 18,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#FF8C00', '#FFD700', '#FFFFFF', '#1a1a2e', '#CC6600', '#3a2010', '#FF6600', '#FF4444', '#FFF8DC'],
+            // 橙色恐龙，黄色肚子，小角，站立姿势
+            grid: [
+                '       77       ', // 0: 角
+                '       77       ',
+                '      1166      ', // 2: 头顶
+                '     1116611    ', // 3: 头部
+                '     11334611   ', // 4: 眼睛
+                '    1111111111  ', // 5: 脸
+                '    1112222111  ', // 6: 上体
+                '    1122222211  ', // 7: 肚子
+                '     112222211  ', // 8
+                '     111222211  ', // 9
+                '    111122111   ', // 10: 手臂
+                '   111  11211   ', // 11
+                '   111  11111   ', // 12: 腿
+                '   55    115    ', // 13: 脚爪
+                '   55    115    ', // 14
+                '   55     55    ', // 15
+            ],
         },
+
         gabumon: {
-            color: '#4A90D9',    // 蓝色 — 友情
-            accent: '#87CEEB',
-            size: 18,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#4A6FA5', '#E8E8F0', '#FFFFFF', '#1a1a2e', '#3A5A8A', '#2a3050', '#5A8ABF', '#FFDD44', '#FFF8DC'],
+            // 蓝色狼皮，白肚子，单角，毛皮外套
+            grid: [
+                '       77       ', // 0: 单角
+                '      1166      ',
+                '     11116611    ', // 2: 头部
+                '     11334611    ', // 3: 眼
+                '    1111111111   ', // 4
+                '   111112221111  ', // 5: 上身
+                '   111222222211  ', // 6: 白肚
+                '    1122222221   ', // 7
+                '    1112222221   ', // 8
+                '     111222211   ', // 9
+                '   1111  11211   ', // 10: 手
+                '   111   1111    ', // 11
+                '   55    115     ', // 12: 腿
+                '   55    115     ', // 13
+                '   55     55     ', // 14
+                '                 ', // 15
+            ],
         },
+
         biyomon: {
-            color: '#FF69B4',    // 粉色 — 爱心
-            accent: '#FFB6C1',
-            size: 16,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#FF69B4', '#FFB6C1', '#FFFFFF', '#1a1a2e', '#FF1493', '#FFA07A', '#FF8C00', '#FF4500', '#FFF0F5'],
+            // 粉色鸟，橙色喙，翅膀
+            grid: [
+                '       77       ', // 0: 冠羽
+                '      7766      ',
+                '     111111     ', // 2: 头
+                '    11334411    ', // 3: 眼+喙
+                '   1177777711   ', // 4: 喙
+                '  111111111111  ', // 5: 身体
+                ' 11112222221111 ', // 6: 腹
+                ' 11222222222211 ', // 7
+                ' 11122222222211 ', // 8
+                '  8 112222211 8 ', // 9: 翅膀
+                '  88 1111111 88 ', // 10
+                '  88   11   88  ', // 11
+                '   8   55   8   ', // 12: 脚
+                '       55       ', // 13
+                '       55       ', // 14
+                '                 ', // 15
+            ],
         },
+
         tentomon: {
-            color: '#8B4513',    // 棕色 — 知识
-            accent: '#D2691E',
-            size: 16,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#8B3A8B', '#6B2A6B', '#FFFFFF', '#FF0000', '#4B1A4B', '#3a1a3a', '#A050A0', '#FF4444', '#DDAAFF'],
+            // 紫色甲虫，红色复眼，瓢虫壳
+            grid: [
+                '      7777      ', // 0: 触角
+                '     776677     ',
+                '    11666611    ', // 2: 壳顶
+                '   1111441111   ', // 3: 红眼
+                '  111111111111  ', // 4: 头
+                '  111188881111  ', // 5: 壳纹
+                ' 1111188881111  ', // 6
+                ' 1111188881111  ', // 7
+                ' 1111111111111  ', // 8: 身体
+                '  1111  11111   ', // 9: 腿
+                '  55    1155    ', // 10
+                '  55    1155    ', // 11
+                '  5      55     ', // 12
+                '  5      5      ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
+
         palmon: {
-            color: '#32CD32',    // 绿色 — 纯真
-            accent: '#90EE90',
-            size: 18,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#3CB371', '#90EE90', '#FFFFFF', '#1a1a2e', '#2E8B57', '#1a5a2a', '#FF69B4', '#FF1493', '#FFB6C1'],
+            // 绿色植物，头上有花，叶子手
+            grid: [
+                '       77       ', // 0: 花
+                '      7997      ',
+                '      7997      ', // 2
+                '     116611     ', // 3: 头
+                '    11334411    ', // 4: 眼
+                '   1111111111   ', // 5: 身体
+                '  111122221111  ', // 6
+                '  112222222211  ', // 7
+                '  112222222211  ', // 8
+                ' 111122222211   ', // 9: 叶手
+                ' 111 112211     ', // 10
+                ' 55   1155      ', // 11: 根/脚
+                ' 5    55        ', // 12
+                ' 5    5         ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
+
         gomamon: {
-            color: '#FFFFFF',    // 白色 — 诚实
-            accent: '#E0E0FF',
-            size: 17,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#F0F0FF', '#E0E0F0', '#FFFFFF', '#1a1a2e', '#8888AA', '#6B3A8B', '#C0C0E0', '#FF6600', '#D0D0F0'],
+            // 白色海豹，紫色斑纹，橙色莫西干
+            grid: [
+                '       88       ', // 0: 莫西干
+                '       88       ',
+                '     116611     ', // 2: 头
+                '    11334411    ', // 3: 眼
+                '   1111111111   ', // 4
+                '  111111111111  ', // 5: 圆身体
+                '  116611661111  ', // 6: 紫斑纹
+                ' 1166 1111 6611 ', // 7
+                ' 1111 1111 1111 ', // 8
+                ' 1111 1111 1111 ', // 9
+                '  11  1111 11   ', // 10
+                '      1111      ', // 11: 肚
+                '       55       ', // 12: 尾
+                '      5 5       ', // 13
+                '     5   5      ', // 14
+                '                 ', // 15
+            ],
         },
+
         patamon: {
-            color: '#FFDAB9',    // 浅橙 — 希望
-            accent: '#FFE4B5',
-            size: 14,
-            actions: {
-                idle:    { frames: 4, fps: 4,  loop: true },  // 巴达兽更活泼
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#FFDAB9', '#FFE4B5', '#FFFFFF', '#1a1a2e', '#FFA07A', '#DEB887', '#87CEEB', '#ADD8E6', '#FFF0E0'],
+            // 橙色带翅膀，大耳朵
+            grid: [
+                '   77  77  77   ', // 0: 翅膀
+                '  7777 7777 77  ',
+                '   7777777777   ', // 2: 翅膀展开
+                '    11666611    ', // 3: 大耳
+                '   1133334411   ', // 4: 眼
+                '   1111111111   ', // 5: 脸
+                '    11222211    ', // 6: 身体
+                '    11222211    ', // 7
+                '    11122111    ', // 8
+                '     111111     ', // 9
+                '     55  55     ', // 10: 小脚
+                '     5    5     ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
+
+        plotmon: {
+            colors: ['transparent', '#FFE4C4', '#FFDEAD', '#FFFFFF', '#1a1a2e', '#FFDAB9', '#DEB887', '#FFB6C1', '#FFC0CB', '#FFF5EE'],
+            // 奶油色小狗，垂耳，小尾巴
+            grid: [
+                '     166611     ', // 0: 垂耳
+                '    11116611    ',
+                '   1113344611   ', // 2: 眼
+                '   1111111111   ', // 3: 脸
+                '   1111222111   ', // 4: 身体
+                '   1122222211   ', // 5
+                '   1112222211   ', // 6
+                '    11222211    ', // 7
+                '    11111111    ', // 8
+                '    11    11    ', // 9: 腿
+                '    55    55    ', // 10
+                '    5     5     ', // 11
+                '         77     ', // 12: 尾
+                '        77      ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
         tailmon: {
-            color: '#F5F5DC',    // 米色 — 光明
-            accent: '#FFE4E1',
-            size: 16,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#F5F5DC', '#FFE4E1', '#FFFFFF', '#1a1a2e', '#EEE8CD', '#DEB887', '#FFD700', '#FFA500', '#FFFACD'],
+            // 奶油色猫，长尾，猫耳
+            grid: [
+                '      1166      ', // 0: 猫耳
+                '     111166     ',
+                '    11334411    ', // 2: 眼
+                '    11111111    ', // 3: 脸
+                '    11122111    ', // 4: 身体
+                '    11222211    ', // 5
+                '    11122111    ', // 6
+                '     111111     ', // 7
+                '     55  55     ', // 8: 腿
+                '     5    5     ', // 9
+                '     5    5     ', // 10
+                '      7777      ', // 11: 尾
+                '     777777     ', // 12
+                '       77       ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
 
         // ═══ 疫苗种 — 其他 ═══
-        plotmon: {
-            color: '#FFE4C4',    // 奶油色 — 小狗兽
-            accent: '#FFDEAD',
-            size: 15,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
         elecmon: {
-            color: '#00BFFF',    // 电蓝色 — 艾力兽
-            accent: '#FFD700',   // 金色闪电
-            size: 16,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 9,  loop: true },  // 电力充沛, 移动快
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#FF3333', '#FF6644', '#FFFFFF', '#1a1a2e', '#CC0000', '#8B0000', '#FFD700', '#FFAA00', '#FFF0E0'],
+            // 红色带电兽，金色闪电纹，尖耳
+            grid: [
+                '      1666      ', // 0
+                '     111166     ',
+                '    11334411    ', // 2: 眼
+                '   1111111111   ', // 3: 头
+                '   1117777111   ', // 4: 闪电纹
+                '   1122222211   ', // 5: 身体
+                '    11222211    ', // 6
+                '    11111111    ', // 7
+                '   11      11   ', // 8: 腿
+                '   55      55   ', // 9
+                '   5        5   ', // 10
+                '    77777777   ', // 11: 电尾
+                '     777777     ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
+
         tsunomon: {
-            color: '#E6E6FA',    // 薰衣草白 — 独角兽
-            accent: '#DDA0DD',
-            size: 15,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 7,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#E6E6FA', '#D8BFD8', '#FFFFFF', '#1a1a2e', '#C8A2C8', '#9370DB', '#DDA0DD', '#BA55D3', '#FFF0FF'],
+            // 薰衣草白独角兽，额头独角
+            grid: [
+                '       77       ', // 0: 角
+                '      7777      ',
+                '     116611     ', // 2: 头
+                '    11334411    ', // 3: 眼
+                '    11111111    ', // 4: 脸
+                '    11122111    ', // 5: 身体
+                '    11222211    ', // 6
+                '    11111111    ', // 7
+                '     55  55     ', // 8
+                '     5    5     ', // 9
+                '     5    5     ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
 
-        // ═══ 数据种 (Data) ═══
+        // ═══ 数据种 ═══
         hagurumon: {
-            color: '#C0C0C0',    // 银色 — 齿轮兽
-            accent: '#708090',
-            size: 14,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 6,  loop: true },  // 齿轮滚动
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#B0B0B0', '#C8C8C8', '#FFFFFF', '#1a1a2e', '#808080', '#606060', '#D0D0D0', '#FFD700', '#E8E8E8'],
+            // 灰色齿轮，圆形齿轮身，中心轴
+            grid: [
+                '      7777      ', // 0
+                '     776677     ',
+                '    77111177    ', // 2: 齿轮外圈
+                '   7711111177   ', // 3
+                '   7111441177   ', // 4: 眼
+                '  711111111177  ', // 5
+                '  711222211177  ', // 6: 腹
+                '  711222211177  ', // 7
+                '  711111111177  ', // 8
+                '   7166  6617   ', // 9: 齿
+                '   77      77   ', // 10
+                '   7        7   ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
+
         guardromon: {
-            color: '#4682B4',    // 钢蓝 — 守卫兽
-            accent: '#B0C4DE',
-            size: 20,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },  // 机械感, 慢节奏
-                walk:    { frames: 6, fps: 6,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#4682B4', '#5A9AC4', '#FFFFFF', '#FF0000', '#2E5A7A', '#1a3a5a', '#87CEEB', '#B0E0E6', '#A0D0F0'],
+            // 银色机器人，蓝色装甲，红色传感器眼
+            grid: [
+                '      7777      ', // 0: 天线
+                '     117711     ',
+                '    11111111    ', // 2: 头
+                '   1111441111   ', // 3: 红眼
+                '   1111111111   ', // 4: 装甲
+                '  111111111111  ', // 5
+                '  112222222211  ', // 6: 胸甲
+                '  116666666611  ', // 7: 腹甲
+                '  1111    1111  ', // 8: 腰
+                '  11        11  ', // 9: 腿
+                '  55        55  ', // 10
+                '  5          5  ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
-        clockmon: {
-            color: '#8B7355',    // 古铜色 — 时钟兽
-            accent: '#DAA520',
-            size: 18,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },
-                walk:    { frames: 6, fps: 5,  loop: true },  // 时间齿轮慢转
-                attack:  { frames: 5, fps: 10, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        tankmon: {
-            color: '#556B2F',    // 军绿 — 坦克兽
-            accent: '#8B8B00',
-            size: 20,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },
-                walk:    { frames: 6, fps: 6,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        kokuwamon: {
-            color: '#87CEEB',    // 天蓝 — 溜溜球兽
-            accent: '#00CED1',
-            size: 15,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
+
         andromon: {
-            color: '#4169E1',    // 皇家蓝 — 安杜路兽
-            accent: '#1E90FF',
-            size: 22,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },  // 完全体, 稳重
-                walk:    { frames: 6, fps: 5,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#4169E1', '#5A7AFF', '#FFFFFF', '#FF0000', '#1a3a7a', '#0a1a4a', '#6A9AFF', '#2a5aC0', '#B0D0FF'],
+            // 皇家蓝完全体机器人，红色眼罩，大型装甲
+            grid: [
+                '      7777      ', // 0: 头冠
+                '     117711     ',
+                '    11111111    ', // 2: 头部装甲
+                '   1111441111   ', // 3: 红眼
+                '  111111111111  ', // 4: 肩甲
+                ' 1111111111111  ', // 5
+                ' 1122222222211  ', // 6: 胸甲
+                ' 1166666666611  ', // 7: 腹甲
+                '  1166  6611    ', // 8
+                '  11      11    ', // 9: 腿
+                '  55      55    ', // 10
+                '  5        5    ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
 
-        // ═══ 病毒种 (Virus) ═══
-        picodevimon: {
-            color: '#4B0082',    // 靛蓝 — 小恶魔兽
-            accent: '#8B008B',
-            size: 13,
-            actions: {
-                idle:    { frames: 4, fps: 4,  loop: true },  // 活泼好动
-                walk:    { frames: 6, fps: 9,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        blackgabumon: {
-            color: '#2F4F4F',    // 暗灰蓝 — 黑加布兽
-            accent: '#A9A9A9',
-            size: 18,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
+        // ═══ 病毒种 ═══
         devimon: {
-            color: '#191970',    // 午夜蓝 — 恶魔兽 (成熟期)
-            accent: '#DC143C',   // 血红 accent
-            size: 24,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },
-                walk:    { frames: 6, fps: 5,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        devidramon: {
-            color: '#800020',    // 酒红 — 邪龙兽
-            accent: '#FF4500',
-            size: 22,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },
-                walk:    { frames: 6, fps: 5,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        vamdemon: {
-            color: '#2C003E',    // 深紫 — 吸血魔兽 (完全体)
-            accent: '#8B0000',
-            size: 26,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },
-                walk:    { frames: 6, fps: 4,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        fantomon: {
-            color: '#483D8B',    // 暗灰紫 — 死神兽
-            accent: '#9370DB',
-            size: 20,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },
-                walk:    { frames: 6, fps: 6,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        bakemon: {
-            color: '#A9A9A9',    // 暗灰 — 猛鬼兽
-            accent: '#D3D3D3',
-            size: 17,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 7,  loop: true },  // 飘浮感
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#191970', '#2a2a8a', '#FFFFFF', '#FF0000', '#0a0a40', '#000020', '#4a00a0', '#DC143C', '#A0A0FF'],
+            // 午夜蓝恶魔，血红眼，蝙蝠翅膀，成熟期
+            grid: [
+                '  77    77  77  ', // 0: 双角
+                ' 7777  777777  ',
+                '  7766116677   ', // 2: 头
+                '   11444411    ', // 3: 红眼
+                '  1111111111   ', // 4: 脸
+                ' 111111111111  ', // 5: 身体
+                '111122222211111', // 6: 胸
+                ' 111666666111  ', // 7
+                '  88 1111 88   ', // 8: 翅膀
+                ' 8888 11 8888  ', // 9
+                ' 8888    8888  ', // 10
+                '  88      88   ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
 
-        // ═══ 自由种 (Free) ═══
-        renamon: {
-            color: '#FFD700',    // 金色 — 妖狐兽
-            accent: '#FFA500',
-            size: 18,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 9,  loop: true },  // 忍者般敏捷
-                attack:  { frames: 5, fps: 14, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+        ogremon: {
+            colors: ['transparent', '#556B2F', '#6B8B3F', '#FFFFFF', '#1a1a2e', '#3a4a1a', '#1a2a0a', '#8B4513', '#FF6600', '#A0B050'],
+            // 绿色食人魔，棕色角，肌肉发达
+            grid: [
+                '       77       ', // 0: 角
+                '      7777      ',
+                '     111111     ', // 2: 头
+                '    11334411    ', // 3: 眼
+                '   1111111111   ', // 4: 脸
+                '  111111111111  ', // 5: 宽肩
+                ' 11112222221111 ', // 6: 胸肌
+                ' 11122222222111 ', // 7
+                ' 1111  111111   ', // 8
+                '  55    1155    ', // 9: 腿
+                '  55    1155    ', // 10
+                '  5      55     ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
         },
-        impmon: {
-            color: '#800080',    // 紫色 — 小妖兽
-            accent: '#FF6347',
-            size: 16,
-            actions: {
-                idle:    { frames: 4, fps: 4,  loop: true },  // 顽皮活跃
-                walk:    { frames: 6, fps: 9,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        dorumon: {
-            color: '#5B9BD5',    // 天蓝 — 多路兽 (与守卫兽区分)
-            accent: '#87CEFA',
-            size: 17,
-            actions: {
-                idle:    { frames: 4, fps: 3,  loop: true },
-                walk:    { frames: 6, fps: 8,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
-        wizarmon: {
-            color: '#6A0DAD',    // 深紫 — 巫师兽
-            accent: '#00CED1',   // 魔法青色
-            size: 20,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },
-                walk:    { frames: 6, fps: 6,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
-        },
+
         leomon: {
-            color: '#DAA520',    // 金褐色 — 狮子兽 (成熟期)
-            accent: '#FF8C00',
-            size: 24,
-            actions: {
-                idle:    { frames: 4, fps: 2,  loop: true },
-                walk:    { frames: 6, fps: 6,  loop: true },
-                attack:  { frames: 5, fps: 12, loop: false },
-                evolve:  { frames: 8, fps: 6,  loop: false },
-            },
+            colors: ['transparent', '#DAA520', '#FFD700', '#FFFFFF', '#1a1a2e', '#B8860B', '#8B6914', '#FFA500', '#FF8C00', '#FFF0C0'],
+            // 金褐色狮子兽，鬃毛，成熟期
+            grid: [
+                '     777777     ', // 0: 鬃毛
+                '    77777777    ',
+                '    77111177    ', // 2: 头
+                '   7711334477   ', // 3: 眼
+                '   7711111177   ', // 4: 脸
+                '   1111111111   ', // 5: 身体
+                '  111122221111  ', // 6: 胸
+                '  111222221111  ', // 7
+                '  1111  111111  ', // 8
+                '  55      115   ', // 9
+                '  5        5    ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        // ═══ 成熟期/完全体/究极体 ═══
+        greymon: {
+            colors: ['transparent', '#FF8C00', '#FFA500', '#FFFFFF', '#1a1a2e', '#CC6600', '#3a2010', '#1E90FF', '#4169E1', '#FFD700'],
+            // 橙色暴龙兽，蓝条纹，大头冠
+            grid: [
+                '       77       ', // 0: 角
+                '      7777      ',
+                '     117711     ', // 2: 头冠
+                '    11111111    ', // 3: 大头
+                '   1133444411   ', // 4: 眼
+                '  111111111111  ', // 5
+                ' 11112222221111 ', // 6: 身体
+                ' 11122222222111 ', // 7
+                '  111888881111  ', // 8: 蓝条纹
+                '  111111111111  ', // 9
+                '  55       55   ', // 10: 腿
+                '  55       55   ', // 11
+                '  5         5   ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        garurumon: {
+            colors: ['transparent', '#4A6FA5', '#6A8FC5', '#FFFFFF', '#1a1a2e', '#2A4A7A', '#0a1a3a', '#87CEEB', '#E8E8F0', '#B0D0FF'],
+            // 蓝色加鲁鲁兽，狼形，白条纹
+            grid: [
+                '     1166       ', // 0: 耳
+                '    111166      ',
+                '   11334411     ', // 2: 眼
+                '   11111111     ', // 3: 头
+                '  1111888811    ', // 4: 白纹
+                ' 111122221111   ', // 5: 身体
+                ' 111222221111   ', // 6
+                ' 111111111111   ', // 7
+                '  11      11    ', // 8: 腿
+                '  55      55    ', // 9
+                '  55      55    ', // 10
+                '  5        5    ', // 11
+                '        77      ', // 12: 尾
+                '       7777     ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        kabuterimon: {
+            colors: ['transparent', '#4B0082', '#6B2AAB', '#FFFFFF', '#FF0000', '#2B0050', '#1a0040', '#9370DB', '#8A2BE2', '#DDA0DD'],
+            // 紫色比多兽，甲虫型，大角
+            grid: [
+                '      7777      ', // 0: 大角
+                '     776677     ',
+                '    77666677    ', // 2
+                '   7711111177   ', // 3: 大头
+                '   7711441177   ', // 4: 红眼
+                '  771111111177  ', // 5
+                ' 77112222221177 ', // 6: 身体
+                ' 77118888811177 ', // 7: 甲壳纹
+                '  771111111177  ', // 8
+                '   77 1111 77   ', // 9: 腿
+                '   5   55   5   ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        togemon: {
+            colors: ['transparent', '#32CD32', '#90EE90', '#FFFFFF', '#1a1a2e', '#1a7a1a', '#0a4a0a', '#FF6347', '#FF4500', '#B0FFB0'],
+            // 绿色仙人掌兽，拳击手套
+            grid: [
+                '       77       ', // 0: 花
+                '      7797      ',
+                '     117711     ', // 2: 头
+                '    11334411    ', // 3: 眼
+                '   1111111111   ', // 4
+                '  111111111111  ', // 5: 身体
+                '  112222222211  ', // 6
+                ' 8111111111118  ', // 7: 拳击手套
+                ' 8811    1188   ', // 8
+                '  55      55    ', // 9
+                '  5        5    ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        angemon: {
+            colors: ['transparent', '#F5F5F5', '#FFFFFF', '#87CEEB', '#1a1a2e', '#D0D0D0', '#A0A0A0', '#FFD700', '#FFA500', '#E0F0FF'],
+            // 白色天使兽，六翼，金发
+            grid: [
+                '  77  77  77    ', // 0: 翅膀
+                ' 777777777777   ',
+                '  7777777777    ', // 2
+                '    117711      ', // 3: 头
+                '   11111111     ', // 4
+                '  1133334411    ', // 5: 蓝眼
+                '  1111111111    ', // 6: 身体
+                '  1112222111    ', // 7
+                '  1111111111    ', // 8
+                '   11    11     ', // 9
+                '   55    55     ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        birdramon: {
+            colors: ['transparent', '#FF6347', '#FF7F50', '#FFFFFF', '#1a1a2e', '#CC3300', '#8B0000', '#FFD700', '#FF4500', '#FFA07A'],
+            // 红色巴多拉兽，火焰鸟，大翅膀
+            grid: [
+                '  77  77  77   ', // 0: 火羽
+                ' 777777777777  ',
+                '  7777777777   ', // 2
+                '   11111111    ', // 3: 头
+                '  1133441111   ', // 4: 眼
+                '  1111111111   ', // 5
+                ' 111122221111  ', // 6: 身体
+                ' 111222221111  ', // 7
+                '  1111111111   ', // 8
+                '   55    55    ', // 9: 爪
+                '   5      5    ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        garudamon: {
+            colors: ['transparent', '#FFD700', '#FFA500', '#FFFFFF', '#1a1a2e', '#B8860B', '#8B6914', '#FF6347', '#FF4500', '#FFF0C0'],
+            // 金色迦楼达兽，巨鸟，完全体
+            grid: [
+                ' 777  77  777  ', // 0: 巨翼
+                '77777777777777 ',
+                ' 777777777777  ', // 2
+                '   11111111    ', // 3: 头
+                '  1133444411   ', // 4: 眼
+                ' 111111111111  ', // 5
+                ' 111222222111  ', // 6: 身体
+                ' 111111111111  ', // 7
+                '  11 1111 11   ', // 8
+                '  55      55   ', // 9: 爪
+                '  5        5   ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        metalgreymon: {
+            colors: ['transparent', '#FF8C00', '#B0B0B0', '#FFFFFF', '#1a1a2e', '#CC6600', '#3a2010', '#1E90FF', '#4169E1', '#FFD700'],
+            // 机械暴龙兽，金属装甲，导弹翼
+            grid: [
+                '   77    77    ', // 0: 机翼
+                '  7777  7777   ',
+                '  7722  2277   ', // 2: 金属
+                '   11111111    ', // 3: 头
+                '  1133444411   ', // 4: 眼
+                ' 111111111111  ', // 5
+                ' 111222222111  ', // 6: 身体
+                ' 111888881111  ', // 7: 蓝纹
+                '  1122222211   ', // 8: 金属胸
+                '  55      55   ', // 9
+                '  55      55   ', // 10
+                '  5        5   ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        weregarurumon: {
+            colors: ['transparent', '#4A6FA5', '#6A8FC5', '#FFFFFF', '#1a1a2e', '#2A4A7A', '#0a1a3a', '#C0C0C0', '#A0A0A0', '#B0D0FF'],
+            // 狼人加鲁鲁，站立狼人形，金属爪
+            grid: [
+                '     1166       ', // 0: 耳
+                '    111166      ',
+                '   11334411     ', // 2: 眼
+                '   11111111     ', // 3: 头
+                '  1111111111    ', // 4
+                ' 111122221111   ', // 5: 胸
+                ' 111222221111   ', // 6
+                ' 118888881111   ', // 7: 金属甲
+                '  11 1111 11    ', // 8: 手
+                '  55      55    ', // 9
+                '  5        5    ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        atlurkabuterimon: {
+            colors: ['transparent', '#FF0000', '#CC0000', '#FFFFFF', '#1a1a2e', '#8B0000', '#4a0000', '#FFD700', '#FFA500', '#FF6644'],
+            // 红色超比多兽，巨大甲虫角
+            grid: [
+                '      7777      ', // 0: 巨角
+                '     776677     ',
+                '    77666677    ', // 2
+                '   7711111177   ', // 3: 大头
+                '   7711441177   ', // 4: 眼
+                '  771111111177  ', // 5
+                ' 77111111111177 ', // 6: 身体
+                ' 77122222221177 ', // 7
+                '  771111111177  ', // 8
+                '   7711111177   ', // 9
+                '   7        7   ', // 10
+                '                 ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        // ═══ 其他数码兽 ═══
+        seadramon: {
+            colors: ['transparent', '#00CED1', '#20B2AA', '#FFFFFF', '#1a1a2e', '#008B8B', '#006060', '#87CEEB', '#48D1CC', '#E0FFFF'],
+            // 海龙兽，青色海蛇
+            grid: [
+                '       11       ', // 0: 头
+                '      1111      ',
+                '     113341     ', // 2: 眼
+                '     111111     ', // 3
+                '    11111111    ', // 4: 长身
+                '   1111111111   ', // 5
+                '   1122222211   ', // 6: 腹
+                '   1111111111   ', // 7
+                '    11111111    ', // 8
+                '    11111111    ', // 9
+                '     111111     ', // 10: 尾
+                '      1111      ', // 11
+                '       11       ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        whamon: {
+            colors: ['transparent', '#4A6FA5', '#6A8FC5', '#FFFFFF', '#1a1a2e', '#2A4A7A', '#0a1a3a', '#87CEEB', '#B0E0E6', '#E0F0FF'],
+            // 巨鲸兽，蓝色鲸鱼
+            grid: [
+                '                 ', // 0
+                '   11111111111  ', // 1: 大头
+                '  113344111111  ', // 2: 眼
+                ' 11111111111111 ', // 3
+                ' 11122222222211 ', // 4: 巨腹
+                '1112222222222111', // 5
+                '1112222222222111', // 6
+                '1112222222222111', // 7
+                '1112222222222111', // 8
+                ' 11111111111111 ', // 9
+                '  111111111111  ', // 10
+                '    11111111    ', // 11: 尾
+                '      1111      ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        ikkakumon: {
+            colors: ['transparent', '#F5F5F5', '#E8E8F0', '#FFFFFF', '#1a1a2e', '#C0C0C0', '#A0A0A0', '#FF6600', '#FF4500', '#FFF8F0'],
+            // 白色海狮兽，尖角，橙色鳍
+            grid: [
+                '       77       ', // 0: 角
+                '      7777      ',
+                '     116611     ', // 2: 头
+                '    11334411    ', // 3: 眼
+                '   1111111111   ', // 4
+                '  111111111111  ', // 5: 胖身
+                ' 11112222221111 ', // 6
+                ' 11122222222111 ', // 7
+                ' 1111111111111  ', // 8
+                '  8   1111  8   ', // 9: 鳍
+                '  88       88   ', // 10
+                '  8         8   ', // 11
+                '                 ', // 12
+                '                 ', // 13
+                '                 ', // 14
+                '                 ', // 15
+            ],
+        },
+
+        // 默认/未知
+        _default: {
+            colors: ['transparent', '#AABBCC', '#CCDDEE', '#FFFFFF', '#1a1a2e', '#8899AA', '#667788', '#99AACC', '#BBDDFF', '#EEF0FF'],
+            grid: [
+                '     111111     ',
+                '    11111111    ',
+                '   1133444411   ',
+                '   1111111111   ',
+                '   1111111111   ',
+                '   1122222211   ',
+                '   1122222211   ',
+                '    11111111    ',
+                '    11    11    ',
+                '    55    55    ',
+                '                 ',
+                '                 ',
+                '                 ',
+                '                 ',
+                '                 ',
+                '                 ',
+            ],
         },
     };
 
-    /** 默认配置 (未知数码兽) */
-    const DEFAULT = {
-        color: '#AABBCC',
-        accent: '#CCDDEE',
-        size: 16,
-        actions: {
-            idle:    { frames: 4, fps: 3,  loop: true },
-            walk:    { frames: 6, fps: 8,  loop: true },
-        },
+    // ---- 精灵缓存 ----
+    const spriteCache = new Map();
+
+    /** 渲染一个精灵定义到离屏 Canvas */
+    function renderSprite(spriteDef) {
+        const size = 48;
+        const cellSize = 3;  // 16×16 grid × 3px per cell
+        const offscreen = document.createElement('canvas');
+        offscreen.width = size;
+        offscreen.height = size;
+        const c = offscreen.getContext('2d');
+        c.imageSmoothingEnabled = false;
+
+        const grid = spriteDef.grid;
+        const colors = spriteDef.colors;
+
+        for (let row = 0; row < grid.length; row++) {
+            const line = grid[row];
+            for (let col = 0; col < line.length; col++) {
+                const ch = line[col];
+                if (ch === ' ' || ch === '0') continue;
+                const colorIdx = parseInt(ch, 10);
+                if (isNaN(colorIdx) || colorIdx < 1 || colorIdx >= colors.length) continue;
+                c.fillStyle = colors[colorIdx];
+                c.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+            }
+        }
+
+        return offscreen;
+    }
+
+    /** 获取或创建精灵图 (按物种名) */
+    function getSprite(species) {
+        const key = (species || '_default').toLowerCase().replace(/[\s\-]/g, '_');
+        if (spriteCache.has(key)) return spriteCache.get(key);
+
+        const def = SPRITES[key] || SPRITES._default;
+        const canvas = renderSprite(def);
+        spriteCache.set(key, canvas);
+        return canvas;
+    }
+
+    /** 批量预加载所有已知精灵 */
+    function preloadAll() {
+        for (const key of Object.keys(SPRITES)) {
+            if (key === '_default') continue;
+            if (!spriteCache.has(key)) {
+                spriteCache.set(key, renderSprite(SPRITES[key]));
+            }
+        }
+    }
+
+    /** 清除缓存 */
+    function clearCache() {
+        spriteCache.clear();
+    }
+
+    return { getSprite, preloadAll, clearCache, SPRITES };
+})();
+
+/**
+ * DIGIMON WORLD - 精灵动画数据 (Phase 13-②)
+ * 为每只数码兽定义动画帧数据和颜色配置。
+ * 被 animator.js 和 main.js 的 drawDigimon 使用。
+ */
+window.SPRITE_DATA = (function () {
+    'use strict';
+
+    const configs = {
+        agumon:       { color: '#FF8C00', accent: '#FFD700', size: 18 },
+        gabumon:      { color: '#4A90D9', accent: '#87CEEB', size: 18 },
+        biyomon:      { color: '#FF69B4', accent: '#FFB6C1', size: 16 },
+        tentomon:     { color: '#8B4513', accent: '#D2691E', size: 16 },
+        palmon:       { color: '#32CD32', accent: '#90EE90', size: 18 },
+        gomamon:      { color: '#FFFFFF', accent: '#E0E0FF', size: 17 },
+        patamon:      { color: '#FFDAB9', accent: '#FFE4B5', size: 14 },
+        tailmon:      { color: '#F5F5DC', accent: '#FFE4E1', size: 16 },
+        plotmon:      { color: '#FFE4C4', accent: '#FFDEAD', size: 15 },
+        elecmon:      { color: '#00BFFF', accent: '#FFD700', size: 16 },
+        tsunomon:     { color: '#E6E6FA', accent: '#DDA0DD', size: 15 },
+        hagurumon:    { color: '#C0C0C0', accent: '#708090', size: 14 },
+        guardromon:   { color: '#4682B4', accent: '#B0C4DE', size: 20 },
+        andromon:     { color: '#4169E1', accent: '#1E90FF', size: 22 },
+        clockmon:     { color: '#8B7355', accent: '#DAA520', size: 18 },
+        tankmon:      { color: '#556B2F', accent: '#8B8B00', size: 20 },
+        kokuwamon:    { color: '#87CEEB', accent: '#00CED1', size: 15 },
+        picodevimon:  { color: '#4B0082', accent: '#8B008B', size: 13 },
+        blackgabumon: { color: '#2F4F4F', accent: '#A9A9A9', size: 18 },
+        devimon:      { color: '#191970', accent: '#DC143C', size: 24 },
+        devidramon:   { color: '#800020', accent: '#FF4500', size: 22 },
+        vamdemon:     { color: '#2C003E', accent: '#8B0000', size: 26 },
+        fantomon:     { color: '#483D8B', accent: '#9370DB', size: 20 },
+        bakemon:      { color: '#A9A9A9', accent: '#D3D3D3', size: 17 },
+        renamon:      { color: '#FFD700', accent: '#FFA500', size: 18 },
+        impmon:       { color: '#800080', accent: '#FF6347', size: 16 },
+        dorumon:      { color: '#5B9BD5', accent: '#87CEFA', size: 17 },
+        wizarmon:     { color: '#6A0DAD', accent: '#00CED1', size: 20 },
+        leomon:       { color: '#DAA520', accent: '#FF8C00', size: 24 },
+        greymon:      { color: '#FF8C00', accent: '#FFD700', size: 24 },
+        garurumon:    { color: '#4A6FA5', accent: '#B0D0FF', size: 24 },
+        kabuterimon:  { color: '#4B0082', accent: '#9370DB', size: 22 },
+        togemon:      { color: '#32CD32', accent: '#90EE90', size: 22 },
+        angemon:      { color: '#F5F5F5', accent: '#FFD700', size: 24 },
+        birdramon:    { color: '#FF6347', accent: '#FF4500', size: 26 },
+        garudamon:    { color: '#FFD700', accent: '#FF6347', size: 28 },
+        metalgreymon: { color: '#FF8C00', accent: '#B0B0B0', size: 28 },
+        weregarurumon:{ color: '#4A6FA5', accent: '#C0C0C0', size: 26 },
+        atlurkabuterimon: { color: '#FF0000', accent: '#FFD700', size: 28 },
+        seadramon:    { color: '#00CED1', accent: '#48D1CC', size: 22 },
+        whamon:       { color: '#4A6FA5', accent: '#87CEEB', size: 30 },
+        ikkakumon:    { color: '#F5F5F5', accent: '#FF6600', size: 22 },
+        ogremon:      { color: '#556B2F', accent: '#FF6600', size: 24 },
     };
 
-    /**
-     * 获取数码兽精灵配置
-     * @param {string} name 数码兽物种名 (英语, 如 'agumon')
-     * @returns {object} 精灵配置 { color, accent, size, actions }
-     */
+    const DEFAULT = { color: '#AABBCC', accent: '#CCDDEE', size: 16 };
+
     function getSpriteConfig(name) {
-        const key = (name || '').toLowerCase().replace(/[\s-]/g, '_');
+        const key = (name || '').toLowerCase().replace(/[\s\-]/g, '_');
         return configs[key] || DEFAULT;
     }
 
-    /**
-     * 获取指定动作的动画参数
-     * @param {string} name 数码兽物种名
-     * @param {string} action 动作名 (idle/walk/attack/evolve)
-     * @returns {{ frames: number, fps: number, loop: boolean }}
-     */
     function getActionConfig(name, action) {
         const cfg = getSpriteConfig(name);
-        return cfg.actions[action] || cfg.actions.idle || { frames: 1, fps: 1, loop: true };
+        const actions = cfg.actions || {};
+        return actions[action] || actions.idle || { frames: 1, fps: 1, loop: true };
     }
 
     return { getSpriteConfig, getActionConfig, DEFAULT };

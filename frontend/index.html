@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>🐉 DIGIMON WORLD - 星航开发中</title>
     <link rel="stylesheet" href="style.css">
     <script>
@@ -16,69 +16,60 @@
     </script>
 </head>
 <body>
-    <button id="theme-toggle" class="theme-toggle" type="button"
-            aria-label="切换明暗主题" title="切换明暗主题">🌙</button>
-    <div id="app">
-        <header>
-            <h1>🐉 DIGIMON WORLD</h1>
-            <p class="subtitle">数码宝贝虚拟世界 · 星航开发中 · Phase 19</p>
-            <nav class="main-nav" aria-label="主导航">
-                <a href="index.html" class="nav-link active">主页</a>
-                <a href="battle.html" class="nav-link">战斗模拟</a>
-                <a href="evolution.html" class="nav-link">进化图鉴</a>
-                <a href="log.html" class="nav-link">世界日志</a>
-                <a href="admin.html" class="nav-link">管理</a>
-            </nav>
-        </header>
+    <!-- 全屏Canvas世界地图 -->
+    <canvas id="world-map"></canvas>
 
-        <main>
-            <div class="canvas-wrap">
-                <canvas id="world-map" width="1200" height="800"></canvas>
-                <aside id="sidebar" class="sidebar">
-                    <p class="hint">点击数码兽 或 方向键+Enter 查看详情</p>
-                </aside>
-            </div>
-            <div id="status-bar">
-                <span id="world-time">世界时间: --</span>
-                <span id="digimon-count">数码兽: 0</span>
-                <span id="battle-count">战斗: 0</span>
-                <span id="vitality-score" title="世界活力指数">活力: --</span>
-                <span id="phase">Phase: --</span>
-            </div>
-
-            <!-- Phase 14: 世界叙事面板 -->
-            <div id="narrative-panel" class="narrative-panel">
-                <h3>📖 世界叙事</h3>
-                <div id="narrative-content">
-                    <div class="narrative-title">世界故事正在酝酿中…</div>
-                    <div class="narrative-story"></div>
-                    <div class="narrative-meta"></div>
-                </div>
-            </div>
-        </main>
-
-        <footer>
-            <p>参考 Stanford Generative Agents + 数码宝贝动画 · 仓库 gitee.com/robin_shaun/digimon-world</p>
-        </footer>
+    <!-- 顶部半透明悬浮导航条 -->
+    <div id="top-nav" class="top-nav">
+        <h1 class="nav-title">🐉 DIGIMON WORLD</h1>
+        <nav class="nav-links">
+            <a href="index.html" class="nav-link active">主页</a>
+            <a href="battle.html" class="nav-link">战斗</a>
+            <a href="evolution.html" class="nav-link">进化</a>
+            <a href="log.html" class="nav-link">日志</a>
+            <a href="admin.html" class="nav-link">管理</a>
+        </nav>
+        <button id="theme-toggle" class="theme-btn" aria-label="切换主题">🌙</button>
     </div>
 
-    <!-- Phase 4: 导演面板 (仅宽屏 > 768px 显示, 由 main.js 控制) -->
+    <!-- 底部半透明状态栏 -->
+    <div id="status-bar" class="status-bar">
+        <span id="world-time">世界时间: --</span>
+        <span id="digimon-count">数码兽: 0</span>
+        <span id="battle-count">战斗: 0</span>
+        <span id="vitality-score" title="世界活力指数">活力: --</span>
+        <span id="phase">Phase: --</span>
+    </div>
+
+    <!-- 右侧滑出侧栏 -->
+    <aside id="sidebar" class="sidebar">
+        <p class="hint">点击数码兽 或 方向键+Enter 查看详情</p>
+    </aside>
+
+    <!-- 世界叙事面板 -->
+    <div id="narrative-panel" class="narrative-panel">
+        <h3>📖 世界叙事</h3>
+        <div id="narrative-content">
+            <div class="narrative-title">世界故事正在酝酿中…</div>
+            <div class="narrative-story"></div>
+            <div class="narrative-meta"></div>
+        </div>
+    </div>
+
+    <!-- 导演面板 -->
     <aside id="director-panel" class="director-panel" aria-label="导演面板">
         <h2>🎬 导演面板</h2>
-
         <section class="dir-section">
             <h3>关系图</h3>
             <canvas id="relationship-graph" width="184" height="184"></canvas>
             <p class="dir-hint" id="rel-hint">加载关系中…</p>
         </section>
-
         <section class="dir-section">
             <h3>派系</h3>
             <ul id="faction-list" class="faction-list">
                 <li class="dir-hint">暂无派系</li>
             </ul>
         </section>
-
         <section class="dir-section">
             <h3>排行榜</h3>
             <div class="lb-tabs" role="tablist">
@@ -90,14 +81,12 @@
                 <li class="dir-hint">加载排行榜中…</li>
             </ol>
         </section>
-
         <section class="dir-section">
             <h3>最近事件</h3>
             <ul id="director-events" class="event-list">
                 <li class="dir-hint">暂无事件</li>
             </ul>
         </section>
-
         <section class="dir-section">
             <h3>时间流速</h3>
             <div class="speed-btns">
@@ -107,7 +96,6 @@
             </div>
             <p class="dir-hint" id="speed-status">当前: --</p>
         </section>
-
         <section class="dir-section">
             <h3>注入事件</h3>
             <select id="inject-type" class="inject-type">
@@ -125,14 +113,12 @@
             <button id="inject-btn" class="inject-btn">注入事件</button>
             <p class="dir-hint" id="inject-status"></p>
         </section>
-
         <section class="dir-section">
             <h3>📋 事件历史</h3>
             <div id="event-history-list" class="event-history-list">
                 <p class="dir-hint">加载中…</p>
             </div>
         </section>
-
         <section class="dir-section">
             <h3>存档</h3>
             <div class="save-btns">
@@ -141,12 +127,11 @@
             </div>
             <p class="dir-hint" id="save-status"></p>
         </section>
-
         <p class="dir-hint" id="director-conn"></p>
     </aside>
 
     <script>
-        // 暗色/亮色主题切换, 偏好存 localStorage
+        // 主题切换 (全屏版)
         (function () {
             var root = document.documentElement;
             var btn = document.getElementById('theme-toggle');
@@ -154,7 +139,6 @@
                 return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
             }
             function syncIcon() {
-                // 显示切换后将进入的主题图标
                 btn.textContent = currentTheme() === 'light' ? '🌙' : '☀️';
             }
             syncIcon();
