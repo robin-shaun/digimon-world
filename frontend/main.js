@@ -1325,14 +1325,16 @@
         let relationData = null;
         let personalityData = null;
         let memoryHealthData = null;
+        let plansData = null;
         try {
-            const [dResp, rResp, aResp, relResp, pResp, mhResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relations/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/personality', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/memory-health', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/plans', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
@@ -1340,6 +1342,7 @@
             if (relResp.ok) relationData = await relResp.json();
             if (pResp.ok) personalityData = await pResp.json();
             if (mhResp.ok) memoryHealthData = await mhResp.json();
+            if (plResp.ok) plansData = await plResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -1496,6 +1499,48 @@
                     }).join('') + '</ul>' +
                     '</div>');
             }
+        }
+
+        // ══════════════════════════════════════════════
+        //  Phase 19: 计划持久化状态面板
+        // ══════════════════════════════════════════════
+        if (plansData) {
+            const active = plansData.active_plan;
+            const history = plansData.history || [];
+            const STATUS_ICONS = { ACTIVE: '▶️', PAUSED: '⏸️', COMPLETED: '✅', ABANDONED: '❌', SUPERSEDED: '🔄' };
+            const STATUS_LABELS = { ACTIVE: '进行中', PAUSED: '暂停', COMPLETED: '完成', ABANDONED: '放弃', SUPERSEDED: '替代' };
+
+            const activeHtml = active
+                ? '<div class="plan-active">' +
+                  '<span class="plan-status-badge">' + (STATUS_ICONS[active.status] || '📍') + ' 当前计划</span>' +
+                  '<p class="plan-text">' + escapeHtml(active.plan_text) + '</p>' +
+                  '<div class="plan-meta">' +
+                  '<span class="plan-imp">重要性: ' + (active.importance || '?') + '/10</span>' +
+                  '<span class="plan-age">创建于 ' + (active.tick_created || '?') + ' tick</span>' +
+                  (active.progress_note ? '<span class="plan-progress">进展: ' + escapeHtml(active.progress_note.substring(0, 60)) + '</span>' : '') +
+                  '</div>' +
+                  '</div>'
+                : '<p class="dir-hint">暂无进行中的计划</p>';
+
+            const historyItems = history.slice(0, 5).map((p) => {
+                const icon = STATUS_ICONS[p.status] || '📋';
+                const label = STATUS_LABELS[p.status] || p.status;
+                return '<li class="plan-history-item">' +
+                    '<span class="plan-h-icon">' + icon + '</span>' +
+                    '<span class="plan-h-text">' + escapeHtml(p.plan_text.substring(0, 50)) + '</span>' +
+                    '<span class="plan-h-status">' + label + '</span>' +
+                    '</li>';
+            }).join('');
+
+            sb.insertAdjacentHTML('beforeend',
+                '<div class="detail-block">' +
+                '<h4>📋 计划记录 <span class="plan-count">' + (plansData.total_plans || 0) + '条</span></h4>' +
+                activeHtml +
+                (historyItems
+                    ? '<h5 style="margin-top:10px;color:var(--text-secondary);font-size:12px;">📜 历史计划</h5>' +
+                      '<ul class="plan-history-list">' + historyItems + '</ul>'
+                    : '') +
+                '</div>');
         }
     }
 

@@ -239,7 +239,7 @@
 |[████████████████████████] 100%  Phase 16 (差序格局 + 情感传播) ✅
 |||[████████████████████████] 100%  Phase 17 (人格深度系统 — 荣格心理学 MBTI 驱动) ✅
 ||||[████████████████████████] 100%  Phase 18 (Agent 自主记忆规划) ✅
-|||||[████████████████████░░░░]  80%  Phase 19 (计划持久化与上下文管理) 🔄
+|||||[████████████████████████] 100%  Phase 19 (计划持久化与上下文管理) ✅
 |||```
 ||
 ||---
@@ -362,6 +362,6 @@
 - [x] Task 2 — 集成 DigimonAgent: plan_next() 后自动 save checkpoint；step() 开始时检测计划丢失→从 checkpoint 恢复；plan 重要性 boost (+2) ✅
 - [x] Task 3 — API 端点: `GET /api/digimon/{name}/plans`（当前计划 + 历史列表）、`GET /api/digimon/{name}/plans/{plan_id}`（计划详情）✅
 - [x] Task 4 — 集成测试: 28 tests PASS（create→resume→progress→complete + expire→abandon）✅
-- [ ] Task 5 — 前端计划状态面板: 显示当前计划进度条 + 历史计划列表（可选，进阶）
+- [x] Task 5 — 前端计划状态面板: 显示当前计划进度条 + 历史计划列表（可选，进阶） ✅
 
 **完成标志**: Agent 重启/记忆压缩后仍能恢复当前计划，计划有完整的 checkpoint→progress→complete 生命周期。
