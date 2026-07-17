@@ -44,7 +44,7 @@ digimon-world/
 │   │   ├── world/           # 世界状态 + 关系 + 经济 + 灾难 + 节日 + 活力
 │   │   ├── llm/             # LLM 客户端
 │   │   └── api/             # FastAPI 接口
-|   └── tests/               # 567 测试
+|   └── tests/               # 779 测试
 └── src/index.js             # Cloudflare Worker (API反代)
 ```
 
@@ -68,7 +68,9 @@ digimon-world/
 || **13** | 多模态 (TTS 配音 + 动画增强) + 生产加固 | ✅ 完成 |
 || **14** | 世界叙事系统 — LLM 驱动故事生成 + 前端叙事面板 | ✅ 完成 |
 || **15** | 导演面板增强 — 注入反馈 + 事件历史 + 模板扩展 | ✅ 完成 |
-|| **16** | 关系深度系统 — 差序格局 + 情感传播 + 合作阈值 | ✅ 完成 |
+|| **17** | MBTI数码兽人格系统 — 四维度人格雷达 + 人格兼容加成 + 演化轨迹 | ✅ 完成 |
+|| **18** | 记忆健康诊断 — API端点 memory-health + 记忆衰退检测 | ✅ 完成 |
+|| **19** | 🌍 世界地图扩展 — 4000×3000 服务器大陆 + 视口滚动 + 面板折叠 | 🚧 进行中 |
 
 详细见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
@@ -80,7 +82,7 @@ digimon-world/
 | 后端 | Python 3.11 + FastAPI + SQLite |
 | AI | Anthropic Claude (Opus 4.8 + Haiku 4.5) via 中转 |
 | 部署 | Cloudflare Workers (前端) + Cloudflare Tunnel (后端) |
-- **测试**: pytest (668 passed)
+- **测试**: pytest (779 passed)
 
 ## 🚀 本地启动
 
@@ -96,7 +98,7 @@ cd backend && source .venv/bin/activate && python -m pytest tests/ -q
 ## 📊 当前状态
 
 - **数码兽**: 30+ 只（亚古兽/加布兽/比丘兽/甲虫兽/巴鲁兽/哥玛兽/巴达兽/迪路兽/小狗兽/艾力兽 + 病毒种/数据种/自由种）
-- **测试**: 668 passed
+- **测试**: 779 passed
 - **部署**: Cloudflare Workers + Tunnel
 - **每日调研**: 08:30 自动跑 arXiv + GitHub + 数码宝贝原作
 
