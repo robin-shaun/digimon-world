@@ -93,6 +93,15 @@ from .seasons import (
     get_season_system,
     reset_season_system,
 )
+from .shared_conventions import (
+    Convention,
+    ConventionDetector,
+    ConventionPool,
+    ConventionPropagation,
+    get_convention_pool,
+    get_convention_propagation,
+    reset_convention_pool,
+)
 from .snapshots import (
     SnapshotManager,
     SnapshotMeta,
@@ -130,6 +139,10 @@ from .world_state import (
 
 __all__ = [
     "AffectPropagationEngine",
+    "Convention",
+    "ConventionDetector",
+    "ConventionPool",
+    "ConventionPropagation",
     "CPM_CHANGE_THRESHOLD",
     "DAYS_PER_FESTIVAL",
     "DAYS_PER_SEASON",
@@ -187,6 +200,8 @@ __all__ = [
     "WorldState",
     "compute_vitality",
     "persistence",
+    "get_convention_pool",
+    "get_convention_propagation",
     "get_dark_gear_system",
     "get_daynight_system",
     "get_director",
@@ -205,6 +220,7 @@ __all__ = [
     "get_tracker",
     "get_weather_system",
     "get_world",
+    "reset_convention_pool",
     "reset_dark_gear_system",
     "reset_daynight_system",
     "reset_director",
