@@ -64,10 +64,10 @@ DIALOGUE_COOLDOWN_MINUTES = 10            # 对话冷却(世界分钟)
 
 # Phase 11: LLM 调用批量化 — 降低每 tick 的 LLM 调用密度
 # 30 只数码兽,每 tick 全调 LLM 不可行
-THINK_ROUND_INTERVAL = 10                 # 反思轮次: 每 10 tick 才收集需要反思的 agent
-PLAN_CACHE_TICKS = 30                     # 计划缓存: 生成后缓存 30 tick 不再重复调用
-DIALOGUE_TRIGGER_PROB = 0.3               # 对话触发概率: 距离<200 + 双方未冷却时,仅 30%
-MOVE_LLM_TICKS = 15                       # 移动决策: 每 15 tick 才调 LLM planner 一次(中间用向量+噪声)
+THINK_ROUND_INTERVAL = 20                 # 反思轮次: 每 20 tick 才收集需要反思的 agent
+PLAN_CACHE_TICKS = 60                     # 计划缓存: 生成后缓存 60 tick 不再重复调用
+DIALOGUE_TRIGGER_PROB = 0.1               # 对话触发概率: 距离<200 + 双方未冷却时,仅 10%
+MOVE_LLM_TICKS = 20                       # 移动决策: 每 20 tick 才调 LLM planner 一次(中间用向量+噪声)
 
 # ---- 显著性阈值(Phase 6) ----
 # 事件分级: trivial(0-2) / routine(3-5) / significant(6-8) / critical(9-10)
@@ -724,10 +724,11 @@ class WorldScheduler:
     async def _step_agent(self, agent: DigimonAgent) -> dict[str, Any]:
         """调用单个 agent.step(),捕获异常不让一只炸了拖死整个 tick。
 
-        Phase 11 优化:
-        - 计划缓存: 30 tick 内从缓存取,不调 LLM planner
-        - 思考轮次: 每 10 tick 才批量触发 reflect
+        Phase 11 优化 + 扩容 30→100:
+        - 计划缓存: 60 tick 内从缓存取,不调 LLM planner
+        - 思考轮次: 每 20 tick 才批量触发 reflect
         - 移动: 每 MOVE_LLM_TICKS 才调 LLM planner,中间用简单向量+噪声
+        - LLM 节流: 每 tick 只让 N=总数/5 只 agent 调 LLM,其余用缓存(随机错开)
         """
         try:
             # Phase 11: 计划缓存 — 缓存未过期则跳过 LLM planner 调用
@@ -748,6 +749,18 @@ class WorldScheduler:
                 # 降频模式: 用已有的 current_plan 做向量移动(不调 LLM)
                 self.skipped_plan_calls += 1
                 return await self._step_with_cached_plan(agent)
+
+            # 扩容优化: LLM 节流 — 每 tick 只让 N=总数/5 只 agent 调 LLM
+            # 用 (agent.name hash + tick 轮次) 确定性错开,保证各 agent 轮流获得 LLM 配额
+            agents = self._world.all()
+            total_agents = len(agents)
+            if total_agents > 5:
+                n_llm_quota = max(1, total_agents // 5)
+                tick_round = self._tick_count // MOVE_LLM_TICKS
+                slot = (hash(agent.name) + tick_round) % total_agents
+                if slot >= n_llm_quota:
+                    self.skipped_plan_calls += 1
+                    return await self._step_with_cached_plan(agent)
 
             # 正常路径: 调 LLM step (包含 plan + act)
             result = await agent.step(self._world.regions, tick_index=self._tick_count)

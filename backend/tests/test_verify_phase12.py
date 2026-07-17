@@ -176,8 +176,8 @@ async def test_events_produced(fake_client):
 
     # 每 tick 至少产生一些事件
     assert len(world.events) >= 60, f"Too few events: {len(world.events)}"
-    # 但也不能爆炸
-    assert len(world.events) < 60 * 100, f"Events exploding: {len(world.events)}"
+    # 但也不能爆炸 (扩容后100 agents: 放宽上限)
+    assert len(world.events) < 60 * 200, f"Events exploding: {len(world.events)}"
 
 
 async def test_attribute_diversity(fake_client):

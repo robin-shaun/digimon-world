@@ -52,21 +52,15 @@ def _setup_known_relations() -> tuple[list[str], RelationshipTracker]:
     names = _ensure_agents()
     tracker = get_tracker()
 
-    # 找到名字对应的 agent
+    # 直接按名字查找 agent (扩容后同物种多个,按名字精确匹配)
     world = get_world()
-    agumon_name = None
-    gabumon_name = None
-    devimon_name = None
-    for a in world.all():
-        if a.species == "agumon":
-            agumon_name = a.name
-        elif a.species == "gabumon":
-            gabumon_name = a.name
-        elif a.species == "devimon":
-            devimon_name = a.name
+    agumon_name = "亚古兽"
+    gabumon_name = "加布兽"
+    devimon_name = "恶魔兽"
 
-    assert agumon_name and gabumon_name and devimon_name, \
-        f"Missing required species: agumon={agumon_name}, gabumon={gabumon_name}, devimon={devimon_name}"
+    assert world.get(agumon_name), f"Missing agent: {agumon_name}"
+    assert world.get(gabumon_name), f"Missing agent: {gabumon_name}"
+    assert world.get(devimon_name), f"Missing agent: {devimon_name}"
 
     # 设置关系: 亚古兽-加布兽 亲密 (INTIMATE)
     tracker._vectors[(agumon_name, gabumon_name)] = RelationshipVector(

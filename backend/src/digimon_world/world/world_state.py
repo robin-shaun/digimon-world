@@ -710,53 +710,116 @@ class WorldState:
 # ---- 进程级单例 ----
 _state: Optional[WorldState] = None
 
-# Phase 11: 数码兽种群数据 (共 30+ 只)
-# Phase 17 更新: 分散到服务器大陆、螺旋山、文件岛
+# Phase 11: 数码兽种群数据 (共 100 只)
+# Phase 17 更新: 分散到服务器大陆、螺旋山、文件岛、无限山
+# Phase 扩容 30→100: 文件岛20 + 服务器大陆50 + 螺旋山20 + 无限山10
 # 分类: 疫苗种(VACCINE) / 数据种(DATA) / 病毒种(VIRUS) / 自由种(FREE)
-# 区域分布: 服务器大陆 15 只, 文件岛 8 只, 螺旋山 5 只, 无限山 2 只
-# 每只初始 latent_desire 随机, 初始位置散开不重叠
+# 每个物种最多出现4次, 每个名字独一无二, 位置不重叠
 _ALL_DIGIMON_SEEDS: tuple[dict, ...] = (
-    # ═══ 文件岛 (8只) — 被选召的孩子的数码兽 ═══
-    {"name": "亚古兽", "species": "agumon", "attribute": "vaccine", "region": "file_island", "pos": (3100, 2700), "plan": "在启程海滩附近闲逛"},
-    {"name": "加布兽", "species": "gabumon", "attribute": "vaccine", "region": "file_island", "pos": (3600, 2650), "plan": "安静地观察周围"},
-    {"name": "比丘兽", "species": "biyomon", "attribute": "vaccine", "region": "file_island", "pos": (3380, 2480), "plan": "从空中巡视"},
-    {"name": "甲虫兽", "species": "tentomon", "attribute": "vaccine", "region": "file_island", "pos": (3250, 2600), "plan": "在迷乱森林里找食物"},
-    {"name": "巴鲁兽", "species": "palmon", "attribute": "vaccine", "region": "file_island", "pos": (3500, 2550), "plan": "晒太阳光合作用"},
-    {"name": "哥玛兽", "species": "gomamon", "attribute": "vaccine", "region": "file_island", "pos": (3050, 2800), "plan": "在启程海滩玩水"},
-    {"name": "巴达兽", "species": "patamon", "attribute": "vaccine", "region": "file_island", "pos": (3300, 2400), "plan": "在空中飞行"},
-    {"name": "迪路兽", "species": "tailmon", "attribute": "vaccine", "region": "file_island", "pos": (3200, 2750), "plan": "在创始村附近巡视"},
-    # ═══ 服务器大陆 — 沙漠地带 (2只) ═══
-    {"name": "艾力兽", "species": "elecmon", "attribute": "data", "region": "server_continent", "pos": (600, 500), "plan": "在沙漠金字塔附近巡逻"},
-    {"name": "独角兽", "species": "tsunomon", "attribute": "free", "region": "server_continent", "pos": (350, 650), "plan": "在绿洲附近晒太阳"},
-    # ═══ 服务器大陆 — 钢铁都市 (2只) ═══
-    {"name": "安杜路兽", "species": "andromon", "attribute": "data", "region": "server_continent", "pos": (1400, 400), "plan": "在中央塔维护系统"},
-    {"name": "守卫兽", "species": "guardromon", "attribute": "data", "region": "server_continent", "pos": (1250, 600), "plan": "在钢铁大桥巡逻警戒"},
-    # ═══ 服务器大陆 — 古代森林 (2只) ═══
-    {"name": "暴龙兽", "species": "greymon", "attribute": "vaccine", "region": "server_continent", "pos": (2200, 450), "plan": "在世界树下守护领地"},
-    {"name": "加鲁鲁兽", "species": "garurumon", "attribute": "vaccine", "region": "server_continent", "pos": (2400, 600), "plan": "在森林中巡视狩猎"},
-    # ═══ 服务器大陆 — 黑暗之城 (2只) ═══
-    {"name": "恶魔兽", "species": "devimon", "attribute": "virus", "region": "server_continent", "pos": (2900, 400), "plan": "在城堡中策划阴谋"},
-    {"name": "奥加兽", "species": "ogremon", "attribute": "virus", "region": "server_continent", "pos": (2750, 600), "plan": "在暗影小巷中巡逻"},
-    # ═══ 服务器大陆 — 龙眠山脉 (1只) ═══
-    {"name": "海龙兽", "species": "seadramon", "attribute": "data", "region": "server_continent", "pos": (700, 1100), "plan": "在龙神湖中游弋"},
-    # ═══ 服务器大陆 — 妖精峡谷 (2只) ═══
-    {"name": "巴多拉兽", "species": "birdramon", "attribute": "vaccine", "region": "server_continent", "pos": (1700, 1100), "plan": "在峡谷上空盘旋巡视"},
-    {"name": "海狮兽", "species": "ikkakumon", "attribute": "vaccine", "region": "server_continent", "pos": (1500, 1300), "plan": "在妖精之泉中嬉戏"},
-    # ═══ 服务器大陆 — 机械工厂 (2只) ═══
-    {"name": "齿轮兽", "species": "hagurumon", "attribute": "data", "region": "server_continent", "pos": (2700, 1050), "plan": "在主锻造炉计算数据"},
-    {"name": "比多兽", "species": "kabuterimon", "attribute": "vaccine", "region": "server_continent", "pos": (2500, 1300), "plan": "在组装大厅巡视"},
-    # ═══ 服务器大陆 — 暗黑海洋 (2只) ═══
-    {"name": "巨鲸兽", "species": "whamon", "attribute": "vaccine", "region": "server_continent", "pos": (1700, 1700), "plan": "在深渊海域游弋"},
-    {"name": "狮子兽", "species": "leomon", "attribute": "free", "region": "server_continent", "pos": (800, 1850), "plan": "在黑暗漩涡附近守卫正义"},
-    # ═══ 螺旋山 (5只) — 黑暗势力/高级数码兽 ═══
-    {"name": "机械暴龙兽", "species": "metal_greymon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3462, 950), "plan": "在小丑皇宫外围巡逻"},
-    {"name": "兽人加鲁鲁", "species": "were_garurumon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3400, 1050), "plan": "在钢铁海龙水域侦察"},
-    {"name": "伽楼达兽", "species": "garudamon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3787, 900), "plan": "在木偶兽森林上空巡视"},
-    {"name": "仙人掌兽", "species": "togemon", "attribute": "data", "region": "spiral_mountain", "pos": (3850, 1050), "plan": "在玩具坟场寻找水源"},
-    {"name": "超比多兽", "species": "atlur_kabuterimon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3787, 1350), "plan": "在机械邪龙都市侦察"},
-    # ═══ 无限山 (2只) — 守护者 ═══
-    {"name": "天使兽", "species": "angemon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (500, 150), "plan": "守护创世者祭坛"},
-    {"name": "小狗兽", "species": "plotmon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (250, 100), "plan": "在无限山修炼"},
+    # ═══ 文件岛 (20只) — 疫苗种为主,核心8只+12只进化体/幼体 ═══
+    {"name": "亚古兽", "species": "agumon", "attribute": "vaccine", "region": "file_island", "pos": (3569, 2429), "plan": "在启程海滩附近闲逛觅食"},
+    {"name": "加布兽", "species": "gabumon", "attribute": "vaccine", "region": "file_island", "pos": (2940, 2596), "plan": "安静地观察周围的动静"},
+    {"name": "比丘兽", "species": "biyomon", "attribute": "vaccine", "region": "file_island", "pos": (3165, 2543), "plan": "在天空中巡视文件岛"},
+    {"name": "甲虫兽", "species": "tentomon", "attribute": "vaccine", "region": "file_island", "pos": (3057, 2419), "plan": "在迷乱森林里寻找食物"},
+    {"name": "巴鲁兽", "species": "palmon", "attribute": "vaccine", "region": "file_island", "pos": (3607, 2873), "plan": "在齿轮草原晒太阳光合作用"},
+    {"name": "哥玛兽", "species": "gomamon", "attribute": "vaccine", "region": "file_island", "pos": (3004, 2747), "plan": "在启程海滩玩水嬉戏"},
+    {"name": "巴达兽", "species": "patamon", "attribute": "vaccine", "region": "file_island", "pos": (2947, 2345), "plan": "在空中飞行俯瞰全岛"},
+    {"name": "迪路兽", "species": "tailmon", "attribute": "vaccine", "region": "file_island", "pos": (3010, 2538), "plan": "在无限山上巡视警戒"},
+    {"name": "暴龙亚古", "species": "agumon", "attribute": "vaccine", "region": "file_island", "pos": (3153, 2832), "plan": "在古代恐龙境散步巡查"},
+    {"name": "森林加布", "species": "gabumon", "attribute": "vaccine", "region": "file_island", "pos": (3531, 2342), "plan": "在迷乱森林深处巡逻"},
+    {"name": "冰原亚古", "species": "agumon", "attribute": "vaccine", "region": "file_island", "pos": (3489, 2518), "plan": "在冰冻地带抵御寒冷"},
+    {"name": "山地加布", "species": "gabumon", "attribute": "vaccine", "region": "file_island", "pos": (3648, 2873), "plan": "在密哈拉西山瞭望"},
+    {"name": "小狗兽", "species": "plotmon", "attribute": "vaccine", "region": "file_island", "pos": (3344, 2540), "plan": "在玩具城附近嬉戏玩耍"},
+    {"name": "荒野暴龙", "species": "greymon", "attribute": "vaccine", "region": "file_island", "pos": (3374, 2599), "plan": "在古代恐龙境守护领地"},
+    {"name": "雪狼加鲁鲁", "species": "garurumon", "attribute": "vaccine", "region": "file_island", "pos": (3743, 2321), "plan": "在冰冻地带狩猎"},
+    {"name": "烈焰巴多拉", "species": "birdramon", "attribute": "vaccine", "region": "file_island", "pos": (3692, 2478), "plan": "从空中巡逻齿轮草原"},
+    {"name": "荆棘仙人掌", "species": "togemon", "attribute": "data", "region": "file_island", "pos": (3629, 2747), "plan": "在无人商店附近寻找水源"},
+    {"name": "铁甲比多", "species": "kabuterimon", "attribute": "vaccine", "region": "file_island", "pos": (3263, 2599), "plan": "在迷乱森林上空飞行"},
+    {"name": "圣翼天使", "species": "angemon", "attribute": "vaccine", "region": "file_island", "pos": (3074, 2535), "plan": "在无限山顶守护进化神殿"},
+    {"name": "雪域海狮", "species": "ikkakumon", "attribute": "vaccine", "region": "file_island", "pos": (3696, 2659), "plan": "在龙眼湖中游泳凉快"},
+    # ═══ 服务器大陆 (50只) ═══
+    {"name": "沙地亚古", "species": "agumon", "attribute": "vaccine", "region": "server_continent", "pos": (319, 309), "plan": "在沙漠中寻找绿洲水源"},
+    {"name": "炽热艾力", "species": "elecmon", "attribute": "data", "region": "server_continent", "pos": (604, 314), "plan": "在沙漠金字塔附近巡逻"},
+    {"name": "沙漠独角", "species": "tsunomon", "attribute": "free", "region": "server_continent", "pos": (582, 567), "plan": "在绿洲附近躲避烈日"},
+    {"name": "烈火暴龙", "species": "greymon", "attribute": "vaccine", "region": "server_continent", "pos": (833, 485), "plan": "在沙漠中巡逻寻找食物"},
+    {"name": "沙暴比丘", "species": "biyomon", "attribute": "vaccine", "region": "server_continent", "pos": (259, 685), "plan": "在沙漠上空寻找绿洲"},
+    {"name": "沙漠狮子", "species": "leomon", "attribute": "free", "region": "server_continent", "pos": (764, 342), "plan": "在沙漠中守护金字塔"},
+    {"name": "安杜路兽", "species": "andromon", "attribute": "data", "region": "server_continent", "pos": (1402, 295), "plan": "在中央塔维护系统运行"},
+    {"name": "守卫兽", "species": "guardromon", "attribute": "data", "region": "server_continent", "pos": (1580, 515), "plan": "在钢铁大桥巡逻警戒"},
+    {"name": "钢铁齿轮", "species": "hagurumon", "attribute": "data", "region": "server_continent", "pos": (1658, 848), "plan": "在城市管道中穿梭巡检"},
+    {"name": "重装守卫", "species": "guardromon", "attribute": "data", "region": "server_continent", "pos": (1385, 806), "plan": "在都市外围巡逻"},
+    {"name": "机械安杜", "species": "andromon", "attribute": "data", "region": "server_continent", "pos": (1211, 286), "plan": "在钢铁大桥检修设备"},
+    {"name": "精密齿轮", "species": "hagurumon", "attribute": "data", "region": "server_continent", "pos": (1061, 448), "plan": "在中央塔计算数据"},
+    {"name": "森林暴龙", "species": "greymon", "attribute": "vaccine", "region": "server_continent", "pos": (2111, 296), "plan": "在世界树下守护领地"},
+    {"name": "丛林加鲁鲁", "species": "garurumon", "attribute": "vaccine", "region": "server_continent", "pos": (2053, 318), "plan": "在古代森林中巡视狩猎"},
+    {"name": "密林比多", "species": "kabuterimon", "attribute": "vaccine", "region": "server_continent", "pos": (2204, 499), "plan": "在巨树间飞行觅食"},
+    {"name": "翠绿巴鲁", "species": "palmon", "attribute": "vaccine", "region": "server_continent", "pos": (2279, 865), "plan": "在世界树下光合作用"},
+    {"name": "森之妖精", "species": "tailmon", "attribute": "vaccine", "region": "server_continent", "pos": (2188, 381), "plan": "在妖精之泉附近守护"},
+    {"name": "古木仙人掌", "species": "togemon", "attribute": "data", "region": "server_continent", "pos": (2194, 578), "plan": "在密林中巡逻警戒"},
+    {"name": "恶魔兽", "species": "devimon", "attribute": "virus", "region": "server_continent", "pos": (2829, 488), "plan": "在城堡中策划黑暗阴谋"},
+    {"name": "奥加兽", "species": "ogremon", "attribute": "virus", "region": "server_continent", "pos": (2688, 838), "plan": "在暗影小巷中巡逻恐吓"},
+    {"name": "暗影恶魔", "species": "devimon", "attribute": "virus", "region": "server_continent", "pos": (2790, 761), "plan": "在黑暗之城中潜伏等待"},
+    {"name": "狂战士奥加", "species": "ogremon", "attribute": "virus", "region": "server_continent", "pos": (2865, 382), "plan": "在城堡外围巡逻警戒"},
+    {"name": "漆黑恶魔", "species": "devimon", "attribute": "virus", "region": "server_continent", "pos": (3088, 603), "plan": "在城堡深处研究黑魔法"},
+    {"name": "暴怒奥加", "species": "ogremon", "attribute": "virus", "region": "server_continent", "pos": (2891, 870), "plan": "在暗影小巷中埋伏猎物"},
+    {"name": "罪痕恶魔", "species": "devimon", "attribute": "virus", "region": "server_continent", "pos": (3185, 439), "plan": "在城墙上巡视领地"},
+    {"name": "暗影狮子", "species": "leomon", "attribute": "free", "region": "server_continent", "pos": (2947, 272), "plan": "在废墟中潜伏收集情报"},
+    {"name": "海龙兽", "species": "seadramon", "attribute": "data", "region": "server_continent", "pos": (449, 947), "plan": "在龙神湖中游弋觅食"},
+    {"name": "龙角幼兽", "species": "tsunomon", "attribute": "free", "region": "server_continent", "pos": (1039, 1238), "plan": "在龙神峰附近修炼"},
+    {"name": "熔岩海龙", "species": "seadramon", "attribute": "data", "region": "server_continent", "pos": (625, 1189), "plan": "在熔岩河中游弋"},
+    {"name": "山脉加鲁鲁", "species": "garurumon", "attribute": "vaccine", "region": "server_continent", "pos": (282, 1131), "plan": "在山脊上巡视狩猎"},
+    {"name": "龙脉巨鲸", "species": "whamon", "attribute": "vaccine", "region": "server_continent", "pos": (1150, 1237), "plan": "在龙神湖深处沉睡"},
+    {"name": "妖精巴多拉", "species": "birdramon", "attribute": "vaccine", "region": "server_continent", "pos": (1432, 1426), "plan": "在峡谷上空盘旋巡视"},
+    {"name": "彩虹海狮", "species": "ikkakumon", "attribute": "vaccine", "region": "server_continent", "pos": (1620, 1384), "plan": "在妖精之泉中嬉戏"},
+    {"name": "水晶比丘", "species": "biyomon", "attribute": "vaccine", "region": "server_continent", "pos": (1361, 1186), "plan": "在水晶洞穴附近飞行"},
+    {"name": "彩虹巴鲁", "species": "palmon", "attribute": "vaccine", "region": "server_continent", "pos": (1357, 1167), "plan": "在彩虹桥附近开花绽放"},
+    {"name": "妖精甲虫", "species": "tentomon", "attribute": "vaccine", "region": "server_continent", "pos": (1977, 1466), "plan": "在花丛中采集花粉"},
+    {"name": "峡谷哥玛", "species": "gomamon", "attribute": "vaccine", "region": "server_continent", "pos": (1484, 1353), "plan": "在发光溪流中游泳"},
+    {"name": "晶翼巴达", "species": "patamon", "attribute": "vaccine", "region": "server_continent", "pos": (2134, 1323), "plan": "在水晶洞穴中探索"},
+    {"name": "花仙迪路", "species": "tailmon", "attribute": "vaccine", "region": "server_continent", "pos": (1585, 1139), "plan": "在妖精峡谷中巡视"},
+    {"name": "工厂齿轮", "species": "hagurumon", "attribute": "data", "region": "server_continent", "pos": (2356, 1436), "plan": "在主锻造炉计算数据"},
+    {"name": "组装比多", "species": "kabuterimon", "attribute": "vaccine", "region": "server_continent", "pos": (2720, 1008), "plan": "在组装大厅巡视检查"},
+    {"name": "钢铁安杜", "species": "andromon", "attribute": "data", "region": "server_continent", "pos": (2988, 963), "plan": "在流水线上监控生产"},
+    {"name": "焊接齿轮", "species": "hagurumon", "attribute": "data", "region": "server_continent", "pos": (3096, 1027), "plan": "在机械臂间穿梭维修"},
+    {"name": "机械守卫", "species": "guardromon", "attribute": "data", "region": "server_continent", "pos": (2371, 1078), "plan": "在工厂门口站岗警戒"},
+    {"name": "锻造海龙", "species": "seadramon", "attribute": "data", "region": "server_continent", "pos": (3026, 1347), "plan": "在冷却池中巡逻"},
+    {"name": "深渊巨鲸", "species": "whamon", "attribute": "vaccine", "region": "server_continent", "pos": (2657, 1580), "plan": "在深渊海域巡游守卫"},
+    {"name": "暗海狮子", "species": "leomon", "attribute": "free", "region": "server_continent", "pos": (1791, 1905), "plan": "在黑暗漩涡附近守卫正义"},
+    {"name": "深海海龙", "species": "seadramon", "attribute": "data", "region": "server_continent", "pos": (2655, 1994), "plan": "在暗黑海洋深处游弋"},
+    {"name": "白浪海狮", "species": "ikkakumon", "attribute": "vaccine", "region": "server_continent", "pos": (2382, 1772), "plan": "在海面浮冰上休息"},
+    {"name": "深渊艾力", "species": "elecmon", "attribute": "data", "region": "server_continent", "pos": (2481, 1526), "plan": "在海岸附近巡逻放电"},
+    # ═══ 螺旋山 (20只) — 高级数码兽(完全体/究极体) ═══
+    {"name": "机械暴龙兽", "species": "metal_greymon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3432, 1364), "plan": "在小丑皇宫外围巡逻警戒"},
+    {"name": "兽人加鲁鲁", "species": "were_garurumon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3588, 1471), "plan": "在钢铁海龙水域侦察敌情"},
+    {"name": "伽楼达兽", "species": "garudamon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3663, 929), "plan": "在木偶兽森林上空巡视"},
+    {"name": "超比多兽", "species": "atlur_kabuterimon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3615, 1260), "plan": "在机械邪龙都市侦察情报"},
+    {"name": "武装暴龙", "species": "metal_greymon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3476, 1279), "plan": "在木偶兽森林中搜索玩具兵"},
+    {"name": "暗夜加鲁鲁", "species": "were_garurumon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3318, 1084), "plan": "在暗处监视机械邪龙动向"},
+    {"name": "烈焰伽楼达", "species": "garudamon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3827, 997), "plan": "在小丑皇宫上方侦察"},
+    {"name": "装甲比多", "species": "atlur_kabuterimon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3834, 923), "plan": "在钢铁海龙水域巡逻"},
+    {"name": "螺旋巴鲁", "species": "palmon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3620, 1469), "plan": "在木偶兽森林中悄悄穿行"},
+    {"name": "钢铁加鲁鲁", "species": "garurumon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3834, 1438), "plan": "在机械邪龙都市附近侦察"},
+    {"name": "暗黑巴多拉", "species": "birdramon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3518, 971), "plan": "在螺旋山上空盘旋侦察"},
+    {"name": "毒刺仙人掌", "species": "togemon", "attribute": "data", "region": "spiral_mountain", "pos": (3697, 980), "plan": "在玩具坟场中埋伏"},
+    {"name": "堕天使兽", "species": "angemon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3867, 1358), "plan": "在小丑皇宫深处潜伏"},
+    {"name": "风暴比多", "species": "kabuterimon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3315, 1428), "plan": "在螺旋山风暴中飞行"},
+    {"name": "巨型海狮", "species": "ikkakumon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3646, 1315), "plan": "在钢铁海龙水域巡逻"},
+    {"name": "冥海巨鲸", "species": "whamon", "attribute": "vaccine", "region": "spiral_mountain", "pos": (3334, 929), "plan": "在黑暗水域中巡游"},
+    {"name": "黑暗艾力", "species": "elecmon", "attribute": "data", "region": "spiral_mountain", "pos": (3686, 1129), "plan": "在机械邪龙都市充电"},
+    {"name": "螺旋守卫", "species": "guardromon", "attribute": "data", "region": "spiral_mountain", "pos": (3560, 874), "plan": "在小丑皇宫入口守卫"},
+    {"name": "邪龙安杜", "species": "andromon", "attribute": "data", "region": "spiral_mountain", "pos": (3561, 1395), "plan": "在螺旋山顶维修设备"},
+    {"name": "噩梦幻兽", "species": "ogremon", "attribute": "virus", "region": "spiral_mountain", "pos": (3395, 902), "plan": "在四大天王祭坛巡逻"},
+    # ═══ 无限山 (10只) — 守护者+天使系数码兽 ═══
+    {"name": "圣天使兽", "species": "angemon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (3012, 2005), "plan": "守护创世者祭坛"},
+    {"name": "圣光小狗", "species": "plotmon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (3357, 298), "plan": "在无限山修炼祈祷"},
+    {"name": "神圣巴达", "species": "patamon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (3130, 2196), "plan": "在无限山上空飞翔"},
+    {"name": "天光迪路", "species": "tailmon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (3151, 530), "plan": "在祭坛附近巡逻"},
+    {"name": "守护狮子", "species": "leomon", "attribute": "free", "region": "infinity_mountain", "pos": (540, 2717), "plan": "守护无限山入口"},
+    {"name": "圣翼巴多拉", "species": "birdramon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (1961, 2266), "plan": "在无限山上空盘旋守护"},
+    {"name": "明光比丘", "species": "biyomon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (691, 1100), "plan": "在祭坛附近歌唱"},
+    {"name": "辉光小狗", "species": "plotmon", "attribute": "vaccine", "region": "infinity_mountain", "pos": (2176, 2499), "plan": "在圣山脚下巡逻"},
+    {"name": "神殿艾力", "species": "elecmon", "attribute": "data", "region": "infinity_mountain", "pos": (1748, 882), "plan": "在神殿外围放哨"},
+    {"name": "圣山独角", "species": "tsunomon", "attribute": "free", "region": "infinity_mountain", "pos": (3819, 2223), "plan": "在山脚下安静修炼"},
 )
 
 # 随机欲望池
@@ -791,7 +854,7 @@ def _spawn_from_seed(world: WorldState, seed: dict) -> DigimonAgent:
 def get_world() -> WorldState:
     """获取(或延迟初始化)世界单例。
 
-    Phase 17: 30 只数码兽覆盖服务器大陆(15只)、文件岛(8只)、螺旋山(5只)、无限山(2只)。
+    Phase 扩容 30→100: 文件岛(20只)、服务器大陆(50只)、螺旋山(20只)、无限山(10只)。
     不同属性: 疫苗种/数据种/病毒种/自由种。
     每只初始 latent_desire 随机生成。
     """
