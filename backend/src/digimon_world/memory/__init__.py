@@ -15,6 +15,14 @@ Phase 18: 记忆自主规划
 - MemoryRehearsal: 记忆复述机制
 - MemoryUpdateDetector: 记忆过期检测
 
+Phase 20: 自进化世界模型 (WorldEvolver, arXiv:2606.30639)
+- WorldModel: 主入口类, per-agent 实例
+- EpisodicMemory: 情节记忆 (状态→动作→结果 转换记录)
+- SemanticMemory: 语义记忆 (从情节中提取的启发式规则)
+- SelectiveForesight: 选择性前瞻引擎 (融合情节+规则进行预测)
+- Episode: 单条情节记忆数据结构
+- Rule: 单条语义规则数据结构
+
 详细设计: docs/DESIGN.md 第 3.2 节
 """
 from .memory_stream import MemoryNode, MemoryStream
@@ -28,8 +36,20 @@ from .memory_autonomy import (
     MemoryUpdateDetector,
 )
 
+from .world_model import (
+    Episode,
+    EpisodicMemory,
+    PredictionResult,
+    Rule,
+    SelectiveForesight,
+    SemanticMemory,
+    WorldModel,
+)
+
 __all__ = [
     "EbbinghausCurve",
+    "Episode",
+    "EpisodicMemory",
     "ForgettingEngine",
     "ImportanceAssessor",
     "MemoryAutonomy",
@@ -38,4 +58,9 @@ __all__ = [
     "MemoryRehearsal",
     "MemoryStream",
     "MemoryUpdateDetector",
+    "PredictionResult",
+    "Rule",
+    "SelectiveForesight",
+    "SemanticMemory",
+    "WorldModel",
 ]

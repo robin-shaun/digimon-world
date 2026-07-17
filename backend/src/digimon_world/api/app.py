@@ -603,6 +603,63 @@ def get_memory_health(name: str) -> dict[str, Any]:
     return report
 
 
+@app.get("/api/digimon/{name}/world-model")
+def get_world_model(name: str) -> dict[str, Any]:
+    """Phase 20: 数码兽自演化世界模型快照。
+
+    返回 agent 对世界运作规律的认知：
+    - 情节记忆库摘要（总记录数 + 最近 10 条）
+    - 语义规则库（提取的启发式规则）
+    - 世界模型统计信息（预测历史 + 置信度分布）
+    - 计划评估（对当前计划的预测）
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    wm = getattr(agent, "world_model", None)
+    if wm is None:
+        return {
+            "name": name,
+            "status": "not_initialized",
+            "message": "World model not yet initialized for this digimon.",
+        }
+
+    stats = wm.stats()
+
+    # 最近情节
+    recent = wm.episodic.recent(n=10)
+    recent_episodes = [
+        {
+            "tick": ep.tick_index,
+            "action": ep.action[:50],
+            "outcome_type": ep.outcome.get("type", "?"),
+            "timestamp": ep.timestamp.isoformat(),
+        }
+        for ep in recent
+    ]
+
+    # 语义规则
+    rules_list = [
+        {
+            "condition": r.condition,
+            "conclusion": r.conclusion,
+            "confidence": r.confidence,
+            "source_episodes": r.source_episodes,
+        }
+        for r in wm.semantic.rules
+    ]
+
+    return {
+        "name": name,
+        "status": "active",
+        "stats": stats,
+        "recent_episodes": recent_episodes,
+        "rules": rules_list,
+    }
+
+
 # ---- Phase 4: 观察者/导演接口 ----
 @app.post("/api/director/inject_event")
 def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:

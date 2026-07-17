@@ -25,6 +25,7 @@ from typing import Any, ClassVar, Optional, TYPE_CHECKING
 
 from ..memory.memory_stream import MemoryStream
 from ..memory.memory_autonomy import MemoryAutonomy
+from ..memory.world_model import WorldModel
 
 if TYPE_CHECKING:
     from .planner import Planner
@@ -136,6 +137,7 @@ class DigimonAgent:
     stats: DigimonStats = field(default_factory=DigimonStats)
     memory: MemoryStream = field(default_factory=MemoryStream)
     memory_autonomy: Optional[Any] = None  # Phase 18: set in __post_init__
+    world_model: Optional[WorldModel] = None  # Phase 20: set in __post_init__
     current_plan: Optional[str] = None
     mood: str = "calm"  # calm/excited/tired/scared/curious
     # CPM 情绪演化管道: 连续情绪向量,每次 tick 积累+衰减
@@ -164,9 +166,10 @@ class DigimonAgent:
     battle_probability_bonus: float = 0.0
 
     def __post_init__(self) -> None:
-        """dataclass 初始化后自动调用。Phase 18: 初始化记忆自主规划。Phase 19: 初始化计划持久化引擎引用。"""
+        """dataclass 初始化后自动调用。Phase 18: 初始化记忆自主规划。Phase 19: 初始化计划持久化引擎引用。Phase 20: 初始化世界模型。"""
         self._init_memory_autonomy()
         self._plan_engine = None  # lazy init on first use
+        self.world_model = WorldModel(agent_name=self.name)
 
     def _get_plan_engine(self):
         """获取计划持久化引擎（lazy import 避免循环依赖）。"""
@@ -607,6 +610,35 @@ class DigimonAgent:
             event["fallback"] = True
         return event
 
+    def _capture_world_state(self, tick_index: int = 0) -> dict[str, Any]:
+        """Phase 20: 捕获当前状态快照供世界模型学习。
+
+        Returns:
+            包含 region_id / stage / hp_pct / nearby_agents_count 等字段的 dict。
+        """
+        return {
+            "region_id": self.region_id,
+            "stage": self.stage.value,
+            "time_of_day": self._estimate_time_of_day(tick_index),
+            "weather": "unknown",
+            "hp_pct": round(self.stats.hp / max(1, self.stats.max_hp) * 100, 1),
+            "nearby_agents_count": 0,
+            "mood": self.mood,
+        }
+
+    @staticmethod
+    def _estimate_time_of_day(tick_index: int) -> str:
+        """从 tick 序号估算一天中的时段（48 tick = 1 天）。"""
+        hour = (tick_index % 48) / 2  # 0-23.5
+        if 6 <= hour < 12:
+            return "morning"
+        elif 12 <= hour < 18:
+            return "afternoon"
+        elif 18 <= hour < 22:
+            return "evening"
+        else:
+            return "night"
+
     async def step(
         self,
         regions: dict[str, "Region"] | None = None,
@@ -646,10 +678,20 @@ class DigimonAgent:
         await self.reflect_if_needed()
         # 2. 重新生成计划
         await self.plan_next()
+        # 2.5. Phase 20: 捕获行动前状态供世界模型学习
+        pre_state = self._capture_world_state(tick_index)
         # 3. 执行并落事件到自身记忆
         event = self.act(regions)
         # 把事件写回记忆流 + CPM 情绪评估
         self.observe(event, tick_index=tick_index)
+        # 3.5. Phase 20: 记录情节到世界模型
+        if self.world_model is not None:
+            self.world_model.observe(
+                pre_state,
+                self.current_plan or "idle",
+                event,
+                tick_index,
+            )
         # 4. 从 mood_state 更新 mood 标签
         self.mood = self._derive_mood_label()
         return event

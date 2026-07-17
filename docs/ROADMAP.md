@@ -238,9 +238,10 @@
 |[████████████████████████] 100%  Phase 15 (导演面板增强) ✅
 |[████████████████████████] 100%  Phase 16 (差序格局 + 情感传播) ✅
 |||[████████████████████████] 100%  Phase 17 (人格深度系统 — 荣格心理学 MBTI 驱动) ✅
-||||[████████████████████████] 100%  Phase 18 (Agent 自主记忆规划) ✅
-|||||[████████████████████████] 100%  Phase 19 (计划持久化与上下文管理) ✅
-|||```
+|||||[████████████████████████] 100%  Phase 18 (Agent 自主记忆规划) ✅
+||||||[████████████████████████] 100%  Phase 19 (计划持久化与上下文管理) ✅
+|||||||[████████░░░░░░░░░░░░░░]  60%  Phase 20 (自演化世界模型) 🚧
+||||```
 ||
 ||---
 ||
@@ -365,3 +366,19 @@
 - [x] Task 5 — 前端计划状态面板: 显示当前计划进度条 + 历史计划列表（可选，进阶） ✅
 
 **完成标志**: Agent 重启/记忆压缩后仍能恢复当前计划，计划有完整的 checkpoint→progress→complete 生命周期。
+
+---
+
+## Phase 20: 自演化世界模型 — WorldEvolver 框架 (60%)
+
+**目标**: 数码兽建立自己对世界的认知模型。受 WorldEvolver (arXiv:2606.30639) 启发，通过 Episodic Memory（检索真实转移）、Semantic Memory（提取启发式规则）、Selective Foresight（过滤低置信预测）三个模块实现世界模型自演化。
+
+**论文依据**: arXiv:2606.30639 "Self-Evolving World Models for LLM Agent Planning"
+
+- [x] Task 1 — `world_model.py` 核心模块: WorldModel + EpisodicMemory + SemanticMemory + SelectiveForesight ✅ (38 tests)
+- [x] Task 2 — 集成 DigimonAgent: step() 中捕获 pre_state + 记录情节到世界模型 ✅
+- [x] Task 3 — API 端点: `GET /api/digimon/{name}/world-model`（世界观快照 + 规则库）✅
+- [ ] Task 4 — 前端世界模型面板: 展示 agent 学到的规则 + 预测置信度
+- [ ] Task 5 — 集成测试 + 端到端验证
+
+**完成标志**: 数码兽能基于历史经验预测行动结果，规则库随经历自然演化。
