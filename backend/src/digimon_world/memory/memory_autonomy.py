@@ -22,10 +22,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, TYPE_CHECKING
 
-from ..memory.memory_stream import MemoryNode, MemoryStream
+from ..memory.memory_stream import MemoryNode
 
 if TYPE_CHECKING:
-    from ..llm.client import ChatMessage
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -365,6 +365,8 @@ class ForgettingEngine:
             "strong_count": stats["strong"],
             "weak_count": stats["weak"],
             "stale_count": stale_count,
+            "strong_threshold": 0.7,
+            "weak_threshold": 0.3,
             "forgetting_half_life_seconds": self.curve.half_life_seconds(),
             "top_weak": [
                 {

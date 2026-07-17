@@ -25,7 +25,6 @@ from digimon_world.memory.memory_autonomy import (
     MemoryHealth,
     MemoryRehearsal,
     MemoryUpdateDetector,
-    REHEARSAL_STRENGTH_THRESHOLD,
 )
 from digimon_world.memory.memory_stream import MemoryNode
 

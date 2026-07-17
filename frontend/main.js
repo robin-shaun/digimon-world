@@ -1324,19 +1324,22 @@
         let achievements = [];
         let relationData = null;
         let personalityData = null;
+        let memoryHealthData = null;
         try {
-            const [dResp, rResp, aResp, relResp, pResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp, mhResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relations/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/personality', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/memory-health', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
             if (aResp.ok) achievements = (await aResp.json()).achievements || [];
             if (relResp.ok) relationData = await relResp.json();
             if (pResp.ok) personalityData = await pResp.json();
+            if (mhResp.ok) memoryHealthData = await mhResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -1442,11 +1445,240 @@
             const prCanvas = sb.querySelector('.personality-radar-canvas');
             if (prCanvas) drawPersonalityRadar(prCanvas, personalityData);
         }
+
+        // Phase 18: 记忆健康面板
+        if (memoryHealthData && memoryHealthData.status !== 'not_initialized') {
+            const total = memoryHealthData.total_memories || 0;
+            const strong = memoryHealthData.strong_count || 0;
+            const weak = memoryHealthData.weak_count || 0;
+            const stale = memoryHealthData.stale_count || 0;
+            const hlH = memoryHealthData.forgetting_half_life_hours || 0;
+            const topWeak = memoryHealthData.top_weak || [];
+            const rehearsal = memoryHealthData.rehearsal_history || [];
+
+            sb.insertAdjacentHTML('beforeend',
+                '<div class="detail-block">' +
+                '<h4>🧠 记忆健康</h4>' +
+                '<div class="memory-health-stats">' +
+                '<span class="mh-stat mh-total">总计: ' + total + '</span>' +
+                '<span class="mh-stat mh-strong">强: ' + strong + '</span>' +
+                '<span class="mh-stat mh-weak">弱: ' + weak + '</span>' +
+                '<span class="mh-stat mh-stale">过期: ' + stale + '</span>' +
+                '<span class="mh-stat mh-halflife">半衰: ' + hlH.toFixed(1) + 'h</span>' +
+                '</div>' +
+                '<canvas class="memory-health-canvas" width="300" height="180"></canvas>' +
+                '</div>');
+
+            const mhCanvas = sb.querySelector('.memory-health-canvas');
+            if (mhCanvas) drawMemoryHealth(mhCanvas, memoryHealthData);
+
+            // 弱记忆列表
+            if (topWeak.length > 0) {
+                sb.insertAdjacentHTML('beforeend',
+                    '<div class="detail-block">' +
+                    '<h4>⚠️ 弱记忆 Top ' + Math.min(topWeak.length, 5) + '</h4>' +
+                    '<ul class="mem-list">' + topWeak.slice(0, 5).map((m) => {
+                        return '<li><span class="mem-imp weak">' + (m.strength != null ? m.strength.toFixed(2) : '?') + '</span>' +
+                            escapeHtml(m.description || '').substring(0, 50) + '</li>';
+                    }).join('') + '</ul>' +
+                    '</div>');
+            }
+
+            // 复述历史
+            if (rehearsal.length > 0) {
+                sb.insertAdjacentHTML('beforeend',
+                    '<div class="detail-block">' +
+                    '<h4>🔄 复述历史</h4>' +
+                    '<ul class="mem-list">' + rehearsal.slice(0, 3).map((r) => {
+                        const desc = (r.description || '').substring(0, 40);
+                        return '<li><span class="mem-imp">' + r.rehearsal_count + '×</span>' +
+                            escapeHtml(desc) + '</li>';
+                    }).join('') + '</ul>' +
+                    '</div>');
+            }
+        }
     }
 
     function hideSidebar() {
         const sb = document.getElementById('sidebar');
         if (sb) sb.classList.remove('open');
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 18: 记忆健康 Ebbinghaus 遗忘曲线
+    // ══════════════════════════════════════════════
+
+    /**
+     * 在 Canvas 上绘制 Ebbinghaus 遗忘曲线可视化。
+     * 包含: 记忆强度分布条形图 + 遗忘曲线预测。
+     */
+    function drawMemoryHealth(canvas, data) {
+        const c = canvas.getContext('2d');
+        const w = canvas.width;   // 300
+        const h = canvas.height;  // 180
+        const pad = { top: 12, right: 16, bottom: 28, left: 40 };
+        const pw = w - pad.left - pad.right;
+        const ph = h - pad.top - pad.bottom;
+
+        // 暗色背景
+        c.fillStyle = 'rgba(10, 14, 39, 0.6)';
+        c.fillRect(0, 0, w, h);
+
+        const total = data.total_memories || 1;
+        const strong = data.strong_count || 0;
+        const weak = data.weak_count || 0;
+        const stale = data.stale_count || 0;
+        const hlSec = data.forgetting_half_life_seconds || data.forgetting_half_life_hours * 3600 || 3600;
+
+        // ── 左侧: 堆叠条形图 (strong/weak/stale) ──
+        const barX = pad.left;
+        const barW = pw * 0.35;
+        const barH = ph * 0.5;
+        const barY = pad.top + ph * 0.15;
+
+        // 分段
+        const segs = [
+            { count: strong, label: '强', color: '#00d4aa' },
+            { count: weak, label: '弱', color: '#ffb347' },
+            { count: stale, label: '过期', color: '#ff6b6b' },
+        ];
+
+        let segX = barX;
+        for (const seg of segs) {
+            const segW = total > 0 ? (seg.count / total) * barW : 0;
+            if (segW > 1) {
+                const grad = c.createLinearGradient(segX, barY, segX + segW, barY);
+                grad.addColorStop(0, seg.color);
+                grad.addColorStop(1, seg.color + '88');
+                c.fillStyle = grad;
+                c.fillRect(segX, barY, segW, barH);
+
+                // 标签
+                if (segW > 20) {
+                    c.fillStyle = '#fff';
+                    c.font = '9px "SF Mono", Consolas, monospace';
+                    c.textAlign = 'center';
+                    c.fillText(seg.count, segX + segW / 2, barY + barH / 2 + 3);
+                }
+            }
+            segX += segW;
+        }
+
+        // 条形图标签
+        c.fillStyle = '#888';
+        c.font = '9px "SF Mono", Consolas, monospace';
+        c.textAlign = 'center';
+        c.fillText('记忆强度分布', barX + barW / 2, barY - 8);
+
+        // ── 右侧: Ebbinghaus 遗忘曲线 R(t)=e^(-t/S) ──
+        const curveX = pad.left + pw * 0.48;
+        const curveW = pw * 0.52;
+        const curveH = ph;
+        const curveY = pad.top;
+
+        // Y轴 (保留率 0-100%)
+        c.strokeStyle = '#444';
+        c.lineWidth = 0.5;
+        for (let pct = 0; pct <= 100; pct += 20) {
+            const y = curveY + curveH - (pct / 100) * curveH;
+            c.beginPath();
+            c.moveTo(curveX, y);
+            c.lineTo(curveX + curveW, y);
+            c.stroke();
+
+            c.fillStyle = '#666';
+            c.font = '8px "SF Mono", Consolas, monospace';
+            c.textAlign = 'right';
+            c.fillText(pct + '%', curveX - 5, y + 3);
+        }
+
+        // X轴 (时间, 0 → 2×半衰期)
+        c.strokeStyle = '#444';
+        c.beginPath();
+        c.moveTo(curveX, curveY + curveH);
+        c.lineTo(curveX + curveW, curveY + curveH);
+        c.stroke();
+
+        const maxT = hlSec * 2;  // 显示到 2× 半衰期
+        const tSteps = 5;
+        for (let i = 0; i <= tSteps; i++) {
+            const t = (maxT / tSteps) * i;
+            const x = curveX + (i / tSteps) * curveW;
+            const label = t < 3600 ? (t / 60).toFixed(0) + 'min' : (t / 3600).toFixed(1) + 'h';
+
+            c.fillStyle = '#666';
+            c.font = '8px "SF Mono", Consolas, monospace';
+            c.textAlign = 'center';
+            c.fillText(label, x, curveY + curveH + 14);
+        }
+
+        // 绘制遗忘曲线
+        c.strokeStyle = '#ff6b6b';
+        c.lineWidth = 2;
+        c.shadowColor = '#ff6b6b';
+        c.shadowBlur = 6;
+        c.beginPath();
+        let firstPoint = true;
+        const resolution = 80;
+        for (let i = 0; i <= resolution; i++) {
+            const t = (maxT / resolution) * i;
+            const retention = Math.max(0, Math.exp(-t / hlSec));
+            const x = curveX + (t / maxT) * curveW;
+            const y = curveY + curveH - retention * curveH;
+
+            if (firstPoint) {
+                c.moveTo(x, y);
+                firstPoint = false;
+            } else {
+                c.lineTo(x, y);
+            }
+        }
+        c.stroke();
+        c.shadowBlur = 0;
+
+        // 半衰期标记线
+        const hlRetention = Math.exp(-hlSec / hlSec);  // = 1/e ≈ 0.368
+        const hlX = curveX + 0.5 * curveW;
+        const hlY = curveY + curveH - hlRetention * curveH;
+        c.strokeStyle = '#ffb347';
+        c.lineWidth = 1;
+        c.setLineDash([3, 3]);
+        c.beginPath();
+        c.moveTo(curveX, hlY);
+        c.lineTo(curveX + curveW, hlY);
+        c.stroke();
+        c.setLineDash([]);
+
+        // 半衰期标签
+        c.fillStyle = '#ffb347';
+        c.font = 'bold 9px "SF Mono", Consolas, monospace';
+        c.textAlign = 'left';
+        const hlLabel = hlSec < 3600 ? (hlSec / 60).toFixed(0) + 'min 半衰期' : (hlSec / 3600).toFixed(1) + 'h 半衰期';
+        c.fillText(hlLabel, curveX + 3, hlY - 4);
+
+        // 曲线标签
+        c.fillStyle = '#ff6b6b';
+        c.font = '9px "SF Mono", Consolas, monospace';
+        c.textAlign = 'right';
+        c.fillText('R(t)=e^(-t/S)', curveX + curveW, curveY + 12);
+
+        // 图例色块
+        const legendY = barY + barH + 16;
+        const legendItems = [
+            { color: '#00d4aa', label: '强(S>' + (data.strong_threshold || 0.5).toFixed(1) + ')' },
+            { color: '#ffb347', label: '弱(S<' + (data.weak_threshold || 0.3).toFixed(1) + ')' },
+            { color: '#ff6b6b', label: '过期(stale)' },
+        ];
+        let lx = barX;
+        for (const item of legendItems) {
+            c.fillStyle = item.color;
+            c.fillRect(lx, legendY, 8, 8);
+            c.fillStyle = '#888';
+            c.font = '8px "SF Mono", Consolas, monospace';
+            c.textAlign = 'left';
+            c.fillText(item.label, lx + 11, legendY + 8);
+            lx += c.measureText(item.label).width + 22;
+        }
     }
 
     // ══════════════════════════════════════════════
