@@ -386,16 +386,32 @@
 
 ---
 
-## Phase 21: Agent 内省聚合仪表板 🔄
+## Phase 21: Agent 内省聚合仪表板 ✅ (100%)
 
 **目标**: Phase 18（记忆自主）、19（计划持久化）、20（世界模型）三个系统各自独立运行，缺少统一的健康诊断视图。Phase 21 构建 `AgentInsightEngine`，聚合三大系统数据生成每个 agent 的内省报告——记忆健康评分、计划成功率、习得规则概览——一站式 Agent 自我认知仪表板。
 
 **论文依据**: arXiv:2607.00233 "From Signals to Structure: How Memory Architecture Drives Language Emergence in LLM Agents" — 记忆架构决定了 agent 能否将交互历史转化为稳定惯例。
 
-- [ ] Task 1 — `agent_insights.py` 核心模块: AgentInsightEngine 聚合 memory_autonomy + plan_persistence + world_model 数据，生成统一内省报告
-- [ ] Task 2 — API 端点: `GET /api/digimon/{name}/insights` 返回内省报告（记忆健康评分 + 计划成功率 + 习得规则摘要 + 综合评分）
-- [ ] Task 3 — 前端内省面板: 在 digimon 详情侧栏新增「内省」tab，展示综合评分条 + 三维雷达图（记忆/计划/世界观）+ 各维度明细
-- [ ] Task 4 — 集成测试: 测试 AgentInsightEngine 数据聚合正确性 + API 端点 + digimon 数据不足时的降级处理
-- [ ] Task 5 — 端到端验证: verify_phase21.py 脚本（至少 5 项验证：数据聚合/API 响应/降级/前端渲染/多 agent 对比）
+- [x] Task 1 — `agent_insights.py` 核心模块: AgentInsightEngine 聚合 memory_autonomy + plan_persistence + world_model 数据，生成统一内省报告 ✅
+- [x] Task 2 — API 端点: `GET /api/digimon/{name}/insights` 返回内省报告（记忆健康评分 + 计划成功率 + 习得规则摘要 + 综合评分）✅
+- [x] Task 3 — 前端内省面板: 在 digimon 详情侧栏新增「内省」tab，展示综合评分环 + 三维雷达图（记忆/计划/世界观）+ 各维度明细 ✅
+- [x] Task 4 — 集成测试: 21 tests PASS ✅
+- [x] Task 5 — 端到端验证: verify_phase21.py ✅
 
-**完成标志**: 每只数码兽有一个统一的「内省仪表板」，一眼看清其记忆健康度、计划执行力和世界观成熟度。
+**完成标志**: 每只数码兽有一个统一的「内省仪表板」，一眼看清其记忆健康度、计划执行力和世界观成熟度。 ✅
+
+---
+
+## Phase 22: 共享记忆惯例与文化涌现 🔄
+
+**目标**: 当多个 agent 通过持久化记忆反复交互时，自然发展出共享符号系统和文化惯例。受 arXiv:2607.00233 启发——记忆架构驱动语言涌现，persistent private notebook 的 agent 达到了最高协调率 (0.867)。Phase 18 的 Ebbinghaus 遗忘 + 复述机制已为个体记忆打下基底，Phase 22 向上一层：**群体记忆**。
+
+**论文依据**: arXiv:2607.00233 "From Signals to Structure: How Memory Architecture Drives Language Emergence in LLM Agents"
+
+- [ ] Task 1 — `shared_conventions.py` 核心模块: ConventionDetector（检测 2+ agent 重复使用的术语/行为模式）+ ConventionPool（全局共享惯例池，每个惯例有 adoption_count + last_used + decay 曲线）+ ConventionPropagation（按社交网络传播惯例）
+- [ ] Task 2 — API 端点: `GET /api/conventions`（世界共享惯例列表）、`GET /api/conventions/{id}`（惯例详情 + 采用 agent 列表）、`GET /api/digimon/{name}/conventions`（某 agent 的惯例快照）
+- [ ] Task 3 — 前端文化面板: 新增「文化」标签页，展示当前世界共享惯例词云/列表、惯例传播图（force-directed graph）、agent 间共享术语
+- [ ] Task 4 — 集成测试: ConventionDetector 检测正确性 + 传播衰减 + 去重 + 多 agent 同步（≥20 条用例）
+- [ ] Task 5 — 端到端验证: verify_phase22.py 脚本（100 tick 运行，验证惯例涌现、传播、遗忘生命周期）
+
+**完成标志**: 数码兽能自发形成共享术语和行为惯例，世界中有「文化」——惯例有自己的生命周期（涌现→传播→遗忘）。
