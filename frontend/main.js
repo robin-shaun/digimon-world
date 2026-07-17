@@ -1326,8 +1326,9 @@
         let personalityData = null;
         let memoryHealthData = null;
         let plansData = null;
+        let worldModelData = null;
         try {
-            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
@@ -1335,6 +1336,7 @@
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/personality', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/memory-health', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/plans', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/world-model', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
@@ -1343,6 +1345,7 @@
             if (pResp.ok) personalityData = await pResp.json();
             if (mhResp.ok) memoryHealthData = await mhResp.json();
             if (plResp.ok) plansData = await plResp.json();
+            if (wmResp.ok) worldModelData = await wmResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -1542,6 +1545,13 @@
                     : '') +
                 '</div>');
         }
+
+        // ══════════════════════════════════════════════
+        //  Phase 20: 自演化世界模型面板
+        // ══════════════════════════════════════════════
+        if (worldModelData) {
+            renderWorldModel(sb, worldModelData);
+        }
     }
 
     function hideSidebar() {
@@ -1724,6 +1734,72 @@
             c.fillText(item.label, lx + 11, legendY + 8);
             lx += c.measureText(item.label).width + 22;
         }
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 20: 自演化世界模型面板渲染
+    // ══════════════════════════════════════════════
+
+    /**
+     * 渲染世界模型面板到侧栏。
+     * 展示: 情节记忆摘要 + 语义规则库 + 预测统计信息。
+     */
+    function renderWorldModel(sb, data) {
+        if (!data || data.status === 'not_initialized') return;
+
+        const stats = data.stats || {};
+        const episodes = data.recent_episodes || [];
+        const rules = data.rules || [];
+        const totalEpisodes = stats.total_episodes || 0;
+        const totalRules = stats.total_rules || 0;
+        const avgConf = (stats.avg_confidence || 0);
+
+        // ─── 统计摘要 ───
+        const confPct = (avgConf * 100).toFixed(0);
+        const confColor = avgConf >= 0.6 ? '#00d4aa' : (avgConf >= 0.4 ? '#ffb347' : '#ff6b6b');
+
+        let html = '<div class="detail-block">' +
+            '<h4>🌍 世界模型 <span class="plan-count">Phase 20</span></h4>' +
+            '<div class="memory-health-stats">' +
+            '<span class="mh-stat mh-total">情节: ' + totalEpisodes + '</span>' +
+            '<span class="mh-stat mh-strong">规则: ' + totalRules + '</span>' +
+            '<span class="mh-stat" style="color:' + confColor + '">置信: ' + confPct + '%</span>' +
+            '</div>';
+
+        // ─── 语义规则列表 ───
+        if (rules.length > 0) {
+            html += '<h5 style="margin-top:8px;color:var(--accent-cyan);font-size:12px;">📐 学到的规则</h5>' +
+                '<ul class="mem-list">' +
+                rules.slice(0, 5).map(function(r) {
+                    return '<li>' +
+                        '<span class="mem-imp" style="background:' + (r.confidence >= 0.6 ? '#00d4aa33' : '#ffb34733') +
+                        ';color:' + (r.confidence >= 0.6 ? '#00d4aa' : '#ffb347') + '">' +
+                        (r.confidence * 100).toFixed(0) + '%</span>' +
+                        escapeHtml(r.conclusion || '?') +
+                        '</li>';
+                }).join('') +
+                '</ul>';
+        } else {
+            html += '<p class="dir-hint">暂无学到的规则（需更多交互经验）</p>';
+        }
+
+        // ─── 最近情节 ───
+        if (episodes.length > 0) {
+            html += '<h5 style="margin-top:8px;color:var(--text-secondary);font-size:12px;">📖 最近情节</h5>' +
+                '<ul class="mem-list">' +
+                episodes.slice(0, 5).map(function(ep) {
+                    return '<li>' +
+                        '<span class="mem-imp">#' + ep.tick + '</span>' +
+                        escapeHtml((ep.action || '').substring(0, 40)) +
+                        ' <span style="color:var(--text-muted);font-size:10px;">→' +
+                        escapeHtml(ep.outcome_type || '?') + '</span>' +
+                        '</li>';
+                }).join('') +
+                '</ul>';
+        }
+
+        html += '</div>';
+        sb.insertAdjacentHTML('beforeend', html);
     }
 
     // ══════════════════════════════════════════════
