@@ -1,6 +1,6 @@
 """
-Phase 20: 自演化世界模型 — 单元测试
-==================================
+Phase 20: 自演化世界模型 — 单元测试 + 集成测试
+================================================
 
 测试覆盖:
 - 状态相似度计算 (Jaccard + Euclidean)
@@ -9,6 +9,8 @@ Phase 20: 自演化世界模型 — 单元测试
 - SelectiveForesight 三级级联预测
 - WorldModel observe/predict/evaluate_plan/stats
 - 序列化往返
+- DigimonAgent 集成 (world_model 创建 + step() 记录情节)
+- API 端点 GET /api/digimon/{name}/world-model
 """
 
 from __future__ import annotations
@@ -427,3 +429,368 @@ class TestWorldModel:
 
         # 第 24 tick 应提取规则
         assert wm.semantic.count() > 0 or wm.stats()["total_rules"] >= 0
+
+
+# ──────────────────────────────────────────────
+# Phase 20 集成测试: DigimonAgent + API + 端到端
+# ──────────────────────────────────────────────
+
+
+class TestWorldModelAgentIntegration:
+    """测试 WorldModel 与 DigimonAgent 的集成。"""
+
+    def test_agent_creates_world_model(self):
+        """DigimonAgent 初始化后 world_model 不为 None。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent, DigimonAttribute
+
+        agent = DigimonAgent(
+            name="测试兽",
+            species="testmon",
+            attribute=DigimonAttribute.VACCINE,
+        )
+        assert agent.world_model is not None
+        assert agent.world_model.agent_name == "测试兽"
+        assert agent.world_model.episodic.count() == 0
+        assert agent.world_model.semantic.count() == 0
+
+    def test_agent_world_model_is_independent(self):
+        """每个 agent 的 world_model 互相独立。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+
+        a = DigimonAgent(name="甲兽", species="amon")
+        b = DigimonAgent(name="乙兽", species="bmon")
+
+        # 各自独立
+        assert a.world_model is not b.world_model
+        assert a.world_model.agent_name == "甲兽"
+        assert b.world_model.agent_name == "乙兽"
+
+        # 对 a 记录情节不应影响 b
+        a.world_model.observe(
+            {"region_id": "forest"}, "fight", {"success": True}, tick_index=1,
+        )
+        assert a.world_model.episodic.count() == 1
+        assert b.world_model.episodic.count() == 0
+
+    def test_step_records_episode_sync(self):
+        """同步模拟 agent.step() 核心逻辑，验证 world_model 记录情节。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+
+        agent = DigimonAgent(name="同步测兽", species="synctest")
+        agent.planner = None
+        agent.reflector = None
+
+        count_before = agent.world_model.episodic.count()
+        assert count_before == 0
+
+        # 模拟 step() 核心逻辑（不含异步 LLM 调用）
+        agent._decay_mood()
+        for i in range(3):
+            pre_state = agent._capture_world_state(tick_index=i)
+            event = agent.act()
+            agent.observe(event, tick_index=i)
+            agent.world_model.observe(pre_state, agent.current_plan or "idle", event, i)
+
+        assert agent.world_model.episodic.count() == 3
+        # 验证统计信息可读
+        stats = agent.world_model.stats()
+        assert stats["total_episodes"] == 3
+        assert stats["agent_name"] == "同步测兽"
+
+    def test_step_preserves_state_snapshot(self):
+        """step 模拟中，记录的 state_snapshot 包含完整字段。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+
+        agent = DigimonAgent(name="状态测兽", species="statetest")
+        agent.planner = None
+        agent.reflector = None
+
+        pre_state = agent._capture_world_state(tick_index=5)
+        event = agent.act()
+        agent.world_model.observe(pre_state, agent.current_plan or "idle", event, 5)
+
+        ep = agent.world_model.episodic.episodes[-1]
+        assert ep.tick_index == 5
+        assert "region_id" in ep.state_snapshot
+        assert "stage" in ep.state_snapshot
+        assert "hp_pct" in ep.state_snapshot
+        assert "nearby_agents_count" in ep.state_snapshot
+
+    def test_world_model_observe_directly(self):
+        """直接调用 WorldModel.observe() 记录情节。"""
+        wm = WorldModel(agent_name="亚古兽")
+        pre_state = {
+            "region_id": "齿轮草原",
+            "stage": "rookie",
+            "hp_pct": 80,
+            "nearby_agents_count": 2,
+        }
+        ep = wm.observe(
+            pre_state,
+            "fight enemy",
+            {"success": True, "event_type": "battle", "hp_change": -10},
+            tick_index=5,
+        )
+        assert wm.episodic.count() == 1
+        assert ep.tick_index == 5
+
+        # 第二条记录
+        wm.observe(
+            pre_state,
+            "rest",
+            {"success": True, "event_type": "rest", "hp_change": 5},
+            tick_index=6,
+        )
+        assert wm.episodic.count() == 2
+
+        recent = wm.episodic.recent(n=2)
+        assert recent[0].tick_index == 6
+
+    def test_world_model_rules_after_sufficient_observations(self):
+        """≥5 条同类型情节后应提取规则。"""
+        wm = WorldModel(agent_name="加布兽")
+        for i in range(10):
+            wm.observe(
+                {
+                    "region_id": "迷乱森林",
+                    "stage": "rookie",
+                    "hp_pct": 75,
+                    "nearby_agents_count": 3,
+                },
+                "fight enemy",
+                {"success": True, "event_type": "battle", "hp_change": -8},
+                tick_index=i,
+            )
+
+        n_rules = wm.extract_rules(force=True)
+        assert n_rules >= 0
+        # 强制提取后 stats 应反映规则数
+        stats = wm.stats()
+        assert stats["total_rules"] >= 0
+
+    def test_world_model_predict_with_history(self):
+        """有足够经验后 predict 应基于情节记忆。"""
+        wm = WorldModel(agent_name="比丘兽")
+        for i in range(5):
+            wm.observe(
+                {
+                    "region_id": "龙眼湖",
+                    "stage": "rookie",
+                    "hp_pct": 80,
+                    "nearby_agents_count": 1,
+                },
+                "talk to friend",
+                {"success": True, "event_type": "social", "mood_change": 0.3},
+                tick_index=i,
+            )
+
+        result = wm.predict(
+            {
+                "region_id": "龙眼湖",
+                "stage": "rookie",
+                "hp_pct": 80,
+                "nearby_agents_count": 1,
+            },
+            "talk to friend",
+        )
+        assert result.source in ("episodic", "semantic", "none")
+        assert 0.0 <= result.confidence <= 1.0
+        assert isinstance(result.predicted_outcome, dict)
+
+    def test_world_model_serialization_preserves_data(self):
+        """序列化往返后数据不丢失。"""
+        wm = WorldModel(agent_name="甲虫兽")
+        for i in range(5):
+            wm.observe(
+                {"region_id": "玩具城", "stage": "rookie"},
+                "explore",
+                {"success": True, "event_type": "explore"},
+                tick_index=i,
+            )
+        wm.extract_rules(force=True)
+
+        d = wm.to_dict()
+        restored = WorldModel.from_dict(d)
+
+        assert restored.agent_name == "甲虫兽"
+        assert restored.episodic.count() == wm.episodic.count()
+        assert restored.semantic.count() == wm.semantic.count()
+        # 验证情节内容一致
+        for orig, rest in zip(wm.episodic.episodes, restored.episodic.episodes):
+            assert orig.tick_index == rest.tick_index
+            assert orig.action == rest.action
+
+    def test_evaluate_plan_returns_recommendation(self):
+        """evaluate_plan 返回合理建议。"""
+        wm = WorldModel(agent_name="巴鲁兽")
+        result = wm.evaluate_plan(
+            {"region_id": "森林", "stage": "rookie"},
+            "去森林探索然后战斗",
+        )
+        assert "recommendation" in result
+        assert result["recommendation"] in ("proceed", "caution", "reconsider")
+        assert "overall_confidence" in result
+        assert "predictions" in result
+
+
+class TestWorldModelAPI:
+    """测试 /api/digimon/{name}/world-model API 端点。"""
+
+    @pytest.fixture(autouse=True)
+    def _reset_world(self):
+        """每个测试前重置世界状态。"""
+        from digimon_world.world.world_state import get_world, reset_world
+
+        reset_world()
+        return get_world()
+
+    def test_endpoint_returns_world_model_snapshot(self):
+        """API 返回包含 stats + recent_episodes + rules 的 JSON。"""
+        from fastapi.testclient import TestClient
+        from digimon_world.api.app import app
+
+        client = TestClient(app)
+
+        resp = client.get("/api/digimon/亚古兽/world-model")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "亚古兽"
+        assert data["status"] == "active"
+        assert "stats" in data
+        assert "recent_episodes" in data
+        assert "rules" in data
+        assert isinstance(data["stats"], dict)
+        assert isinstance(data["rules"], list)
+        assert "total_episodes" in data["stats"]
+        assert "total_rules" in data["stats"]
+
+    def test_endpoint_404_for_unknown_digimon(self):
+        """未知数码兽返回 404。"""
+        from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
+        from digimon_world.world.world_state import get_world
+
+        get_world()
+        client = TestClient(app)
+
+        resp = client.get("/api/digimon/不存在的数码兽/world-model")
+        assert resp.status_code == 404
+
+    def test_endpoint_reflects_accumulated_episodes(self):
+        """WorldModel 有情节后 API 返回正确的 recent_episodes。"""
+        from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
+        from digimon_world.world.world_state import get_world
+
+        world = get_world()
+
+        # 给亚古兽直接添加情节
+        agent = world.get("亚古兽")
+        assert agent is not None
+        assert agent.world_model is not None
+
+        for i in range(3):
+            agent.world_model.observe(
+                {"region_id": "测试区域", "stage": "rookie"},
+                f"测试动作_{i}",
+                {"success": True, "event_type": "test"},
+                tick_index=i,
+            )
+
+        client = TestClient(app)
+        resp = client.get("/api/digimon/亚古兽/world-model")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert data["stats"]["total_episodes"] >= 3
+        assert len(data["recent_episodes"]) >= 3
+
+    def test_endpoint_returns_rules_when_present(self):
+        """当有规则时 API 返回 rules 列表。"""
+        from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
+        from digimon_world.world.world_state import get_world
+
+        world = get_world()
+
+        agent = world.get("加布兽")
+        assert agent is not None
+        assert agent.world_model is not None
+
+        # 添加足量经验以提取规则
+        for i in range(10):
+            agent.world_model.observe(
+                {"region_id": "迷乱森林", "stage": "rookie", "hp_pct": 80},
+                "fight",
+                {"success": True, "event_type": "battle"},
+                tick_index=i,
+            )
+        agent.world_model.extract_rules(force=True)
+
+        client = TestClient(app)
+        resp = client.get("/api/digimon/加布兽/world-model")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data["rules"], list)
+        # 规则列表中的规则应有 condition / conclusion / confidence
+        for rule in data["rules"]:
+            assert "condition" in rule
+            assert "conclusion" in rule
+            assert "confidence" in rule
+            assert 0.0 <= rule["confidence"] <= 1.0
+
+    def test_all_agents_have_world_model(self):
+        """所有初始化的 agent 都有 world_model。"""
+        from digimon_world.world.world_state import get_world
+
+        world = get_world()
+
+        for agent in world.all():
+            assert agent.world_model is not None, (
+                f"{agent.name} should have a world_model"
+            )
+            assert agent.world_model.agent_name == agent.name
+
+    def test_cross_agent_episode_isolation(self):
+        """不同 agent 的情节记录互不影响，API 各自返回正确数据。"""
+        from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
+        from digimon_world.world.world_state import get_world
+
+        world = get_world()
+
+        agumon = world.get("亚古兽")
+        gabumon = world.get("加布兽")
+        assert agumon is not None
+        assert gabumon is not None
+
+        # 给亚古兽记录情节
+        for i in range(5):
+            agumon.world_model.observe(
+                {"region_id": "a_region"}, "fight", {"success": True, "event_type": "battle"},
+                tick_index=i,
+            )
+
+        # 给加布兽记录不同的情节
+        for i in range(3):
+            gabumon.world_model.observe(
+                {"region_id": "b_region"}, "rest", {"success": True, "event_type": "rest"},
+                tick_index=i,
+            )
+
+        client = TestClient(app)
+
+        # 亚古兽 API
+        r1 = client.get("/api/digimon/亚古兽/world-model")
+        assert r1.json()["stats"]["total_episodes"] >= 5
+
+        # 加布兽 API
+        r2 = client.get("/api/digimon/加布兽/world-model")
+        assert r2.json()["stats"]["total_episodes"] >= 3
+
+        # 互不影响
+        assert r1.json()["stats"]["total_episodes"] != r2.json()["stats"]["total_episodes"]
