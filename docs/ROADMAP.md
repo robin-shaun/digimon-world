@@ -408,7 +408,7 @@
 
 **论文依据**: arXiv:2607.00233 "From Signals to Structure: How Memory Architecture Drives Language Emergence in LLM Agents"
 
-- [ ] Task 1 — `shared_conventions.py` 核心模块: ConventionDetector（检测 2+ agent 重复使用的术语/行为模式）+ ConventionPool（全局共享惯例池，每个惯例有 adoption_count + last_used + decay 曲线）+ ConventionPropagation（按社交网络传播惯例）
+- [x] Task 1 — `shared_conventions.py` 核心模块: ConventionDetector（检测 2+ agent 重复使用的术语/行为模式）+ ConventionPool（全局共享惯例池，每个惯例有 adoption_count + last_used + decay 曲线）+ ConventionPropagation（按社交网络传播惯例）✅ (40 tests)
 - [ ] Task 2 — API 端点: `GET /api/conventions`（世界共享惯例列表）、`GET /api/conventions/{id}`（惯例详情 + 采用 agent 列表）、`GET /api/digimon/{name}/conventions`（某 agent 的惯例快照）
 - [ ] Task 3 — 前端文化面板: 新增「文化」标签页，展示当前世界共享惯例词云/列表、惯例传播图（force-directed graph）、agent 间共享术语
 - [ ] Task 4 — 集成测试: ConventionDetector 检测正确性 + 传播衰减 + 去重 + 多 agent 同步（≥20 条用例）
