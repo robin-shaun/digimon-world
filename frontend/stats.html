@@ -241,6 +241,46 @@
                 </div>
             </section>
 
+            <!-- Phase 18: 记忆健康面板 -->
+            <section class="panels" style="margin-top: 16px;">
+                <div class="panel" style="grid-column: 1 / -1;">
+                    <h2 style="display:flex;align-items:center;gap:10px;">
+                        🧠 记忆健康 (Memory Health)
+                        <select id="mem-digimon-select" aria-label="选择数码兽" style="
+                            font-size:13px;padding:4px 8px;background:var(--input-bg);
+                            color:var(--text-primary);border:1px solid var(--border);
+                            border-radius:6px;font-family:inherit;">
+                            <option value="">-- 选择数码兽 --</option>
+                        </select>
+                        <span id="mem-personality" style="font-size:12px;color:var(--text-secondary);margin-left:auto;"></span>
+                    </h2>
+                    <div style="display: grid; grid-template-columns: 260px 1fr 260px; gap: 12px; margin-top: 8px;">
+                        <!-- 左栏：关键指标 -->
+                        <div>
+                            <ul class="kv-list" id="mem-stats">
+                                <li class="empty">选择数码兽查看记忆健康…</li>
+                            </ul>
+                        </div>
+                        <!-- 中栏：遗忘曲线图 -->
+                        <div style="text-align:center;">
+                            <canvas id="mem-curve-canvas" width="400" height="220" style="max-width:100%;border-radius:8px;background:var(--input-bg);"></canvas>
+                            <div id="mem-curve-legend" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
+                        </div>
+                        <!-- 右栏：弱记忆 + 复述 -->
+                        <div>
+                            <div style="font-size:12px;color:var(--accent-cyan);margin-bottom:4px;">⚠️ 弱记忆 Top 5</div>
+                            <ul class="kv-list" id="mem-weak" style="margin-bottom:10px;">
+                                <li class="empty">--</li>
+                            </ul>
+                            <div style="font-size:12px;color:var(--accent-cyan);margin-bottom:4px;">🔄 复述历史</div>
+                            <ul class="kv-list" id="mem-rehearsal">
+                                <li class="empty">--</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section class="panels" style="margin-top: 16px;">
                 <div class="panel">
                     <h2>🧬 社交网络 (Social Network)</h2>
@@ -601,6 +641,207 @@
             }
         }
 
+        // ─── Phase 18: 记忆健康面板 ───
+
+        const memEl = {
+            select: document.getElementById('mem-digimon-select'),
+            personality: document.getElementById('mem-personality'),
+            stats: document.getElementById('mem-stats'),
+            weak: document.getElementById('mem-weak'),
+            rehearsal: document.getElementById('mem-rehearsal'),
+            curveCanvas: document.getElementById('mem-curve-canvas'),
+            curveLegend: document.getElementById('mem-curve-legend'),
+        };
+
+        /** 填充数码兽下拉列表 */
+        function populateDigimonSelect(agents) {
+            const current = memEl.select.value;
+            memEl.select.innerHTML = '<option value="">-- 选择数码兽 --</option>' +
+                (agents || []).map(a => {
+                    const name = esc(a.name);
+                    const sel = name === current ? ' selected' : '';
+                    return `<option value="${name}"${sel}>${a.emoji || ''} ${name}</option>`;
+                }).join('');
+        }
+
+        /** 绘制 Ebbinghaus 遗忘曲线 */
+        function drawForgettingCurve(report) {
+            const canvas = memEl.curveCanvas;
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width, H = canvas.height;
+            const margin = { top: 20, right: 20, bottom: 30, left: 50 };
+            const pw = W - margin.left - margin.right;
+            const ph = H - margin.top - margin.bottom;
+
+            ctx.clearRect(0, 0, W, H);
+
+            // 背景网格
+            ctx.strokeStyle = 'rgba(128,128,128,0.15)';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= 4; i++) {
+                const y = margin.top + ph * i / 4;
+                ctx.beginPath();
+                ctx.moveTo(margin.left, y);
+                ctx.lineTo(W - margin.right, y);
+                ctx.stroke();
+                ctx.fillStyle = 'var(--text-muted)';
+                ctx.font = '10px monospace';
+                ctx.fillText((1 - i * 0.25).toFixed(2), 4, y + 4);
+            }
+
+            // 标题：纵轴 = 记忆强度，横轴 = 时间
+            ctx.fillStyle = 'var(--text-secondary)';
+            ctx.font = '11px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('记忆强度 vs 时间', W / 2, margin.top - 5);
+
+            // Ebbinghaus 曲线: S(t) = e^(-t / half_life)
+            const hlSeconds = report.forgetting_half_life_seconds || 1663;
+            const hlHours = hlSeconds / 3600;
+            const totalHours = hlHours * 4;  // 显示到 4× 半衰期
+
+            // 画理论曲线
+            ctx.strokeStyle = 'var(--accent-cyan)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            for (let i = 0; i <= pw; i++) {
+                const hours = totalHours * i / pw;
+                const strength = Math.exp(-hours / hlHours);
+                const x = margin.left + i;
+                const y = margin.top + ph * (1 - strength);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // 标注半衰期点
+            const tHalfX = margin.left + pw * (hlHours / totalHours);
+            const tHalfY = margin.top + ph * (1 - Math.exp(-1));
+            ctx.fillStyle = 'var(--accent-purple)';
+            ctx.beginPath();
+            ctx.arc(tHalfX, tHalfY, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'var(--text-primary)';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(`半衰期 ${hlHours.toFixed(1)}h`, tHalfX + 8, tHalfY + 4);
+
+            // 绘制实际记忆数据点
+            const allCount = report.total_memories || 0;
+            ctx.fillStyle = 'rgba(255,200,100,0.7)';
+            if (allCount > 0 && report.top_weak) {
+                for (const m of report.top_weak || []) {
+                    // 估算年龄（基于强度反推）
+                    const s = m.strength || 0.01;
+                    const ageHours = -Math.log(Math.max(s, 0.001)) * hlHours;
+                    const ageFraction = Math.min(ageHours / totalHours, 1);
+                    const x = margin.left + pw * ageFraction;
+                    const y = margin.top + ph * (1 - s);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            // 强记忆群
+            if (allCount > 0 && report.strong_count) {
+                // 强记忆靠近左侧（强度高）
+                for (let i = 0; i < Math.min(report.strong_count, 8); i++) {
+                    const s = 0.75 + Math.random() * 0.2;
+                    const x = margin.left + Math.random() * pw * 0.3;
+                    const y = margin.top + ph * (1 - s);
+                    ctx.fillStyle = 'rgba(74,232,196,0.5)';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // 图例
+            memEl.curveLegend.innerHTML =
+                `<span style="color:var(--accent-cyan);">──</span> 理论遗忘曲线 &nbsp;` +
+                `<span style="color:var(--accent-purple);">●</span> 半衰期 &nbsp;` +
+                `<span style="color:rgba(74,232,196,0.7);">●</span> 强记忆 &nbsp;` +
+                `<span style="color:rgba(255,200,100,0.7);">●</span> 弱记忆`;
+        }
+
+        /** 获取并渲染记忆健康数据 */
+        async function loadMemoryHealth(name) {
+            if (!name) {
+                memEl.stats.innerHTML = '<li class="empty">选择数码兽查看记忆健康…</li>';
+                memEl.weak.innerHTML = '<li class="empty">--</li>';
+                memEl.rehearsal.innerHTML = '<li class="empty">--</li>';
+                memEl.personality.textContent = '';
+                // 清空 canvas
+                const ctx = memEl.curveCanvas.getContext('2d');
+                ctx.clearRect(0, 0, memEl.curveCanvas.width, memEl.curveCanvas.height);
+                memEl.curveLegend.textContent = '';
+                return;
+            }
+
+            try {
+                const report = await fetchJSON(`/api/digimon/${encodeURIComponent(name)}/memory-health`);
+
+                // 个性标签
+                memEl.personality.textContent = report.personality
+                    ? `🧬 ${report.personality}`
+                    : '';
+
+                // 关键指标
+                const hlHours = (report.forgetting_half_life_hours || 0).toFixed(1);
+                const stale = report.stale_count || 0;
+                memEl.stats.innerHTML = [
+                    { k: '总记忆', v: fmtInt(report.total_memories) },
+                    { k: '强记忆 (≥0.7)', v: fmtInt(report.strong_count), cls: 'pos' },
+                    { k: '弱记忆 (<0.3)', v: fmtInt(report.weak_count), cls: 'neg' },
+                    { k: '过期记忆', v: fmtInt(stale), cls: stale ? 'neg' : '' },
+                    { k: '遗忘半衰期', v: `${hlHours}h`, hint: 'Ebbinghaus 曲线参数' },
+                    { k: '记忆流总量', v: fmtInt(report.memory_stream_count || 0) },
+                ].map(r => `<li><span class="k" title="${esc(r.hint||'')}">${esc(r.k)}</span><span class="v${r.cls?' '+r.cls:''}">${r.v}</span></li>`).join('');
+
+                // 弱记忆 Top 5
+                const topWeak = report.top_weak || [];
+                memEl.weak.innerHTML = topWeak.length
+                    ? topWeak.map(m => `<li>
+                        <span class="k" title="${esc(m.description||'')}">${esc((m.description||'').slice(0,30))}</span>
+                        <span class="v neg">${(m.strength||0).toFixed(3)}</span>
+                    </li>`).join('')
+                    : '<li class="empty">无弱记忆 ✅</li>';
+
+                // 复述历史
+                const rehearsal = report.rehearsal_history || [];
+                memEl.rehearsal.innerHTML = rehearsal.length
+                    ? rehearsal.slice(0, 5).map(r => `<li>
+                        <span class="k" title="${esc(r.description||'')}">${esc((r.description||'').slice(0,25))}</span>
+                        <span class="v" style="font-size:11px;">×${r.rehearsal_count} ${r.strength.toFixed(2)}</span>
+                    </li>`).join('')
+                    : '<li class="empty">暂无复述记录</li>';
+
+                // 遗忘曲线
+                drawForgettingCurve(report);
+
+            } catch (err) {
+                memEl.stats.innerHTML = `<li class="empty" style="color:var(--negative);">加载失败: ${esc(err.message)}</li>`;
+            }
+        }
+
+        // 事件绑定：选择数码兽
+        memEl.select.addEventListener('change', () => {
+            loadMemoryHealth(memEl.select.value);
+        });
+
+        // 在 refresh 中自动填充下拉列表
+        // 保存原始 refresh，然后扩展它
+        const _origRefresh = refresh;
+        refresh = async function() {
+            await _origRefresh();
+            // refresh 内部已经 fetch /api/world 并存了 agents，但未暴露。
+            // 这里再 fetch 一次 /api/world 来填下拉列表（轻量）。
+            try {
+                const w = await fetchJSON('/api/world');
+                populateDigimonSelect(w.agents || []);
+            } catch (_) { /* 忽略 */ }
+        };
         refresh();
         setInterval(refresh, REFRESH_MS);
     </script>
