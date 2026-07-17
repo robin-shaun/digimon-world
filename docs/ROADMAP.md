@@ -240,9 +240,10 @@
 |||[████████████████████████] 100%  Phase 17 (人格深度系统 — 荣格心理学 MBTI 驱动) ✅
 |||||[████████████████████████] 100%  Phase 18 (Agent 自主记忆规划) ✅
 ||||||[████████████████████████] 100%  Phase 19 (计划持久化与上下文管理) ✅
-|||||||||[████████████████████████] 100%  Phase 20 (自演化世界模型) ✅
-|||||```
-||
+||||||||||[████████████████████████] 100%  Phase 20 (自演化世界模型) ✅
+||||||||||||[░░░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 21 (Agent 内省聚合仪表板) 🔄
+||||||```
+|||
 ||---
 ||
 ||## Phase 17: 人格深度系统 — 荣格心理学 MBTI 驱动
@@ -353,7 +354,7 @@
 
 ---
 
-## Phase 19: 计划持久化与上下文管理 ✅ 进行中
+## Phase 19: 计划持久化与上下文管理 ✅ (100%)
 
 **目标**: LLM agent 的计划信号在写入后 1 步就衰减 4.1×（arXiv:2606.22953）。当前 `current_plan` 只存在于内存中——服务重启、记忆压缩/eviction 后计划丢失，agent 失忆。Phase 19 建立 PlanCheckpoint 系统，计划获得独立于 memory_stream 的持久化存储，支持计划恢复和历史追溯。
 
@@ -369,7 +370,7 @@
 
 ---
 
-## Phase 20: 自演化世界模型 — WorldEvolver 框架 (60%)
+## Phase 20: 自演化世界模型 — WorldEvolver 框架 ✅ (100%)
 
 **目标**: 数码兽建立自己对世界的认知模型。受 WorldEvolver (arXiv:2606.30639) 启发，通过 Episodic Memory（检索真实转移）、Semantic Memory（提取启发式规则）、Selective Foresight（过滤低置信预测）三个模块实现世界模型自演化。
 
@@ -382,3 +383,19 @@
 - [x] Task 5 — 集成测试 + 端到端验证 ✅ (53 tests, verify_phase20.py 10/10)
 
 **完成标志**: 数码兽能基于历史经验预测行动结果，规则库随经历自然演化。 ✅
+
+---
+
+## Phase 21: Agent 内省聚合仪表板 🔄
+
+**目标**: Phase 18（记忆自主）、19（计划持久化）、20（世界模型）三个系统各自独立运行，缺少统一的健康诊断视图。Phase 21 构建 `AgentInsightEngine`，聚合三大系统数据生成每个 agent 的内省报告——记忆健康评分、计划成功率、习得规则概览——一站式 Agent 自我认知仪表板。
+
+**论文依据**: arXiv:2607.00233 "From Signals to Structure: How Memory Architecture Drives Language Emergence in LLM Agents" — 记忆架构决定了 agent 能否将交互历史转化为稳定惯例。
+
+- [ ] Task 1 — `agent_insights.py` 核心模块: AgentInsightEngine 聚合 memory_autonomy + plan_persistence + world_model 数据，生成统一内省报告
+- [ ] Task 2 — API 端点: `GET /api/digimon/{name}/insights` 返回内省报告（记忆健康评分 + 计划成功率 + 习得规则摘要 + 综合评分）
+- [ ] Task 3 — 前端内省面板: 在 digimon 详情侧栏新增「内省」tab，展示综合评分条 + 三维雷达图（记忆/计划/世界观）+ 各维度明细
+- [ ] Task 4 — 集成测试: 测试 AgentInsightEngine 数据聚合正确性 + API 端点 + digimon 数据不足时的降级处理
+- [ ] Task 5 — 端到端验证: verify_phase21.py 脚本（至少 5 项验证：数据聚合/API 响应/降级/前端渲染/多 agent 对比）
+
+**完成标志**: 每只数码兽有一个统一的「内省仪表板」，一眼看清其记忆健康度、计划执行力和世界观成熟度。

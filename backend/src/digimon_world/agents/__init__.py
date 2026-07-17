@@ -31,8 +31,10 @@ from .meme import (
 )
 from .planner import Planner
 from .reflector import Reflection, Reflector
+from .agent_insights import AgentInsightEngine, get_insight_engine, reset_insight_engine
 
 __all__ = [
+    "AgentInsightEngine",
     "Badge",
     "BadgeSystem",
     "CATEGORY_SPREAD_RATE",
@@ -56,4 +58,6 @@ __all__ = [
     "HealingSystem",
     "get_healing_system",
     "reset_healing_system",
+    "get_insight_engine",
+    "reset_insight_engine",
 ]

@@ -503,6 +503,19 @@ class WorldModel:
             "last_rule_extraction_tick": self._last_rule_extraction_tick,
         }
 
+    def get_snapshot(self) -> dict[str, Any]:
+        """返回世界模型快照，供 AgentInsightEngine 使用。
+
+        Returns:
+            {"episodes_count": int, "rules_count": int, "avg_confidence": float}
+        """
+        s = self.stats()
+        return {
+            "episodes_count": s.get("total_episodes", 0),
+            "rules_count": s.get("total_rules", 0),
+            "avg_confidence": s.get("avg_confidence", 0.0),
+        }
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "agent_name": self.agent_name,

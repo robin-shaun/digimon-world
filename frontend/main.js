@@ -1429,8 +1429,9 @@
         let memoryHealthData = null;
         let plansData = null;
         let worldModelData = null;
+        let insightsData = null;
         try {
-            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
@@ -1439,6 +1440,7 @@
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/memory-health', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/plans', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/world-model', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/insights', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
@@ -1448,6 +1450,7 @@
             if (mhResp.ok) memoryHealthData = await mhResp.json();
             if (plResp.ok) plansData = await plResp.json();
             if (wmResp.ok) worldModelData = await wmResp.json();
+            if (insResp.ok) insightsData = await insResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -1653,6 +1656,13 @@
         // ══════════════════════════════════════════════
         if (worldModelData) {
             renderWorldModel(sb, worldModelData);
+        }
+
+        // ══════════════════════════════════════════════
+        //  Phase 21: Agent 内省聚合仪表板
+        // ══════════════════════════════════════════════
+        if (insightsData) {
+            renderInsights(sb, insightsData);
         }
     }
 
@@ -1902,6 +1912,210 @@
 
         html += '</div>';
         sb.insertAdjacentHTML('beforeend', html);
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 21: Agent 内省聚合仪表板渲染
+    // ══════════════════════════════════════════════
+
+    /**
+     * 渲染 Agent 内省聚合面板到侧栏。
+     * 聚合 Phase 18/19/20 数据：记忆健康 + 计划执行力 + 世界观成熟度 → 综合评分。
+     */
+    function renderInsights(sb, data) {
+        if (!data || data.status === 'not_initialized') return;
+
+        var overall = data.overall_score != null ? data.overall_score : 0;
+        var dims = data.dimensions || {};
+
+        // 综合评分颜色
+        var scoreColor = overall >= 70 ? '#00d4aa' : (overall >= 40 ? '#ffb347' : '#ff6b6b');
+
+        var html = '<div class="detail-block">' +
+            '<h4>🔬 内省仪表板 <span class="plan-count">Phase 21</span></h4>' +
+            '<div class="insight-overall" style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">' +
+            '<div class="insight-score-ring" style="width:56px;height:56px;border-radius:50%;border:3px solid ' + scoreColor +
+            ';display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:' + scoreColor +
+            ';flex-shrink:0;">' + Math.round(overall) + '</div>' +
+            '<div>' +
+            '<span style="color:var(--text-secondary);font-size:12px;">综合内省评分</span>' +
+            '<div class="insight-score-bar-bg" style="width:180px;height:6px;background:#1a1f3a;border-radius:3px;margin-top:4px;">' +
+            '<div class="insight-score-bar" style="width:' + Math.min(100, overall) + '%;height:100%;background:' + scoreColor +
+            ';border-radius:3px;transition:width 0.5s;"></div>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+
+        // ─── 三维度雷达图 (Canvas) ───
+        html += '<canvas class="insights-radar-canvas" width="260" height="220"></canvas>';
+
+        // ─── 维度明细 ───
+        var dimKeys = ['memory_health', 'plan_execution', 'world_model'];
+        var dimIcons = { memory_health: '🧠', plan_execution: '📋', world_model: '🌍' };
+        var dimLabels = { memory_health: '记忆健康', plan_execution: '计划执行', world_model: '世界观' };
+
+        for (var d = 0; d < dimKeys.length; d++) {
+            var key = dimKeys[d];
+            var dim = dims[key];
+            if (!dim) continue;
+
+            var score = dim.score != null ? Math.round(dim.score) : '?';
+            var details = dim.details || {};
+            var icon = dimIcons[key] || '📊';
+            var label = dimLabels[key] || key;
+            var dColor = score >= 70 ? '#00d4aa' : (score >= 40 ? '#ffb347' : '#ff6b6b');
+
+            html += '<div style="margin-top:8px;padding:6px 0;border-top:1px solid #1a1f3a;">' +
+                '<span>' + icon + ' <strong>' + label + '</strong></span>' +
+                '<span style="float:right;color:' + dColor + ';font-weight:700;">' + score + '/100</span>' +
+                '</div>';
+
+            // 维度细节
+            if (key === 'memory_health') {
+                html += '<div class="memory-health-stats" style="margin-top:4px;">' +
+                    '<span class="mh-stat mh-total">总计: ' + (details.total || 0) + '</span>' +
+                    '<span class="mh-stat mh-strong">强: ' + (details.strong || 0) + '</span>' +
+                    '<span class="mh-stat mh-weak">弱: ' + (details.weak || 0) + '</span>' +
+                    '<span class="mh-stat mh-stale">过期: ' + (details.stale || 0) + '</span>' +
+                    '</div>';
+            } else if (key === 'plan_execution') {
+                html += '<div class="memory-health-stats" style="margin-top:4px;">' +
+                    '<span class="mh-stat mh-total">总计: ' + (details.total || 0) + '</span>' +
+                    '<span class="mh-stat mh-strong">完成: ' + (details.completed || 0) + '</span>' +
+                    '<span class="mh-stat mh-stale">放弃: ' + (details.abandoned || 0) + '</span>' +
+                    '<span class="mh-stat">进行: ' + (details.active || 0) + '</span>' +
+                    '</div>';
+            } else if (key === 'world_model') {
+                html += '<div class="memory-health-stats" style="margin-top:4px;">' +
+                    '<span class="mh-stat mh-total">情节: ' + (details.episodes_count || 0) + '</span>' +
+                    '<span class="mh-stat mh-strong">规则: ' + (details.rules_count || 0) + '</span>' +
+                    '<span class="mh-stat">置信: ' + ((details.avg_confidence || 0) * 100).toFixed(0) + '%</span>' +
+                    '</div>';
+            }
+        }
+
+        html += '</div>';
+        sb.insertAdjacentHTML('beforeend', html);
+
+        // ─── 绘制三维雷达图 ───
+        var radarCanvas = sb.querySelector('.insights-radar-canvas');
+        if (radarCanvas) {
+            drawInsightsRadar(radarCanvas, dims);
+        }
+    }
+
+    /**
+     * 绘制三维雷达图：记忆/计划/世界观 三个维度。
+     */
+    function drawInsightsRadar(canvas, dims) {
+        var c = canvas.getContext('2d');
+        var w = canvas.width;   // 260
+        var h = canvas.height;  // 220
+        var cx = w / 2;
+        var cy = h / 2 + 5;
+        var radius = Math.min(w, h) * 0.38;
+
+        // 背景
+        c.fillStyle = 'rgba(10, 14, 39, 0.4)';
+        c.fillRect(0, 0, w, h);
+
+        var dimKeys = ['memory_health', 'plan_execution', 'world_model'];
+        var dimLabels = ['记忆', '计划', '世界观'];
+        var n = dimKeys.length;
+        var angleStep = (2 * Math.PI) / n;
+        var startAngle = -Math.PI / 2; // 从顶部开始
+
+        // 网格同心环
+        for (var ring = 1; ring <= 4; ring++) {
+            var ringR = (radius / 4) * ring;
+            c.beginPath();
+            c.strokeStyle = '#1a1f3a';
+            c.lineWidth = 1;
+            for (var i = 0; i <= n; i++) {
+                var a = startAngle + i * angleStep;
+                var x = cx + ringR * Math.cos(a);
+                var y = cy + ringR * Math.sin(a);
+                if (i === 0) c.moveTo(x, y);
+                else c.lineTo(x, y);
+            }
+            c.closePath();
+            c.stroke();
+        }
+
+        // 轴线
+        for (var i = 0; i < n; i++) {
+            var a = startAngle + i * angleStep;
+            c.beginPath();
+            c.strokeStyle = '#2a2f4a';
+            c.lineWidth = 1;
+            c.moveTo(cx, cy);
+            c.lineTo(cx + radius * Math.cos(a), cy + radius * Math.sin(a));
+            c.stroke();
+
+            // 标签
+            var labelX = cx + (radius + 20) * Math.cos(a);
+            var labelY = cy + (radius + 20) * Math.sin(a);
+            c.fillStyle = '#888';
+            c.font = 'bold 11px system-ui, sans-serif';
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.fillText(dimLabels[i], labelX, labelY);
+        }
+
+        // 数据多边形
+        c.beginPath();
+        var values = [
+            (dims.memory_health && dims.memory_health.score != null) ? dims.memory_health.score / 100 : 0,
+            (dims.plan_execution && dims.plan_execution.score != null) ? dims.plan_execution.score / 100 : 0,
+            (dims.world_model && dims.world_model.score != null) ? dims.world_model.score / 100 : 0,
+        ];
+
+        for (var i = 0; i < n; i++) {
+            var a = startAngle + i * angleStep;
+            var r = values[i] * radius;
+            var x = cx + r * Math.cos(a);
+            var y = cy + r * Math.sin(a);
+            if (i === 0) c.moveTo(x, y);
+            else c.lineTo(x, y);
+        }
+        c.closePath();
+
+        // 填充
+        var grad = c.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, 'rgba(0, 212, 170, 0.15)');
+        grad.addColorStop(1, 'rgba(0, 212, 170, 0.02)');
+        c.fillStyle = grad;
+        c.fill();
+
+        // 边框
+        c.strokeStyle = '#00d4aa';
+        c.lineWidth = 2;
+        c.shadowColor = '#00d4aa';
+        c.shadowBlur = 8;
+        c.stroke();
+        c.shadowBlur = 0;
+
+        // 数据点
+        for (var i = 0; i < n; i++) {
+            var a = startAngle + i * angleStep;
+            var r = values[i] * radius;
+            var x = cx + r * Math.cos(a);
+            var y = cy + r * Math.sin(a);
+
+            c.beginPath();
+            c.fillStyle = '#00d4aa';
+            c.arc(x, y, 4, 0, 2 * Math.PI);
+            c.fill();
+
+            // 数值标签
+            var scoreLabel = Math.round(values[i] * 100);
+            var labelOffsetX = x > cx ? 12 : -12;
+            var labelOffsetY = y < cy ? -10 : 10;
+            c.fillStyle = '#ccc';
+            c.font = '9px "SF Mono", Consolas, monospace';
+            c.textAlign = x > cx ? 'left' : 'right';
+            c.fillText(scoreLabel, x + labelOffsetX, y + labelOffsetY);
+        }
     }
 
     // ══════════════════════════════════════════════

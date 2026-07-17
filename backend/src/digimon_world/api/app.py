@@ -660,6 +660,34 @@ def get_world_model(name: str) -> dict[str, Any]:
     }
 
 
+@app.get("/api/digimon/{name}/insights")
+def get_digimon_insights(name: str) -> dict[str, Any]:
+    """Phase 21: Agent 内省聚合仪表板。
+
+    聚合 MemoryAutonomy (Phase 18) + PlanPersistence (Phase 19) +
+    WorldModel (Phase 20) 三大系统数据，生成统一内省报告。
+
+    如果 agent 缺少某系统（如无 world_model），该维度返回 None，
+    综合评分仅计算可用维度。
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    from ..agents.agent_insights import AgentInsightEngine
+    from ..agents.plan_persistence import get_plan_engine
+
+    engine = AgentInsightEngine(agent_name=name)
+
+    # 收集三大系统引用（可能为 None）
+    memory_autonomy = getattr(agent, "memory_autonomy", None)
+    plan_engine = get_plan_engine()
+    world_model = getattr(agent, "world_model", None)
+
+    return engine.assess(memory_autonomy, plan_engine, world_model)
+
+
 # ---- Phase 4: 观察者/导演接口 ----
 @app.post("/api/director/inject_event")
 def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:
