@@ -1260,6 +1260,81 @@ def get_digimon_diary(name: str) -> dict[str, Any]:
     }
 
 
+# ---- Phase 19: 计划持久化 API ----
+
+
+@app.get("/api/digimon/{name}/plans")
+def get_digimon_plans(name: str) -> dict[str, Any]:
+    """获取数码兽的计划列表: 当前活跃计划 + 历史记录。
+
+    Phase 19: 计划持久化 — 计划 checkpoint 独立于 memory_stream 存储。
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    from ..agents.plan_persistence import get_plan_engine  # noqa: PLC0415
+
+    engine = get_plan_engine()
+    history = engine.get_history(name, limit=10)
+    active = engine.get_active(name)
+
+    return {
+        "name": name,
+        "total_plans": len(engine._store.get(name, [])),
+        "active_plan": active.to_dict() if active else None,
+        "has_active": active is not None,
+        "history": [cp.to_dict() for cp in history if cp.status.value != "active"],
+    }
+
+
+@app.get("/api/digimon/{name}/plans/{plan_id}")
+def get_digimon_plan_detail(name: str, plan_id: str) -> dict[str, Any]:
+    """获取数码兽的指定计划详情。
+
+    Phase 19: 计划持久化 — 查询单个计划的完整状态 + 时间线。
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    from ..agents.plan_persistence import get_plan_engine  # noqa: PLC0415
+
+    engine = get_plan_engine()
+    cp = engine.get_by_id(plan_id)
+    if cp is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Plan '{plan_id}' not found for {name}",
+        )
+    if cp.agent_name != name:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Plan '{plan_id}' belongs to {cp.agent_name}, not {name}",
+        )
+
+    # 获取同一 agent 的上下文（前后计划）
+    agent_plans = engine._store.get(name, [])
+    plan_index = next(
+        (i for i, p in enumerate(agent_plans) if p.plan_id == plan_id), None
+    )
+    prev_plan = agent_plans[plan_index - 1].plan_id if plan_index and plan_index > 0 else None
+    next_plan = (
+        agent_plans[plan_index + 1].plan_id
+        if plan_index is not None and plan_index < len(agent_plans) - 1
+        else None
+    )
+
+    return {
+        "plan": cp.to_dict(),
+        "prev_plan_id": prev_plan,
+        "next_plan_id": next_plan,
+        "time_since_created": cp.time_since_created(),
+    }
+
+
 # ---- 黑色齿轮 API (Phase 8) ----
 
 

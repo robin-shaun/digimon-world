@@ -164,8 +164,16 @@ class DigimonAgent:
     battle_probability_bonus: float = 0.0
 
     def __post_init__(self) -> None:
-        """dataclass 初始化后自动调用。Phase 18: 初始化记忆自主规划。"""
+        """dataclass 初始化后自动调用。Phase 18: 初始化记忆自主规划。Phase 19: 初始化计划持久化引擎引用。"""
         self._init_memory_autonomy()
+        self._plan_engine = None  # lazy init on first use
+
+    def _get_plan_engine(self):
+        """获取计划持久化引擎（lazy import 避免循环依赖）。"""
+        if self._plan_engine is None:
+            from .plan_persistence import get_plan_engine  # noqa: PLC0415
+            self._plan_engine = get_plan_engine()
+        return self._plan_engine
 
     def apply_dark_masters_effects(self) -> bool:
         """当黑暗四天王事件激活时,增加恐惧和战斗倾向。
@@ -377,6 +385,7 @@ class DigimonAgent:
     async def plan_next(self, world_state_snapshot: dict | None = None) -> str:
         """根据记忆和当前状态,调用 Planner 生成下一段计划。
 
+        Phase 19: 计划生成后自动保存 checkpoint。
         Returns:
             计划字符串,同时写入 self.current_plan 和 self.last_planned_at。
         """
@@ -388,6 +397,24 @@ class DigimonAgent:
         plan = await self.planner.plan(self, world_state_snapshot or {})
         self.current_plan = plan
         self.last_planned_at = datetime.utcnow()
+
+        # Phase 19: 计划持久化 checkpoint
+        try:
+            engine = self._get_plan_engine()
+            # 构建世界状态简述作为上下文
+            ctx = ""
+            if world_state_snapshot:
+                ctx = str(world_state_snapshot)[:200]
+            engine.checkpoint(
+                agent_name=self.name,
+                plan_text=plan,
+                importance=max(6, len(plan) // 10),  # 计划越长越重要
+                tick=getattr(self, '_last_tick', 0),
+                context_snapshot=ctx,
+            )
+        except Exception:
+            logger.debug("Plan checkpoint 失败（非致命）", exc_info=True)
+
         return plan
 
     # 默认步长(像素/一次 act),Phase 2 暂用常量;后续可由 mood/性格/EP 决定
@@ -600,6 +627,21 @@ class DigimonAgent:
         # 0.5. Phase 18: 记忆自主规划（遗忘曲线 + 过期检测 + 复述）
         if self.memory_autonomy is not None:
             self.memory_autonomy.step(current_tick=tick_index)
+        # 0.6. Phase 19: 计划恢复 — 如果 current_plan 丢失，从 checkpoint 恢复
+        self._last_tick = tick_index
+        _no_plan = not self.current_plan or self.current_plan == "在附近闲逛, 保持警觉"
+        if _no_plan:
+            try:
+                engine = self._get_plan_engine()
+                resumed = engine.resume(self.name, current_tick=tick_index)
+                if resumed is not None and resumed.plan_text:
+                    self.current_plan = resumed.plan_text
+                    logger.debug(
+                        "PlanPersistence: %s 计划恢复 #%s: %s",
+                        self.name, resumed.plan_id, resumed.plan_text[:50],
+                    )
+            except Exception:
+                pass
         # 1. 触发反思(无副作用失败时静默)
         await self.reflect_if_needed()
         # 2. 重新生成计划

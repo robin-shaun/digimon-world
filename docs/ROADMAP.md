@@ -237,9 +237,10 @@
 |[████████████████████████] 100%  Phase 14 (世界叙事系统) ✅
 |[████████████████████████] 100%  Phase 15 (导演面板增强) ✅
 |[████████████████████████] 100%  Phase 16 (差序格局 + 情感传播) ✅
-||[████████████████████████] 100%  Phase 17 (人格深度系统 — 荣格心理学 MBTI 驱动) ✅
-|||[████████████████████████] 100%  Phase 18 (Agent 自主记忆规划) ✅
-||```
+|||[████████████████████████] 100%  Phase 17 (人格深度系统 — 荣格心理学 MBTI 驱动) ✅
+||||[████████████████████████] 100%  Phase 18 (Agent 自主记忆规划) ✅
+|||||[██████░░░░░░░░░░░░░░░░░░]  20%  Phase 19 (计划持久化与上下文管理) 🔄
+|||```
 ||
 ||---
 ||
@@ -348,3 +349,19 @@
 - [x] Task 5 — 合作阈值集成: 在对话/战斗/组队场景中，用关系距离调节互动概率
 
 **完成标志**: 关系系统从"分数"升级为"圈层"，差序格局可视化，情感传播可用。
+
+---
+
+## Phase 19: 计划持久化与上下文管理 ✅ 进行中
+
+**目标**: LLM agent 的计划信号在写入后 1 步就衰减 4.1×（arXiv:2606.22953）。当前 `current_plan` 只存在于内存中——服务重启、记忆压缩/eviction 后计划丢失，agent 失忆。Phase 19 建立 PlanCheckpoint 系统，计划获得独立于 memory_stream 的持久化存储，支持计划恢复和历史追溯。
+
+**论文依据**: arXiv:2606.22953 "Plans Don't Persist: Why Context Management Is Load Bearing for LLM Agents"
+
+- [x] Task 1 — `plan_persistence.py` 核心模块: PlanCheckpoint 数据类 + PlanPersistenceEngine（checkpoint/resume/update_progress/complete/abandon/get_history/相似度检测）
+- [ ] Task 2 — 集成 DigimonAgent: plan_next() 后自动 save checkpoint；step() 开始时检测计划丢失→从 checkpoint 恢复；plan 重要性 boost (+2)
+- [ ] Task 3 — API 端点: `GET /api/digimon/{name}/plans`（当前计划 + 历史列表）、`GET /api/digimon/{name}/plans/{plan_id}`（计划详情）
+- [ ] Task 4 — 集成测试: 计划生命周期完整流程（create→resume→progress→complete + expire→abandon）
+- [ ] Task 5 — 前端计划状态面板: 显示当前计划进度条 + 历史计划列表（可选，进阶）
+
+**完成标志**: Agent 重启/记忆压缩后仍能恢复当前计划，计划有完整的 checkpoint→progress→complete 生命周期。
