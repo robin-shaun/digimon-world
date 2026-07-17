@@ -770,10 +770,16 @@ window.SPRITE_PIXEL = (function () {
 
     /** 获取或创建精灵图 (按物种名) */
     function getSprite(species) {
-        const key = (species || '_default').toLowerCase().replace(/[\s\-]/g, '_');
+        let key = (species || '_default').toLowerCase().replace(/[\s\-]/g, '_');
         if (spriteCache.has(key)) return spriteCache.get(key);
-
-        const def = SPRITES[key] || SPRITES._default;
+        let def = SPRITES[key];
+        // 尝试去掉下划线的版本 (如 metal_greymon → metalgreymon)
+        if (!def) {
+            const keyFlat = key.replace(/_/g, '');
+            def = SPRITES[keyFlat];
+            if (def) key = keyFlat;
+        }
+        if (!def) def = SPRITES._default;
         const canvas = renderSprite(def);
         spriteCache.set(key, canvas);
         return canvas;
