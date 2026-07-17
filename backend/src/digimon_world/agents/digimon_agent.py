@@ -24,6 +24,7 @@ from enum import Enum
 from typing import Any, ClassVar, Optional, TYPE_CHECKING
 
 from ..memory.memory_stream import MemoryStream
+from ..memory.memory_autonomy import MemoryAutonomy
 
 if TYPE_CHECKING:
     from .planner import Planner
@@ -134,6 +135,7 @@ class DigimonAgent:
     location: tuple[int, int] = (0, 0)
     stats: DigimonStats = field(default_factory=DigimonStats)
     memory: MemoryStream = field(default_factory=MemoryStream)
+    memory_autonomy: Optional[Any] = None  # Phase 18: set in __post_init__
     current_plan: Optional[str] = None
     mood: str = "calm"  # calm/excited/tired/scared/curious
     # CPM 情绪演化管道: 连续情绪向量,每次 tick 积累+衰减
@@ -160,6 +162,10 @@ class DigimonAgent:
     fear_modifier: float = 1.0
     # 战斗概率修正 (天王活跃时 +30%,即 battle_chance 增加 30 个百分点)
     battle_probability_bonus: float = 0.0
+
+    def __post_init__(self) -> None:
+        """dataclass 初始化后自动调用。Phase 18: 初始化记忆自主规划。"""
+        self._init_memory_autonomy()
 
     def apply_dark_masters_effects(self) -> bool:
         """当黑暗四天王事件激活时,增加恐惧和战斗倾向。
@@ -202,13 +208,39 @@ class DigimonAgent:
             lines.append(f"- {trait}({val}/10): {desc}")
         return "你的性格:\n" + "\n".join(lines)
 
+    def _init_memory_autonomy(self) -> None:
+        """Phase 18: 初始化记忆自主规划系统。"""
+        # 确定主个性特征
+        primary_trait = "neutral"
+        if self.personality_traits:
+            primary_trait = max(
+                self.personality_traits, key=lambda k: self.personality_traits[k]
+            )
+        self.memory_autonomy = MemoryAutonomy(
+            agent_name=self.name,
+            personality=primary_trait,
+        )
+
     def observe(self, event: dict[str, Any], tick_index: int = 0) -> None:
         """观察一个世界事件,写入记忆流并触发 CPM 情绪评估。
 
-        重要程度评分: 启发式评分(Phase 2 已完成接入 LLM 评估,本行仅为默认兜底)。
+        重要程度评分: Phase 18 升级为 MemoryAutonomy 自评（如已初始化），
+        否则走启发式评分兜底。
         """
-        importance = self._heuristic_importance(event)
-        self.memory.add(event=event, importance=importance, tick_index=tick_index)
+        # Phase 18: 用 MemoryAutonomy 自评重要性
+        if self.memory_autonomy is not None:
+            desc = event.get("description") or str(event)
+            evt_type = event.get("type", "observation")
+            importance = self.memory_autonomy.assess_importance(desc, evt_type)
+        else:
+            importance = self._heuristic_importance(event)
+
+        node = self.memory.add(event=event, importance=importance, tick_index=tick_index)
+
+        # Phase 18: 注册新记忆到遗忘引擎
+        if self.memory_autonomy is not None:
+            self.memory_autonomy.register(node)
+
         # CPM 情绪评估: 事件影响情绪向量
         self._cpm_appraisal(event)
 
@@ -549,27 +581,33 @@ class DigimonAgent:
         return event
 
     async def step(
-        self, regions: dict[str, "Region"] | None = None
+        self,
+        regions: dict[str, "Region"] | None = None,
+        tick_index: int = 0,
     ) -> dict[str, Any]:
         """主循环一步: observe → reflect_if_needed → plan_next → act。
 
         Args:
             regions: region_id -> Region 映射,透传给 act() 做边界夹紧。
                      scheduler 会传 WorldState.regions;不传则退化为仅非负夹紧。
+            tick_index: 当前世界 tick 序号
 
         Returns:
             act() 产出的世界事件。
         """
         # 0. CPM 情绪衰减(每次 tick 自然消退 5%)
         self._decay_mood()
+        # 0.5. Phase 18: 记忆自主规划（遗忘曲线 + 过期检测 + 复述）
+        if self.memory_autonomy is not None:
+            self.memory_autonomy.step(current_tick=tick_index)
         # 1. 触发反思(无副作用失败时静默)
         await self.reflect_if_needed()
         # 2. 重新生成计划
         await self.plan_next()
         # 3. 执行并落事件到自身记忆
         event = self.act(regions)
-        # 把事件写回记忆流(importance 由启发式决定) + CPM 情绪评估
-        self.observe(event)
+        # 把事件写回记忆流 + CPM 情绪评估
+        self.observe(event, tick_index=tick_index)
         # 4. 从 mood_state 更新 mood 标签
         self.mood = self._derive_mood_label()
         return event

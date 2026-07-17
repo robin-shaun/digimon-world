@@ -481,6 +481,57 @@ def get_digimon_memories(name: str) -> dict[str, Any]:
     }
 
 
+@app.get("/api/digimon/{name}/memory-health")
+def get_memory_health(name: str) -> dict[str, Any]:
+    """Phase 18: 数码兽记忆健康诊断报告。
+
+    返回 Ebbinghaus 遗忘曲线状态、记忆强度分布、弱记忆 Top 5、
+    复述历史等完整诊断数据。
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    # Phase 18: memory_autonomy 可能为 None（未初始化的旧 agent）
+    if agent.memory_autonomy is None:
+        return {
+            "name": name,
+            "status": "not_initialized",
+            "message": "Memory autonomy not yet initialized for this digimon. "
+                       "Wait for the first world tick to complete.",
+            "total_memories": 0,
+            "strong_count": 0,
+            "weak_count": 0,
+            "stale_count": 0,
+            "forgetting_half_life_hours": 0,
+            "forgetting_half_life_seconds": 0,
+            "top_weak": [],
+            "personality": None,
+        }
+
+    report = agent.memory_autonomy.diagnose()
+    # 追加额外的 agent 上下文信息
+    report["name"] = name
+    report["memory_stream_count"] = len(agent.memory.entries)
+
+    # 收集复述历史（从所有 MemoryHealth 中汇总）
+    rehearsal_history = []
+    for hid, health in agent.memory_autonomy.forgetting_engine.memory_health.items():
+        if health.rehearsal_count > 0:
+            rehearsal_history.append({
+                "node_id": hid,
+                "description": health.memory.description[:60],
+                "rehearsal_count": health.rehearsal_count,
+                "last_rehearsed": health.last_rehearsed.isoformat() if health.last_rehearsed else None,
+                "strength": round(health.strength, 3),
+            })
+    rehearsal_history.sort(key=lambda x: x["rehearsal_count"], reverse=True)
+    report["rehearsal_history"] = rehearsal_history[:10]
+
+    return report
+
+
 # ---- Phase 4: 观察者/导演接口 ----
 @app.post("/api/director/inject_event")
 def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:

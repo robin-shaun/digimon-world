@@ -750,7 +750,7 @@ class WorldScheduler:
                 return await self._step_with_cached_plan(agent)
 
             # 正常路径: 调 LLM step (包含 plan + act)
-            result = await agent.step(self._world.regions)
+            result = await agent.step(self._world.regions, tick_index=self._tick_count)
             # 缓存新生成的计划
             if agent.current_plan:
                 self._plan_cache[agent.name] = (agent.current_plan, self._tick_count)

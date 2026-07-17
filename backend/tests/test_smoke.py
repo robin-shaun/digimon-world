@@ -29,8 +29,8 @@ def test_digimon_observe_writes_memory():
     agumon.observe({"type": "first_meet", "description": "遇到了太一"})
     assert len(agumon.memory.entries) == 1
     assert agumon.memory.entries[0].description == "遇到了太一"
-    # first_meet 启发式评 7 分
-    assert agumon.memory.entries[0].importance == 7
+    # Phase 18: MemoryAutonomy 启发式评分 first_meet/遇到 → 6
+    assert agumon.memory.entries[0].importance == 6
 
 
 def test_memory_stream_retrieve():

@@ -86,9 +86,9 @@ def test_compute_bond_zero_on_fresh_agent(agumon, evo_system):
 
 def test_compute_bond_sums_importance(agumon, evo_system):
     agumon.observe({"type": "moved", "delta": (1, 0)})            # importance 3
-    agumon.observe({"type": "battle_victory", "opponent": "x"})   # importance 9
+    agumon.observe({"type": "battle_victory", "opponent": "x"})   # Phase 18: importance 8
     agumon.observe({"type": "ate"})                                # importance 3
-    assert evo_system.compute_bond(agumon) == 3 + 9 + 3
+    assert evo_system.compute_bond(agumon) == 3 + 8 + 3
 
 
 # ----------------------------------------------------------------------------
