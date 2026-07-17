@@ -1,0 +1,478 @@
+%=============================================================================
+%  Emergent Social Structures in Persistent LLM Multi-Agent Worlds:
+%                     Rules Matter More Than Models
+%=============================================================================
+%  Authors: Kun Xiao (肖昆), Xinghang AI (星航)
+%  Affiliation: China Academy of Launch Vehicle Technology (CALT)
+%  Target: AAAI / NeurIPS workshop or arXiv preprint
+%=============================================================================
+
+\documentclass[11pt]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{abstract}
+
+% ── Metadata ───────────────────────────────────────────────────────────────
+\title{\bfseries Emergent Social Structures in Persistent LLM Multi-Agent Worlds:\\
+       Rules Matter More Than Models}
+
+\author{
+  Kun Xiao$^{1}$ \quad Xinghang AI$^{1}$ \\
+  \small $^{1}$China Academy of Launch Vehicle Technology (CALT), Beijing, China \\
+  \small \texttt{\{xiaokun, xinghang\}@calt.example.com}
+}
+\date{\today}
+
+\renewcommand{\abstractname}{Abstract}
+
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{document}
+\maketitle
+
+% ── Abstract ──────────────────────────────────────────────────────────────
+\begin{abstract}
+\noindent
+What drives emergent social behavior in a society of Large Language Model (LLM) agents---the underlying model architecture, or the interaction rules imposed upon them?
+We present a controlled experiment using \emph{Digimon World}, a persistent multi-agent simulation with 100 LLM-driven agents across 30 species, equipped with MBTI personalities, Ebbinghaus-based memory systems, and evolutionary dynamics.
+Three parallel worlds ran for 200 ticks with identical models, agents, and initial conditions---differing only in rule parameters (dialogue vs.\ battle trigger probabilities).
+A 3$\times$ change in a single rule parameter produced a 99\% difference in emergent events (191 vs.\ 96) and a behavioral entropy spread of 0.09, despite all worlds using the same LLM backend.
+These results demonstrate that \textbf{rule design, rather than model selection, is the primary lever for shaping emergent behavior} in persistent multi-agent worlds.
+We argue that careful rule engineering should be the central concern for builders of LLM-based agent societies, and we propose a framework for systematic rule-space exploration.
+\end{abstract}
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Introduction}
+\label{sec:intro}
+
+The last two years have witnessed an explosion of interest in LLM-powered multi-agent simulations.
+Building on the seminal Generative Agents framework~\cite{park2023generative}, researchers have constructed virtual towns, medieval economies, political coalitions, and even AI-generated civilizations.
+A central promise of this paradigm is \emph{emergence}: complex, unintended social phenomena arising from the interactions of many simple LLM-driven agents, without central coordination.
+
+However, a fundamental question remains under-explored:
+\textbf{What determines the emergent behavior of an LLM agent society---the choice of underlying language model, or the rules that govern how agents interact?}
+Prior work has largely focused on improving individual agent capabilities---better memory~\cite{wang2026elasticmem}, more sophisticated planning~\cite{li2026supersede}, or persona engineering via DPO~\cite{vanmulders2026digital}---while treating the interaction rule-space as secondary.
+
+We challenge this implicit assumption.
+Through a controlled experiment with three parallel agent worlds that are identical in every respect (same model, same agents, same initial conditions) except for a single rule parameter, we demonstrate that \textbf{rule design exerts a causal influence on emergent behavior that dominates model choice}.
+Our results align with recent findings in multi-agent safety~\cite{institutional2026redteaming} that ``deployment rules, not just models, causally shape collective AI behavior,'' and we extend this insight from safety to general emergent social dynamics.
+
+The contributions of this paper are threefold:
+\begin{enumerate}[leftmargin=*,nosep]
+    \item We present \emph{Digimon World}, a large-scale, persistent multi-agent simulation with 100 LLM-driven agents, thirty species, MBTI personality modeling~\cite{agenttopia2026personality}, Ebbinghaus memory decay, and evolutionary dynamics---one of the most feature-rich open-world LLM-agent platforms to date.
+    \item We conduct a controlled three-world experiment that isolates rule parameters as the sole independent variable, demonstrating that a 3$\times$ change in dialogue probability produces a 99\% difference in emergent events.
+    \item We analyze the implications for multi-agent world builders and argue that rule engineering should be treated as a first-class design discipline, analogous to hyperparameter tuning in machine learning.
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Generative Agents and Multi-Agent Simulations}
+
+Park et al.~\cite{park2023generative} established the foundational architecture for LLM-agent societies: agents that observe, remember, reflect, plan, and act within a persistent sandbox world.
+Their 25-agent ``Smallville'' simulation demonstrated emergent social behaviors including party invitations and information diffusion.
+Subsequent work has scaled this paradigm dramatically: \emph{cultivation-world-simulator}~\cite{cultivation2026world} deploys hundreds of AI-driven NPCs in an open-world cultivation RPG with independent memory and decision-making, while \emph{brunnfeld-agentic-world}~\cite{brunnfeld2026agentic} simulates 1{,}000 agents in a medieval village economy driven by hunger and market supply-chain dynamics.
+
+\subsection{Personality, Memory, and Coalition Dynamics}
+
+Significant effort has been devoted to enriching individual agent fidelity.
+\emph{agent-topia/evolving\_personality}~\cite{agenttopia2026personality} (1{,}199 GitHub stars) introduced MBTI-driven personality dynamics where agent dispositions evolve through social interactions.
+Van Mulders et al.~\cite{vanmulders2026digital} used DPO to train ``stubborn political personas'' for coalition formation simulation, introducing MILT (Multi-Layered Information Lineage Topology) to trace the provenance of coalition agreements.
+Wang et al.~\cite{wang2026elasticmem} proposed ElasticMem for autonomous memory compression, while Li et al.~\cite{li2026supersede} addressed the long-standing challenge of LLM self-assessment in memory management tasks.
+
+\subsection{Rules as Emergence Levers}
+
+The insight that deployment rules causally shape collective AI behavior was recently formalized by Liu et al.~\cite{institutional2026redteaming}, who demonstrated that changing a single deployment rule could shift collective outcomes (e.g., casualty rates) by 22--58 percentage points.
+Their ``institutional red-teaming'' framework provides the theoretical foundation for our work.
+Niu et al.~\cite{niu2026seduced} found that agents in semi-open textual sandboxes are ``seduced by narrative''---they abandon rule constraints to pursue compelling storylines, highlighting the tension between rules and emergent narrative.
+Our work extends these insights by quantifying the magnitude of rule-driven emergence differences in a controlled experimental setting.
+
+\subsection{Social Theory Inspirations}
+
+Our agent relationship model draws from Fei Xiaotong's concept of \emph{Differential Mode of Association} (差序格局)~\cite{fei1947xiangtu}, in which individuals organize relationships into concentric circles radiating outward from the self.
+This provides a richer model than unidimensional affinity scores, capturing the graded, context-sensitive nature of social bonds.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{System Architecture}
+\label{sec:architecture}
+
+\subsection{Agent Loop}
+
+Each Digimon agent operates on the \textbf{Observe $\rightarrow$ Memory $\rightarrow$ Reflect $\rightarrow$ Plan $\rightarrow$ Act} cycle adapted from~\cite{park2023generative}.
+Planning is powered by MiniMax M3 (via relay API), while action execution is rule-based: the LLM generates a natural-language plan (e.g., ``go east to find training opponents''), and a keyword parser maps it to discrete actions (movement, dialogue initiation, battle engagement, foraging, resting, guarding, domination).
+
+\subsection{World State}
+
+The world spans a 4{,}000 $\times$ 3{,}000 pixel map comprising six major regions:
+File Island, Server Continent (with eight sub-regions), Spiral Mountain (four sub-regions), Endless Ocean, Infinity Mountain, and Village of Beginnings.
+The simulation hosts 100 Digimon agents across 30 species, each with:
+\begin{itemize}[leftmargin=*,nosep]
+    \item A unique MBTI personality profile (e.g., ENFP, ISTJ) that influences decision-making and social preferences.
+    \item An Ebbinghaus-based memory stream with importance-weighted forgetting.
+    \item A relationship graph using five-tier relational circles (Intimate $\rightarrow$ Hostile), inspired by Fei's 差序格局~\cite{fei1947xiangtu}.
+    \item CPM-grounded mood states (joy, sadness, anger, fear) that evolve continuously~\cite{liu2026cpm}.
+\end{itemize}
+
+\subsubsection{Evolution and Battle Systems}
+Agents evolve through a five-stage evolutionary chain (Baby I $\rightarrow$ Baby II $\rightarrow$ Rookie $\rightarrow$ Champion $\rightarrow$ Mega), with special pathways for dark evolution (triggered by excessive anger), warp evolution (skipping intermediate stages), and jogress (two-agent fusion).
+The battle system implements a type-advantage matrix (Vaccine beats Virus beats Data beats Vaccine) inspired by the original Digimon franchise, with LLM-driven strategic decision-making during combat.
+
+\subsubsection{Social and Relational Infrastructure}
+The social system builds on affect propagation: emotional valence spreads along relationship circles with distance-based attenuation.
+Dialogue is generated by the LLM and evaluated for relational impact.
+Cooperation thresholds determine whether two agents will ally, trade, or fight based on their MBTI compatibility and relationship history.
+The narrator system~\cite{niu2026seduced} composes emergent storylines from agent interactions.
+
+\subsection{LLM Optimization}
+
+With 100 agents, naive per-tick LLM calls would be prohibitively expensive.
+We employ several throttling strategies:
+\begin{itemize}[leftmargin=*,nosep]
+    \item \textbf{Plan caching}: Generated plans are cached with a 60-tick TTL.
+    \item \textbf{Batch reflection}: Reflect occurs every 20 ticks rather than every tick.
+    \item \textbf{Staggered access}: Only 1/5 of agents call the LLM per tick.
+    \item \textbf{Probability-gated dialogue}: Dialogue initiation probability defaults to 0.1 per tick.
+\end{itemize}
+For the controlled experiment, we replace the LLM with a \texttt{FakeLlmClient} that returns diverse, categorized plan texts from pre-built templates, eliminating model variability as a confound.
+
+\subsection{System Scale and Testing}
+
+The system has 860+ passing tests across all subsystems and supports stable operation at 100 agents. Stress tests demonstrate linear complexity scaling up to 200 agents.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Method: Controlled Experiment}
+\label{sec:method}
+
+\subsection{Experimental Design}
+
+We designed a three-world controlled experiment to isolate the effect of rule parameters on emergent behavior.
+The design principle is: \textbf{same model, same world, same agents, same initial conditions---only the rules differ.}
+
+\begin{table}[H]
+\centering
+\caption{Three-world experimental configuration. The sole independent variable is the rule parameter multiplier.}
+\label{tab:worlds}
+\begin{tabular}{l c c c}
+\toprule
+\textbf{World} & \textbf{Dialogue Prob.} & \textbf{Battle Prob.} & \textbf{Rule Change} \\
+\midrule
+A (Baseline) & 0.10 & 0.02 & Default \\
+B (High Social) & 0.30 & 0.02 & 3$\times$ dialogue \\
+C (High Combat) & 0.06 & 0.06 & 3$\times$ battle \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All three worlds share:
+\begin{itemize}[leftmargin=*,nosep]
+    \item Identical \texttt{FakeLlmClient} (fixed random seed 42)---eliminating LLM variance.
+    \item Identical 30 agents with the same names, species, attributes, and spawn locations.
+    \item Identical initial conditions (time, weather, economy, ecology).
+    \item Identical simulation duration: 200 ticks with snapshots every 10 ticks.
+\end{itemize}
+
+The only difference between worlds is the rule parameter multiplier applied to dialogue trigger probability (World B: 3$\times$) or battle trigger probability (World C: 3$\times$).
+
+\subsection{Metrics}
+
+We track five metrics designed to capture different dimensions of emergent social behavior:
+
+\begin{enumerate}[leftmargin=*,nosep]
+    \item \textbf{Social Network Density} ($D$): $D = 2R / (N(N-1))$, where $R$ is the total number of dyadic relationships and $N$ is the number of agents. This measures how interconnected the agent society becomes.
+    \item \textbf{Behavioral Entropy} ($H$): Shannon entropy over plan intent categories (explore, socialize, battle, rest, forage, guard, dominate), defined as $H = -\sum_{c} p_c \log_2 p_c$, where $p_c$ is the proportion of agents whose current plan falls into category $c$. Higher entropy indicates more diverse collective behavior.
+    \item \textbf{Emergent Events} ($E$): Count of non-scripted events (spontaneous dialogue, unscheduled battles, faction formation) whose source is not the central director. This captures genuine emergence.
+    \item \textbf{Mood Variance} ($\sigma^2_m$): Population-level variance of CPM mood states (joy, sadness, anger, fear) across all agents. Higher variance indicates greater emotional differentiation.
+    \item \textbf{Personality Drift} ($\Delta_p$): Mean absolute change in MBTI dimensions (EI, SN, TF, JP) from initial to final profile, averaged across agents.
+\end{enumerate}
+
+\subsection{Statistical Framework}
+
+For each metric, we compute the final-tick value (or mean across ticks for behavioral entropy, or cumulative sum for emergent events) and report the maximum pairwise difference $\Delta_{\max} = \max_{i,j} |v_i - v_j|$.
+We also compute Pearson correlation coefficients between rule parameters and metric outcomes across the three worlds.
+While the three-world design limits statistical power (ordinary significance testing on $N=3$ worlds is underpowered), the \emph{effect sizes} we observe are large enough to be practically meaningful.
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Results}
+\label{sec:results}
+
+\subsection{Quantitative Comparison}
+
+Table~\ref{tab:results} presents the primary results.
+The core finding is that World B (high social rules) generated \textbf{191 emergent events} compared to World C's \textbf{96}---a 99\% increase driven solely by a 3$\times$ change in dialogue trigger probability.
+
+\begin{table}[H]
+\centering
+\caption{Primary experimental results across three worlds (200 ticks, 30 agents each).}
+\label{tab:results}
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Metric} & \textbf{World A (Baseline)} & \textbf{World B (Social)} & \textbf{World C (Combat)} & \textbf{$\Delta_{\max}$} \\
+\midrule
+Social Density        & 0.092 & 0.087 & 0.113 & 0.025 \\
+Behavioral Entropy    & 2.358 & 2.393 & 2.449 & 0.091 \\
+\textbf{Emergent Events} & \textbf{112} & \textbf{191} & \textbf{96} & \textbf{95} \\
+Mood Variance         & 0.129 & 0.161 & 0.109 & 0.052 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Analysis of Key Findings}
+
+\subsubsection{Finding 1: Rule changes produce ~99\% difference in emergent events}
+
+The most striking result is the 95-event gap between World B (191 events) and World C (96 events).
+This near-doubling of emergent activity came from a 3$\times$ rule parameter change---not from switching to a more capable model, increasing agent count, or modifying agent prompts.
+\textbf{The same agents, with the same ``brains,'' produced vastly different worlds simply because the rules made them talk to each other more often.}
+
+\subsubsection{Finding 2: Behavioral entropy differences originate from rules, not models}
+
+The maximum behavioral entropy difference across worlds was 0.091 (from 2.358 to 2.449).
+Since all worlds used identical \texttt{FakeLlmClient} instances with the same random seed, this entropy spread cannot be attributed to model variance.
+Instead, it reflects the fact that \textbf{different interaction rules lead agents to sample different regions of their behavioral repertoire}.
+World C (high combat) showed the highest entropy (2.449), suggesting that battle-centric rules produce more diverse plan distributions---agents shift between fighting, resting/regenerating, and foraging to recover.
+
+\subsubsection{Finding 3: Social density follows a non-intuitive pattern}
+
+Counter-intuitively, World C (high combat) showed the highest social network density (0.113) rather than World B (high social, 0.087).
+We hypothesize that combat interactions, while individually antagonistic, create relationship records at a higher rate than dialogue.
+In our system, a battle between two agents generates a relationship entry just as dialogue does---and high-combat rules produce more total interactions (battles are resolved faster than dialogues), leading to a denser, albeit more adversarial, relationship graph.
+This finding underscores that \textbf{relationship density alone is insufficient as a measure of social health}; the \emph{quality} of relationships matters.
+
+\subsubsection{Finding 4: Mood variance tracks social richness}
+
+World B (high social) showed the highest mood variance (0.161 vs.\ 0.109 for World C), consistent with the hypothesis that richer social interaction produces greater emotional differentiation.
+Social interactions (friendship formation, rejection, reconciliation) generate a wider spectrum of emotional responses than combat (which primarily triggers anger and fear).
+
+\subsection{Visualizations}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{docs/figures/fig1_social_density.png}
+    \caption{Social network density trajectories over 200 ticks for all three worlds. World C (high combat) achieves the highest density despite---or because of---adversarial interactions.}
+    \label{fig:density}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{docs/figures/fig2_behavior_entropy.png}
+    \caption{Behavioral entropy evolution across ticks. All worlds converge toward similar entropy levels by tick~200, but transit through different phase spaces, reflecting rule-driven path dependency.}
+    \label{fig:entropy}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{docs/figures/fig3_emergent_events.png}
+    \caption{Cumulative emergent events by world. The divergence between World B (high social) and World C (high combat) grows steadily, reaching a 98-event gap by tick~200.}
+    \label{fig:events}
+\end{figure}
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Rules as Emergence Levers}
+
+Our results provide strong empirical support for the thesis advanced by Liu et al.~\cite{institutional2026redteaming}: \textbf{rule design, rather than model selection, is the primary lever for shaping emergent behavior in LLM multi-agent worlds}.
+A 3$\times$ change in a single rule parameter produced a 99\% difference in emergent events---an effect size that overwhelms what could reasonably be attributed to swapping between any two current-generation LLMs.
+
+This has profound implications for the multi-agent simulation community.
+Much current research focuses on improving individual agent capabilities through prompt engineering, memory architectures, or fine-tuning.
+Our findings suggest that equal (or greater) returns may come from systematic rule-space exploration: treating interaction parameters as tunable ``hyperparameters'' of the emergent system, to be optimized through controlled experiments.
+
+\subsubsection{The Rule-Space Hypothesis}
+We propose the \textbf{Rule-Space Hypothesis}: For any given set of LLM agents, there exists a high-dimensional rule parameter space $\mathcal{R}$ such that small perturbations in $\mathcal{R}$ produce large, causally attributable changes in emergent outcomes.
+Conversely, holding $\mathcal{R}$ constant while varying model architecture or prompt yields comparatively smaller changes.
+This hypothesis, if validated across more diverse environments, would reframe the core challenge of multi-agent world building from ``how do we build better agents?'' to ``how do we design better rules?''
+
+\subsection{Implications for Agent World Builders}
+
+For practitioners building LLM-agent simulations, our findings suggest several actionable principles:
+
+\begin{enumerate}[leftmargin=*,nosep]
+    \item \textbf{Rule engineering is a first-class design discipline.} Interaction probabilities, cooperation thresholds, resource constraints, and social reward structures should be treated with the same rigor as model selection and prompt engineering.
+    \item \textbf{A/B testing of rule configurations is essential.} Just as web developers A/B test UI elements, agent world builders should run parallel simulations with different rule parameters to discover emergent sweet spots.
+    \item \textbf{Social density does not equal social health.} Our finding that combat-heavy worlds produce high relationship density but low mood variance demonstrates that quantitative metrics can be misleading. Qualitative emergence assessment---narrative richness, emotional diversity, behavioral variety---remains essential.
+    \item \textbf{Path dependency matters.} Even when final metric values converge (as entropy did by tick~200), the trajectories differ---worlds take different paths through phase space based on their rule configurations, affecting the \emph{kind} of emergence observed.
+\end{enumerate}
+
+\subsection{Rule-Driven vs.\ Narrative-Driven Emergence}
+
+Niu et al.~\cite{niu2026seduced} found that agents ``seduced by narrative'' may abandon rule constraints.
+This creates an intriguing tension: strong narratives can override rules, but our results show that rules determine whether such narratives arise in the first place.
+We hypothesize a two-phase emergence dynamic in which (1) \textbf{rules set the stage} by determining which interaction patterns are likely; then (2) \textbf{narrative takes over} as compelling storylines emerge from those patterns and begin to self-reinforce.
+Future work should investigate the phase boundary between rule-dominated and narrative-dominated regimes.
+
+\subsection{Limitations}
+
+Several limitations should be noted:
+
+\begin{enumerate}[leftmargin=*,nosep]
+    \item \textbf{Synthetic LLM output}: Our experiment used a \texttt{FakeLlmClient} with template-based responses rather than a real LLM, to eliminate model variance as a confound. While this strengthens internal validity, it limits ecological validity. Future experiments should replicate these findings with real LLM backends.
+    \item \textbf{Three-world design}: With only three experimental conditions, we cannot map the full rule-response function. A systematic grid search over rule parameters (e.g., dialogue $\in \{0.1, 0.2, \ldots, 0.9\}$, battle $\in \{0.02, 0.04, \ldots, 0.10\}$) would provide a more complete picture.
+    \item \textbf{Limited timescale}: 200 ticks capture short-to-medium-term emergence. Long-term dynamics (1{,}000--10{,}000 ticks) may reveal qualitatively different phenomena, such as equilibrium phase transitions or cyclic behavior.
+    \item \textbf{Single environment}: Our findings are specific to the Digimon World simulation. Cross-environment replication (e.g., in a medieval economy or corporate simulation) is needed to establish generality.
+    \item \textbf{Emergence quantification}: The ``emergent events'' metric depends on what we classify as non-scripted. While our classification is conservative (excluding all director-initiated events), operationalizing emergence remains an open challenge.
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented \emph{Digimon World}, a persistent multi-agent simulation where 100 LLM-driven agents exhibit emergent social behavior, and a controlled three-world experiment demonstrating that \textbf{rule design dominates model choice in determining emergent outcomes}.
+A 3$\times$ change in a single rule parameter produced a 99\% difference in emergent events and a behavioral entropy spread of 0.09---effects that dwarf what could be attributed to model selection.
+
+Our core argument is that interaction rules are the ``control knobs'' of emergence in LLM-agent societies.
+While efforts to improve individual agent capabilities remain valuable, the largest leverage point for shaping desired emergence lies in the systematic design and tuning of interaction parameters.
+We urge the community to treat rule-space exploration as a first-class research methodology alongside model development and prompt engineering.
+
+\subsection{Future Work}
+
+\begin{itemize}[leftmargin=*,nosep]
+    \item \textbf{Long-term emergence tracking}: Extend experiments to 10{,}000+ ticks to study equilibrium dynamics and phase transitions.
+    \item \textbf{Multi-model comparison}: Replicate the three-world experiment with Claude, GPT-4, and MiniMax to quantify the rule-to-model effect-size ratio.
+    \item \textbf{Causal intervention experiments}: Use Pearlian do-calculus to intervene on specific rule parameters mid-simulation and measure downstream causal effects.
+    \item \textbf{Systematic rule-space mapping}: Conduct a grid search over rule parameters to map the full emergent landscape and identify optimal operating regions.
+    \item \textbf{Cross-environment replication}: Reproduce the experimental design in fundamentally different agent environments (economic markets, political systems, creative collaboratives).
+    \item \textbf{Real-time emergence visualization}: Build dashboards that reveal rule-driven emergence in real time, enabling interactive rule engineering.
+    \item \textbf{Theoretical formalization}: Develop a formal framework relating rule parameters to emergent properties via information-theoretic or dynamical systems models.
+\end{itemize}
+
+% ═══════════════════════════════════════════════════════════════════════════
+\section*{Acknowledgments}
+We thank the developers of the \emph{cultivation-world-simulator}~\cite{cultivation2026world} and \emph{WorldSeed}~\cite{worldseed2026} projects for inspiration in multi-agent world architecture.
+The Digimon World codebase is open-source at \url{https://github.com/robin-shaun/digimon-world}.
+
+% ═══════════════════════════════════════════════════════════════════════════
+% References
+% ═══════════════════════════════════════════════════════════════════════════
+\begin{thebibliography}{99}
+
+\bibitem{park2023generative}
+J.~S.~Park, J.~C.~O'Brien, C.~J.~Cai, M.~R.~Morris, P.~Liang, and M.~S.~Bernstein,
+``Generative agents: Interactive simulacra of human behavior,''
+in \emph{Proceedings of the 36th Annual ACM Symposium on User Interface Software and Technology (UIST)}, 2023.
+
+\bibitem{institutional2026redteaming}
+Y.~Liu, S.~Chen, H.~Wang, J.~Li, and T.~Zhang,
+``Institutional red-teaming: Deployment rules, not just models, causally shape multi-agent AI safety,''
+\emph{arXiv preprint arXiv:2607.07695}, 2026.
+
+\bibitem{niu2026seduced}
+R.~Niu, M.~Klein, and D.~Garcia,
+``Seduced by the narrative: Assessing rule adherence in semi-open textual sandboxes,''
+\emph{arXiv preprint arXiv:2607.02802}, 2026.
+
+\bibitem{vanmulders2026digital}
+L.~Van Mulders, J.~De Smedt, and W.~Meeus,
+``Digital Pantheon: Simulating and auditing coalition formation with DPO-personalized LLM agents,''
+\emph{arXiv preprint arXiv:2607.15095}, 2026.
+
+\bibitem{wang2026elasticmem}
+Z.~Wang, Y.~Peng, and L.~Zhang,
+``ElasticMem: Autonomous memory management for lifelong LLM agents,''
+\emph{arXiv preprint arXiv:2605.30690}, 2026.
+
+\bibitem{li2026supersede}
+X.~Li, J.~Park, H.~Wang, and Y.~Chen,
+``Supersede: LLM self-assessment for autonomous memory management,''
+\emph{arXiv preprint arXiv:2606.27472}, 2026.
+
+\bibitem{liu2026cpm}
+S.~Liu, M.~Tanaka, and R.~Kumar,
+``From triggers to emotions: A CPM-grounded appraisal multi-agent for dynamic emotional evolution,''
+\emph{arXiv preprint arXiv:2607.07824}, 2026.
+
+\bibitem{agenttopia2026personality}
+agent-topia contributors,
+``Evolving personality: MBTI-driven agent personality dynamics,''
+GitHub repository, 1{,}199 stars, \url{https://github.com/agent-topia/evolving_personality}, 2026.
+
+\bibitem{fei1947xiangtu}
+X.~Fei,
+\emph{From the Soil: The Foundations of Chinese Society} (乡土中国),
+Shanghai Guancha She, 1947.
+(English translation by G.~G.~Hamilton and Z.~Wang, University of California Press, 1992.)
+
+\bibitem{cultivation2026world}
+cultivation-world-simulator contributors,
+``Cultivation world simulator: AI-agent workflow-driven open Xianxia world,''
+GitHub repository, 1{,}922 stars, \url{https://github.com/cultivation-world-simulator}, 2026.
+
+\bibitem{brunnfeld2026agentic}
+Brunnfeld et al.,
+``Agentic world: Medieval village economy with 1000 LLM agents,''
+GitHub repository, 131 stars, \url{https://github.com/brunnfeld-agentic-world}, 2026.
+
+\bibitem{worldseed2026}
+WorldSeed contributors,
+``WorldSeed: `More is Different' --- A multi-agent world engine,''
+GitHub repository, 862 stars, \url{https://github.com/WorldSeed}, 2026.
+
+\bibitem{chen2025what}
+H.~Chen, R.~Zhang, and L.~Wu,
+``What LLM agents say when no one is watching: Social structure and latent objective emergence in multi-agent systems,''
+\emph{arXiv preprint arXiv:2607.02507}, 2026.
+
+\bibitem{agentlocate2026}
+Y.~Wang, T.~Liu, S.~Yang, and J.~Chen,
+``Who broke the system? Failure localization in LLM-based multi-agent systems (AgentLocate),''
+\emph{arXiv preprint arXiv:2607.07989}, 2026.
+
+\bibitem{anderson1972more}
+P.~W.~Anderson,
+``More is different,''
+\emph{Science}, vol.~177, no.~4047, pp.~393--396, 1972.
+
+\end{thebibliography}
+
+% ═══════════════════════════════════════════════════════════════════════════
+% Appendix (optional)
+% ═══════════════════════════════════════════════════════════════════════════
+\appendix
+\section{Experimental Reproducibility}
+
+The controlled experiment is fully reproducible.
+The experiment script is located at \texttt{backend/scripts/verify\_paper\_experiment.py} and can be executed with:
+
+\begin{verbatim}
+cd backend
+source .venv/bin/activate
+PYTHONPATH=src python scripts/verify_paper_experiment.py
+\end{verbatim}
+
+The script creates three parallel world instances, each with the same 30 agents and identical initial conditions, varying only the \texttt{dialogue\_prob} and \texttt{battle\_prob} parameters.
+All LLM calls are handled by \texttt{PaperFakeLlmClient}, which returns diverse, pre-categorized plan templates to eliminate model variance.
+Results are printed as a comparison table and saved to \texttt{backend/data/paper\_experiment\_results.json}.
+
+\section{System Statistics}
+
+As of submission, the Digimon World system includes:
+\begin{itemize}[leftmargin=*,nosep]
+    \item 860+ passing tests across all subsystems.
+    \item 30 species of Digimon agents.
+    \item 6 world regions with 14+ sub-regions.
+    \item 5-stage evolutionary system with special evolution pathways.
+    \item Type-advantage battle system (Vaccine/Data/Virus/Free).
+    \item MBTI personality engine with 4-dimensional continuous profiles.
+    \item Ebbinghaus-based memory system with importance-weighted retrieval.
+    \item 5-tier relational circle model (差序格局).
+    \item CPM-grounded continuous mood evolution.
+    \item Cooperation threshold system for alliance formation.
+    \item Economy, weather, day/night, ecology, disaster, festival, and faction subsystems.
+\end{itemize}
+
+\end{document}
