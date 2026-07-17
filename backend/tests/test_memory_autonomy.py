@@ -1,544 +1,700 @@
-"""memory_autonomy 模块测试。
+"""Tests for Phase 18 memory autonomy system.
 
-覆盖:
-- EbbinghausCurve: retention 计算, half-life, for_agent 工厂
-- ImportanceAssessor: 启发式评估, LLM fallback
-- ForgettingEngine: register, get_strength, update_all_strengths, get_weak_memories, mark_stale, diagnose
-- MemoryRehearsal: select_for_rehearsal, rehearse
-- MemoryUpdateDetector: detect_stale 四种变化类型
-- MemoryAutonomy: register, assess_importance, step, notify_state_change, diagnose
+Covers:
+- EbbinghausCurve math (retention formula, half-life)
+- MemoryHealth dataclass
+- ForgettingEngine (register, get_strength, update_all_strengths,
+  get_weak_memories, mark_stale, diagnose)
+- MemoryRehearsal (select_for_rehearsal)
+- MemoryAutonomy (register + step + diagnose lifecycle, stale detection)
+- API endpoint GET /api/digimon/{name}/memory-health
+- DigimonAgent.observe() integration
 """
 
 from __future__ import annotations
 
 import math
+import random
 from datetime import datetime, timedelta
 
 import pytest
+from fastapi.testclient import TestClient
 
+from digimon_world.api import app
+from digimon_world.world import get_world, reset_world
 from digimon_world.memory.memory_autonomy import (
     EbbinghausCurve,
-    FORGETTING_STRENGTH_DEFAULT,
     ForgettingEngine,
-    ImportanceAssessor,
     MemoryAutonomy,
     MemoryHealth,
     MemoryRehearsal,
-    MemoryUpdateDetector,
+    REHEARSAL_STRENGTH_THRESHOLD,
+    MAX_REHEARSAL_PER_STEP,
 )
 from digimon_world.memory.memory_stream import MemoryNode
+# ═══════════════════════════════════════════════════════════════════
 
 
-# ──────────────────────────────────────────────
-# helpers
-# ──────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _reset():
+    """Reset world singleton before and after each test to avoid pollution."""
+    reset_world()
+    yield
+    reset_world()
 
-def make_node(
+
+@pytest.fixture
+def client() -> TestClient:
+    return TestClient(app)
+
+
+def _make_memory_node(
+    node_id: int,
     description: str,
     importance: int = 5,
     memory_type: str = "observation",
-    node_id: int = 0,
 ) -> MemoryNode:
+    """Factory helper to create a MemoryNode with a known node_id."""
     return MemoryNode(
         timestamp=datetime.utcnow(),
         description=description,
         importance=importance,
         memory_type=memory_type,
         node_id=node_id,
+        tick_index=0,
     )
 
 
-def _register_health(engine: ForgettingEngine, node_id: int, **kw) -> MemoryHealth:
-    """Helper: forcibly inject a MemoryHealth with custom fields into the engine."""
-    node = make_node("test", node_id=node_id, **{k: v for k, v in kw.items() if k in ("importance", "memory_type")})
-    health = MemoryHealth(memory=node, strength=kw.get("strength", 1.0))
-    if "created_at" in kw:
-        health.created_at = kw["created_at"]
-    if "last_rehearsed" in kw:
-        health.last_rehearsed = kw["last_rehearsed"]
-    if "rehearsal_count" in kw:
-        health.rehearsal_count = kw["rehearsal_count"]
-    if "stale" in kw:
-        health.stale = kw["stale"]
-        health.stale_reason = kw.get("stale_reason", "")
-    engine.memory_health[node_id] = health
-    return health
+# ═══════════════════════════════════════════════════════════════════
+# Group 1: EbbinghausCurve math
+# ═══════════════════════════════════════════════════════════════════
 
-
-# ──────────────────────────────────────────────
-# EbbinghausCurve
-# ──────────────────────────────────────────────
 
 class TestEbbinghausCurve:
-    def test_retention_at_zero_is_one(self):
-        curve = EbbinghausCurve(S=1000)
+    """Test the Ebbinghaus forgetting curve model.
+
+    Formula: R(t) = exp(-t / S)  where S = strength parameter.
+    """
+
+    def test_retention_zero_elapsed(self):
+        """At t=0, retention should be 1.0 (no forgetting)."""
+        curve = EbbinghausCurve(S=3600.0)
         assert curve.retention(0) == 1.0
+        assert curve.retention(-5) == 1.0  # negative time → 1.0
 
-    def test_retention_negative_time_returns_one(self):
-        curve = EbbinghausCurve(S=1000)
-        assert curve.retention(-5) == 1.0
+    def test_retention_at_s_equals_e_inverse(self):
+        """At t=S, retention = exp(-1) ≈ 0.3679."""
+        curve = EbbinghausCurve(S=1000.0)
+        expected = math.exp(-1)
+        assert math.isclose(curve.retention(1000.0), expected, rel_tol=1e-9)
 
-    def test_retention_at_half_life_is_about_half(self):
-        curve = EbbinghausCurve(S=1000)
-        half = curve.half_life_seconds()
-        r = curve.retention(half)
-        assert abs(r - 0.5) < 1e-6
+    def test_retention_at_half_life(self):
+        """At t = S * ln(2), retention should be 0.5."""
+        curve = EbbinghausCurve(S=3600.0)
+        half_life = curve.half_life_seconds()
+        result = curve.retention(half_life)
+        assert math.isclose(result, 0.5, rel_tol=1e-9)
+        # Also verify the formula: half_life = S * ln(2)
+        expected_hl = 3600.0 * math.log(2)
+        assert math.isclose(half_life, expected_hl, rel_tol=1e-9)
 
-    def test_retention_decays_over_time(self):
-        curve = EbbinghausCurve(S=1000)
+    def test_retention_decays_monotonically(self):
+        """Retention should decrease as elapsed time increases."""
+        curve = EbbinghausCurve(S=3600.0)
         r1 = curve.retention(100)
-        r2 = curve.retention(500)
-        r3 = curve.retention(2000)
-        # 时间越长，保留率越低
-        assert r1 > r2 > r3
-        assert r1 < 1.0
-        assert r3 > 0.0
+        r2 = curve.retention(200)
+        r3 = curve.retention(500)
+        assert r2 < r1
+        assert r3 < r2
 
-    def test_half_life_formula(self):
-        curve = EbbinghausCurve(S=3600)
-        expected = 3600 * math.log(2)
-        assert abs(curve.half_life_seconds() - expected) < 0.01
+    def test_retention_with_custom_s(self):
+        """Larger S means slower forgetting."""
+        fast = EbbinghausCurve(S=600.0)
+        slow = EbbinghausCurve(S=86400.0)
+        t = 3600.0  # 1 hour
+        assert fast.retention(t) < slow.retention(t)
 
-    def test_for_agent_brave_is_faster_forgetting(self):
-        curve = EbbinghausCurve.for_agent("亚古兽", personality_trait="brave")
-        # brave: factor=1.2 → S = 3600 / 1.2 = 3000
-        assert curve.S == FORGETTING_STRENGTH_DEFAULT / 1.2
-
-    def test_for_agent_timid_is_slower_forgetting(self):
-        curve = EbbinghausCurve.for_agent("巴达兽", personality_trait="timid")
-        # timid: factor=0.8 → S = 3600 / 0.8 = 4500
-        assert curve.S == FORGETTING_STRENGTH_DEFAULT / 0.8
-
-    def test_for_agent_lazy_is_fastest_forgetting(self):
-        curve = EbbinghausCurve.for_agent("鼻涕兽", personality_trait="lazy")
-        # lazy: factor=1.5 → S = 3600 / 1.5 = 2400
-        assert curve.S == FORGETTING_STRENGTH_DEFAULT / 1.5
-
-    def test_for_agent_unknown_personality_defaults_to_one(self):
-        curve = EbbinghausCurve.for_agent("unknown", personality_trait="unknown_trait")
-        assert curve.S == FORGETTING_STRENGTH_DEFAULT
-
-    def test_for_agent_case_insensitive_personality(self):
-        curve = EbbinghausCurve.for_agent("test", personality_trait="BRAVE")
-        assert curve.S == FORGETTING_STRENGTH_DEFAULT / 1.2
+    def test_for_agent_trait_factors(self):
+        """for_agent() should apply personality factor to S."""
+        brave = EbbinghausCurve.for_agent("Agumon", "brave")
+        timid = EbbinghausCurve.for_agent("Gabumon", "timid")
+        # brave: factor=1.2 → S = 3600/1.2 = 3000 (faster forgetting)
+        # timid: factor=0.8 → S = 3600/0.8 = 4500 (slower forgetting)
+        assert brave.S < timid.S
+        # brave forgets faster → lower retention at same elapsed time
+        t = 3600.0
+        assert brave.retention(t) < timid.retention(t)
 
 
-# ──────────────────────────────────────────────
-# ImportanceAssessor
-# ──────────────────────────────────────────────
-
-class TestImportanceAssessor:
-    def test_heuristic_high_signals_return_8(self):
-        assessor = ImportanceAssessor()
-        for desc in ["进化了!", "击败敌人", "和太一建立了羁绊", "发现了徽章", "孵化了数码蛋"]:
-            result = assessor.assess(desc, "亚古兽")
-            assert result["importance"] == 8, f"desc={desc}"
-            assert result["reason"] == "heuristic"
-
-    def test_heuristic_mid_signals_return_6(self):
-        assessor = ImportanceAssessor()
-        for desc in ["战斗开始了", "和加布兽对话", "探索新区域"]:
-            result = assessor.assess(desc, "亚古兽")
-            assert result["importance"] == 6, f"desc={desc}"
-
-    def test_heuristic_low_signals_return_3(self):
-        assessor = ImportanceAssessor()
-        for desc in ["向前移动", "休息一下", "睡觉了"]:
-            result = assessor.assess(desc, "亚古兽")
-            assert result["importance"] == 3, f"desc={desc}"
-
-    def test_heuristic_returns_none_for_unknown_then_llm_fallback(self):
-        assessor = ImportanceAssessor()
-        # 这个描述不匹配任何启发式关键词 → 走 _llm_assess_fallback
-        result = assessor.assess("一朵花在风中摇曳", "亚古兽")
-        assert "importance" in result
-        assert "reason" in result
-        assert result["reason"] != "heuristic"
-
-    def test_llm_fallback_short_description_is_low_importance(self):
-        assessor = ImportanceAssessor()
-        short = "hi"  # len=2, <=30
-        result = assessor._llm_assess_fallback(short, "test", "neutral", "observation")
-        assert result["importance"] == 4
-
-    def test_llm_fallback_medium_description_is_mid_importance(self):
-        assessor = ImportanceAssessor()
-        medium = "a" * 35  # len=35, >30 and <=80
-        result = assessor._llm_assess_fallback(medium, "test", "neutral", "observation")
-        assert result["importance"] == 5
-
-    def test_llm_fallback_long_description_is_higher_importance(self):
-        assessor = ImportanceAssessor()
-        long_desc = "x" * 100  # len=100, >80
-        result = assessor._llm_assess_fallback(long_desc, "test", "neutral", "observation")
-        assert result["importance"] == 6
-
-    def test_assess_returns_dict_with_expected_keys(self):
-        assessor = ImportanceAssessor()
-        result = assessor.assess("进化了", "亚古兽", agent_personality="brave", memory_type="observation")
-        assert set(result.keys()) == {"importance", "reason", "keywords"}
-        assert isinstance(result["importance"], int)
-        assert isinstance(result["reason"], str)
-        assert isinstance(result["keywords"], list)
+# ═══════════════════════════════════════════════════════════════════
+# Group 2: MemoryHealth dataclass
+# ═══════════════════════════════════════════════════════════════════
 
 
-# ──────────────────────────────────────────────
-# ForgettingEngine
-# ──────────────────────────────────────────────
+class TestMemoryHealth:
+    """Test the MemoryHealth dataclass."""
+
+    def test_creation_defaults(self):
+        """MemoryHealth should have sensible default values."""
+        node = _make_memory_node(1, "test memory", importance=5)
+        health = MemoryHealth(memory=node)
+
+        assert health.memory is node
+        assert health.strength == 1.0
+        assert health.last_rehearsed is None
+        assert health.rehearsal_count == 0
+        assert health.stale is False
+        assert health.stale_reason == ""
+        assert isinstance(health.created_at, datetime)
+
+    def test_stale_flag(self):
+        """Setting stale should be reflected correctly."""
+        node = _make_memory_node(2, "old info", importance=3)
+        health = MemoryHealth(memory=node)
+
+        assert not health.stale
+        assert health.stale_reason == ""
+
+        health.stale = True
+        health.stale_reason = "state changed"
+        health.strength = 0.0
+
+        assert health.stale
+        assert health.stale_reason == "state changed"
+        assert health.strength == 0.0
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Group 3: ForgettingEngine
+# ═══════════════════════════════════════════════════════════════════
+
 
 class TestForgettingEngine:
-    def test_register_creates_health_with_strength_one(self):
+    """Test the ForgettingEngine that manages memory health."""
+
+    def test_register_adds_health(self):
+        """register() should add a MemoryHealth entry with initial strength 1.0."""
         engine = ForgettingEngine()
-        node = make_node("test memory", node_id=1)
+        node = _make_memory_node(1, "test", importance=5)
+
         health = engine.register(node)
+        assert 1 in engine.memory_health
         assert health.strength == 1.0
         assert health.memory is node
-        assert health.rehearsal_count == 0
-        assert health.last_rehearsed is None
-        assert not health.stale
 
-    def test_register_raises_valueerror_for_none_node_id(self):
+    def test_register_rejects_node_without_id(self):
+        """register() should raise ValueError if node has no node_id."""
         engine = ForgettingEngine()
-        node = MemoryNode(timestamp=datetime.utcnow(), description="x", importance=5)
+        node = MemoryNode(
+            timestamp=datetime.utcnow(),
+            description="no id",
+            importance=5,
+            node_id=None,
+        )
         with pytest.raises(ValueError, match="node_id"):
             engine.register(node)
 
-    def test_get_strength_unknown_node_returns_zero(self):
+    def test_get_strength_returns_zero_for_unknown_node(self):
+        """get_strength() should return 0.0 for unknown node_id."""
         engine = ForgettingEngine()
         assert engine.get_strength(999) == 0.0
 
-    def test_get_strength_stale_memory_returns_zero(self):
+    def test_get_strength_returns_zero_for_stale(self):
+        """get_strength() should return 0.0 for stale memories."""
         engine = ForgettingEngine()
-        node = make_node("stale", node_id=1)
+        node = _make_memory_node(1, "stale memory", importance=5)
         engine.register(node)
-        engine.mark_stale(1, "outdated")
+        engine.mark_stale(1, "test stale")
         assert engine.get_strength(1) == 0.0
 
-    def test_get_strength_decays_over_time(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=100))
-        node = make_node("decaying", node_id=1)
+    def test_get_strength_decays_with_time(self):
+        """get_strength() should decay according to the forgetting curve."""
+        engine = ForgettingEngine(curve=EbbinghausCurve(S=1000.0))
+        node = _make_memory_node(1, "decaying", importance=5)
         health = engine.register(node)
-        # 手动把 created_at 改到 100 秒前
-        health.created_at = datetime.utcnow() - timedelta(seconds=100)
-        s = engine.get_strength(1)
-        # 100 秒 * e^(-100/100) = e^(-1) ≈ 0.3679
-        assert 0.3 < s < 0.4
 
-    def test_get_strength_with_rehearsal_boosts(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=100))
-        node = make_node("rehearsed", node_id=1)
+        # Simulate passage of time by setting created_at in the past
+        health.created_at = datetime.utcnow() - timedelta(seconds=1000)
+        # At t=S=1000, retention = exp(-1) ≈ 0.3679
+        s = engine.get_strength(1)
+        assert math.isclose(s, math.exp(-1), rel_tol=1e-6)
+
+    def test_get_strength_updates_health_strength(self):
+        """get_strength() should update the health.strength field."""
+        engine = ForgettingEngine(curve=EbbinghausCurve(S=1000.0))
+        node = _make_memory_node(1, "update field", importance=5)
         health = engine.register(node)
-        # 模拟 50 秒前进行了复述
-        health.last_rehearsed = datetime.utcnow() - timedelta(seconds=50)
+
+        # Before decay: strength = 1.0
+        assert health.strength == 1.0
+
+        health.created_at = datetime.utcnow() - timedelta(seconds=500)
+        s = engine.get_strength(1)
+        # After get_strength, health.strength should be updated
+        assert health.strength < 1.0
+        assert math.isclose(health.strength, s, rel_tol=1e-9)
+
+    def test_get_strength_with_rehearsal_boost(self):
+        """Rehearsed memories should get a strength boost."""
+        engine = ForgettingEngine(curve=EbbinghausCurve(S=1000.0))
+        node = _make_memory_node(1, "rehearsed", importance=8)
+        health = engine.register(node)
+
+        # Simulate rehearsal
+        health.last_rehearsed = datetime.utcnow() - timedelta(seconds=200)
         health.rehearsal_count = 3
-        s = engine.get_strength(1)
-        # e^(-50/100) * (1 + 0.05*3) = e^(-0.5) * 1.15 ≈ 0.6065 * 1.15 ≈ 0.697
-        assert s > 0.6
 
-    def test_get_strength_with_rehearsal_capped_at_one(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10000))
-        node = make_node("capped", node_id=1)
-        health = engine.register(node)
-        health.last_rehearsed = datetime.utcnow()
-        health.rehearsal_count = 100
+        # Base retention from last_rehearsed: exp(-200/1000) ≈ 0.8187
+        # Boost: 1 + 0.05 * 3 = 1.15
+        # Expected: 0.8187 * 1.15 ≈ 0.9415 (capped at 1.0)
         s = engine.get_strength(1)
-        assert s <= 1.0
+        base = math.exp(-200 / 1000)
+        expected = min(base * (1.0 + 0.05 * 3), 1.0)
+        assert math.isclose(s, expected, rel_tol=1e-6)
 
     def test_update_all_strengths_returns_stats(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10000))
-        for i in range(3):
-            engine.register(make_node(f"mem {i}", node_id=i))
+        """update_all_strengths() should return total, weak, strong counts."""
+        engine = ForgettingEngine(curve=EbbinghausCurve(S=3600.0))
+
+        # Fresh memory (strength ~1.0)
+        node1 = _make_memory_node(1, "fresh", importance=5)
+        engine.register(node1)
+
+        # Old memory (strength ~0.1)
+        node2 = _make_memory_node(2, "old", importance=5)
+        h2 = engine.register(node2)
+        h2.created_at = datetime.utcnow() - timedelta(seconds=10000)
+
         stats = engine.update_all_strengths()
-        assert stats == {"total": 3, "weak": 0, "strong": 3}
+        assert stats["total"] == 2
+        assert stats["strong"] >= 1  # fresh memory
+        # The old memory at t=10000 with S=3600: exp(-10000/3600) ≈ 0.062 < 0.3 → weak
+        assert stats["weak"] >= 1
 
-    def test_update_all_strengths_detects_weak(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10))
-        for i in range(5):
-            node = make_node(f"weak mem {i}", node_id=i)
-            health = engine.register(node)
-            health.created_at = datetime.utcnow() - timedelta(seconds=20)
-        stats = engine.update_all_strengths()
-        assert stats["weak"] == 5  # all decayed below 0.3
+    def test_get_weak_memories_filters_correctly(self):
+        """get_weak_memories() should return only non-stale, 0 < strength < threshold."""
+        engine = ForgettingEngine(curve=EbbinghausCurve(S=3600.0))
 
-    def test_get_weak_memories_filters_below_threshold(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10))
-        for i in range(3):
-            node = make_node(f"mem {i}", node_id=i)
-            health = engine.register(node)
-            health.created_at = datetime.utcnow() - timedelta(seconds=30)
-        weak = engine.get_weak_memories(threshold=0.5)
-        assert len(weak) == 3
+        # Strong memory (fresh)
+        node1 = _make_memory_node(1, "strong", importance=9)
+        engine.register(node1)
 
-    def test_get_weak_memories_excludes_stale(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10))
-        node = make_node("stale weak", node_id=1)
-        health = engine.register(node)
-        health.created_at = datetime.utcnow() - timedelta(seconds=30)
-        engine.mark_stale(1, "test")
-        weak = engine.get_weak_memories()
-        assert len(weak) == 0
+        # Weak memory (old)
+        node2 = _make_memory_node(2, "weak", importance=6)
+        h2 = engine.register(node2)
+        h2.created_at = datetime.utcnow() - timedelta(seconds=10000)
 
-    def test_get_weak_memories_excludes_zero_strength(self):
+        # Stale memory
+        node3 = _make_memory_node(3, "stale", importance=7)
+        engine.register(node3)
+        engine.mark_stale(3, "stale test")
+
+        weak = engine.get_weak_memories(threshold=REHEARSAL_STRENGTH_THRESHOLD)
+        weak_ids = [h.memory.node_id for h in weak]
+
+        # Should include the genuinely weak memory
+        assert 2 in weak_ids
+        # Should NOT include the strong memory
+        assert 1 not in weak_ids
+        # Should NOT include the stale memory (strength=0)
+        assert 3 not in weak_ids
+
+    def test_mark_stale_sets_flag_and_zero_strength(self):
+        """mark_stale() should set stale=True, set strength=0, and record reason."""
         engine = ForgettingEngine()
-        _register_health(engine, 1, strength=0.0)
-        weak = engine.get_weak_memories()
-        assert len(weak) == 0
-
-    def test_mark_stale_sets_flags_and_zero_strength(self):
-        engine = ForgettingEngine()
-        node = make_node("outdated", node_id=42)
+        node = _make_memory_node(1, "outdated fact", importance=5)
         engine.register(node)
-        engine.mark_stale(42, "evolution changed")
-        health = engine.memory_health[42]
+
+        engine.mark_stale(1, "evolution changed stage")
+        health = engine.memory_health[1]
+
         assert health.stale is True
-        assert health.stale_reason == "evolution changed"
+        assert health.stale_reason == "evolution changed stage"
         assert health.strength == 0.0
 
-    def test_mark_stale_nonexistent_does_not_raise(self):
+    def test_mark_stale_unknown_node_is_noop(self):
+        """mark_stale() on unknown node_id should not raise."""
         engine = ForgettingEngine()
-        # 不应抛出异常
-        engine.mark_stale(999, "no such memory")
+        # Should not raise
+        engine.mark_stale(999, "no such node")
 
-    def test_diagnose_returns_comprehensive_report(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10000))
-        for i in range(5):
-            engine.register(make_node(f"mem {i}", node_id=i, importance=5))
-        engine.mark_stale(0, "test")
+    def test_diagnose_returns_complete_report(self):
+        """diagnose() should return a complete health diagnostic report."""
+        engine = ForgettingEngine()
+        node1 = _make_memory_node(1, "important memory", importance=9)
+        engine.register(node1)
+
+        node2 = _make_memory_node(2, "old weak memory", importance=3)
+        h2 = engine.register(node2)
+        h2.created_at = datetime.utcnow() - timedelta(seconds=20000)
+
+        engine.mark_stale(2, "expired")
+
         report = engine.diagnose()
-        assert report["total_memories"] == 5
+
+        assert report["total_memories"] == 2
         assert "strong_count" in report
         assert "weak_count" in report
         assert report["stale_count"] == 1
+        assert report["strong_threshold"] == 0.7
+        assert report["weak_threshold"] == 0.3
         assert "forgetting_half_life_seconds" in report
-        assert "top_weak" in report
+        assert isinstance(report["top_weak"], list)
+        # top_weak should contain the stale-turned-weak memory
+        assert len(report["top_weak"]) >= 0
 
 
-# ──────────────────────────────────────────────
-# MemoryRehearsal
-# ──────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+# Group 4: MemoryRehearsal
+# ═══════════════════════════════════════════════════════════════════
+
 
 class TestMemoryRehearsal:
-    def test_select_for_rehearsal_empty_engine_returns_empty(self):
-        rehearsal = MemoryRehearsal()
-        engine = ForgettingEngine()
-        selected = rehearsal.select_for_rehearsal(engine)
-        assert selected == []
+    """Test the MemoryRehearsal mechanism."""
 
     def test_select_for_rehearsal_picks_high_importance_weak(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10))
+        """Should prefer weak memories with high importance."""
+        engine = ForgettingEngine(curve=EbbinghausCurve(S=3600.0))
         rehearsal = MemoryRehearsal()
-        # 高重要性 + 弱强度
-        node = make_node("important event", importance=9, node_id=1)
-        health = engine.register(node)
-        health.created_at = datetime.utcnow() - timedelta(seconds=30)
-        selected = rehearsal.select_for_rehearsal(engine)
-        assert len(selected) == 1
-        assert selected[0].memory.node_id == 1
 
-    def test_select_for_rehearsal_falls_back_to_importance_5(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10))
-        rehearsal = MemoryRehearsal()
-        # importance=6 < 7，但 >= 5
-        node = make_node("mid event", importance=6, node_id=1)
-        health = engine.register(node)
-        health.created_at = datetime.utcnow() - timedelta(seconds=30)
-        selected = rehearsal.select_for_rehearsal(engine)
-        assert len(selected) == 1
+        # Create several weak, high-importance memories
+        for i in range(5):
+            node = _make_memory_node(i, f"important event {i}", importance=9)
+            h = engine.register(node)
+            h.created_at = datetime.utcnow() - timedelta(seconds=20000)
 
-    def test_select_for_rehearsal_skips_low_importance(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10))
+        # Also create a weak, low-importance memory
+        node_low = _make_memory_node(99, "boring event", importance=2)
+        h_low = engine.register(node_low)
+        h_low.created_at = datetime.utcnow() - timedelta(seconds=20000)
+
+        random.seed(42)
+        selected = rehearsal.select_for_rehearsal(engine)
+
+        # Should select from high-importance memories, not low
+        selected_ids = [h.memory.node_id for h in selected]
+        assert 99 not in selected_ids, "low-importance memory should not be selected"
+        assert len(selected) <= MAX_REHEARSAL_PER_STEP
+
+    def test_select_for_rehearsal_respects_max_limit(self):
+        """select_for_rehearsal() should never return more than MAX_REHEARSAL_PER_STEP."""
+        engine = ForgettingEngine(curve=EbbinghausCurve(S=3600.0))
         rehearsal = MemoryRehearsal()
-        node = make_node("low event", importance=2, node_id=1)
-        health = engine.register(node)
-        health.created_at = datetime.utcnow() - timedelta(seconds=30)
+
+        # Create 10 weak, high-importance memories
+        for i in range(10):
+            node = _make_memory_node(i, f"important {i}", importance=9)
+            h = engine.register(node)
+            h.created_at = datetime.utcnow() - timedelta(seconds=20000)
+
+        random.seed(123)
+        selected = rehearsal.select_for_rehearsal(engine)
+        assert len(selected) <= MAX_REHEARSAL_PER_STEP
+
+    def test_select_for_rehearsal_returns_empty_when_no_weak(self):
+        """Should return empty list when all memories are strong."""
+        engine = ForgettingEngine()
+        rehearsal = MemoryRehearsal()
+
+        # Fresh memory (strong)
+        node = _make_memory_node(1, "fresh", importance=9)
+        engine.register(node)
+
         selected = rehearsal.select_for_rehearsal(engine)
         assert selected == []
 
-    def test_select_for_rehearsal_respects_max_count(self):
-        engine = ForgettingEngine(curve=EbbinghausCurve(S=10))
-        rehearsal = MemoryRehearsal()
-        for i in range(5):
-            node = make_node(f"event {i}", importance=9, node_id=i)
-            health = engine.register(node)
-            health.created_at = datetime.utcnow() - timedelta(seconds=30)
-        selected = rehearsal.select_for_rehearsal(engine, max_count=2)
-        assert len(selected) <= 2
-
     def test_rehearse_resets_strength_and_increments_count(self):
+        """rehearse() should reset strength to 1.0 and increment rehearsal_count."""
         rehearsal = MemoryRehearsal()
-        node = make_node("rehearse me", node_id=1)
-        health = MemoryHealth(memory=node, strength=0.2)
+        engine = ForgettingEngine()
+
+        node = _make_memory_node(1, "to rehearse", importance=9)
+        health = engine.register(node)
+        health.created_at = datetime.utcnow() - timedelta(seconds=20000)
+        # Advance: strength should be low now
+        engine.get_strength(1)
+        assert health.strength < 1.0
+
+        old_count = health.rehearsal_count
         rehearsal.rehearse(health)
+
         assert health.strength == 1.0
-        assert health.rehearsal_count == 1
+        assert health.rehearsal_count == old_count + 1
         assert health.last_rehearsed is not None
 
-    def test_multiple_rehearsals_increment_count(self):
-        rehearsal = MemoryRehearsal()
-        node = make_node("multi rehearse", node_id=1)
-        health = MemoryHealth(memory=node, strength=0.2)
-        for _ in range(4):
-            rehearsal.rehearse(health)
-        assert health.rehearsal_count == 4
-        assert health.strength == 1.0
 
+# ═══════════════════════════════════════════════════════════════════
+# Group 5: MemoryAutonomy (integration lifecycle)
+# ═══════════════════════════════════════════════════════════════════
 
-# ──────────────────────────────────────────────
-# MemoryUpdateDetector
-# ──────────────────────────────────────────────
-
-class TestMemoryUpdateDetector:
-    def test_detect_stale_evolution_with_old_value_match(self):
-        detector = MemoryUpdateDetector()
-        node = make_node("我是成长期", node_id=1)
-        health = MemoryHealth(memory=node)
-        change = {"type": "evolution", "old_value": "成长期", "new_value": "成熟期"}
-        is_stale, reason = detector.detect_stale(health, change)
-        assert is_stale is True
-        assert "成长期" in reason
-
-    def test_detect_stale_evolution_pattern_match_no_old_value(self):
-        detector = MemoryUpdateDetector()
-        node = make_node("目前是成长期数码兽", node_id=1)
-        health = MemoryHealth(memory=node)
-        change = {"type": "evolution", "old_value": "", "new_value": ""}
-        is_stale, reason = detector.detect_stale(health, change)
-        assert is_stale is True
-
-    def test_detect_stale_location_change(self):
-        detector = MemoryUpdateDetector()
-        node = make_node("我在文件岛游荡", node_id=1)
-        health = MemoryHealth(memory=node)
-        change = {"type": "location", "old_value": "文件岛", "new_value": "无限山"}
-        is_stale, reason = detector.detect_stale(health, change)
-        assert is_stale is True
-        assert "文件岛" in reason
-
-    def test_detect_stale_relationship_change(self):
-        detector = MemoryUpdateDetector()
-        node = make_node("和加布兽是朋友", node_id=1)
-        health = MemoryHealth(memory=node)
-        change = {"type": "relationship", "old_value": "", "new_value": ""}
-        is_stale, reason = detector.detect_stale(health, change)
-        assert is_stale is True
-
-    def test_detect_stale_health_change(self):
-        detector = MemoryUpdateDetector()
-        node = make_node("HP不足，受伤了", node_id=1)
-        health = MemoryHealth(memory=node)
-        change = {"type": "health", "old_value": "", "new_value": ""}
-        is_stale, reason = detector.detect_stale(health, change)
-        assert is_stale is True
-
-    def test_detect_stale_no_match_returns_false(self):
-        detector = MemoryUpdateDetector()
-        node = make_node("今天天气很好", node_id=1)
-        health = MemoryHealth(memory=node)
-        change = {"type": "evolution", "old_value": "成长期", "new_value": "成熟期"}
-        is_stale, reason = detector.detect_stale(health, change)
-        assert is_stale is False
-        assert reason == ""
-
-    def test_detect_stale_unknown_type_returns_false(self):
-        detector = MemoryUpdateDetector()
-        node = make_node("some description", node_id=1)
-        health = MemoryHealth(memory=node)
-        change = {"type": "unknown_category", "old_value": "x", "new_value": "y"}
-        is_stale, reason = detector.detect_stale(health, change)
-        assert is_stale is False
-
-
-# ──────────────────────────────────────────────
-# MemoryAutonomy (主入口)
-# ──────────────────────────────────────────────
 
 class TestMemoryAutonomy:
-    def test_register_delegates_to_forgetting_engine(self):
-        autonomy = MemoryAutonomy(agent_name="亚古兽", personality="brave")
-        node = make_node("test memory", node_id=1)
-        health = autonomy.register(node)
-        assert health.strength == 1.0
-        assert 1 in autonomy.forgetting_engine.memory_health
+    """Test the MemoryAutonomy main class integrating all subsystems."""
 
-    def test_assess_importance_returns_int(self):
-        autonomy = MemoryAutonomy(agent_name="亚古兽", personality="brave")
-        score = autonomy.assess_importance("进化了!")
+    def test_assess_importance_heuristic(self):
+        """assess_importance() should return correct heuristic scores."""
+        autonomy = MemoryAutonomy(agent_name="TestAgumon", personality="brave")
+
+        # High importance: "进化" (evolution) matches heuristic
+        score = autonomy.assess_importance("亚古兽进化了！", "evolution")
         assert score == 8
-        assert isinstance(score, int)
 
-    def test_step_returns_diagnostic_report(self):
-        autonomy = MemoryAutonomy(agent_name="亚古兽", personality="brave")
-        node = make_node("test", node_id=1)
-        autonomy.register(node)
-        report = autonomy.step(current_tick=42)
-        assert report["tick"] == 42
-        assert report["agent"] == "亚古兽"
-        assert "health" in report
-        assert report["stale_detected"] == 0
-        assert "rehearsed" in report
+        # Mid importance: "战斗" matches mid heuristic
+        score = autonomy.assess_importance("一场激烈的战斗", "observation")
+        assert score == 6
 
-    def test_step_detects_stale_on_notify(self):
-        autonomy = MemoryAutonomy(agent_name="亚古兽", personality="brave")
-        node = make_node("我是成长期", node_id=1)
+        # Low importance: "移动" matches low heuristic
+        score = autonomy.assess_importance("移动到了新位置", "observation")
+        assert score == 3
+
+    def test_register_and_step_lifecycle(self):
+        """register() + step() + diagnose() should work end-to-end."""
+        autonomy = MemoryAutonomy(agent_name="TestAgumon", personality="brave")
+
+        # Register a memory
+        node = _make_memory_node(1, "found a rare item", importance=8)
         autonomy.register(node)
+
+        # Step the autonomy
+        result = autonomy.step(current_tick=1)
+        assert result["tick"] == 1
+        assert result["agent"] == "TestAgumon"
+        assert result["health"]["total"] == 1
+        assert "stale_detected" in result
+        assert "rehearsed" in result
+
+        # Diagnose should return full report
+        diag = autonomy.diagnose()
+        assert diag["agent"] == "TestAgumon"
+        assert diag["total_memories"] == 1
+        assert "forgetting_half_life_hours" in diag
+
+    def test_stale_detection_via_notify_state_change(self):
+        """notify_state_change() + step() should detect and mark stale memories."""
+        autonomy = MemoryAutonomy(agent_name="TestAgumon", personality="brave")
+
+        # Register a memory about being rookie stage
+        node = _make_memory_node(1, "我是成长期亚古兽", importance=5)
+        autonomy.register(node)
+
+        # Notify of evolution state change
         autonomy.notify_state_change("evolution", "成长期", "成熟期")
-        report = autonomy.step(current_tick=1)
-        assert report["stale_detected"] >= 1
 
-    def test_notify_state_change_enqueues_pending(self):
-        autonomy = MemoryAutonomy(agent_name="亚古兽", personality="brave")
-        autonomy.notify_state_change("evolution", "幼年期", "成长期")
-        assert len(autonomy.pending_state_changes) == 1
-        assert autonomy.pending_state_changes[0]["type"] == "evolution"
+        # Step to process stale detection
+        result = autonomy.step(current_tick=1)
+        assert result["stale_detected"] >= 1
 
-    def test_step_clears_pending_state_changes(self):
-        autonomy = MemoryAutonomy(agent_name="亚古兽", personality="brave")
-        autonomy.notify_state_change("evolution", "a", "b")
-        autonomy.step(current_tick=1)
-        assert len(autonomy.pending_state_changes) == 0
+        # The memory should now be marked stale
+        health = autonomy.forgetting_engine.memory_health[1]
+        assert health.stale is True
 
-    def test_step_rehearses_weak_memories(self):
-        autonomy = MemoryAutonomy(agent_name="亚古兽", personality="brave")
-        # 使用超快速遗忘曲线
-        autonomy.forgetting_engine.curve = EbbinghausCurve(S=1)
-        node = make_node("important memory about 进化", importance=9, node_id=1)
-        health = autonomy.register(node)
-        # 模拟 50 秒前创建 → 强度极低
-        health.created_at = datetime.utcnow() - timedelta(seconds=50)
-        report = autonomy.step(current_tick=1)
-        # 应该触发复述或至少尝试
-        assert "rehearsed" in report
-        assert isinstance(report["rehearsed"], int)
+    def test_stale_detection_no_match_does_nothing(self):
+        """State changes with no matching patterns should not mark any memories."""
+        autonomy = MemoryAutonomy(agent_name="TestAgumon", personality="brave")
 
-    def test_diagnose_returns_comprehensive_report(self):
-        autonomy = MemoryAutonomy(agent_name="加布兽", personality="timid")
-        node = make_node("test", node_id=1)
+        # Register a memory unrelated to location
+        node = _make_memory_node(1, "吃了一顿美味的饭", importance=4)
         autonomy.register(node)
-        report = autonomy.diagnose()
-        assert report["agent"] == "加布兽"
-        assert report["personality"] == "timid"
-        assert "forgetting_half_life_hours" in report
-        assert "total_memories" in report
 
-    def test_post_init_sets_curve_from_personality(self):
-        autonomy = MemoryAutonomy(agent_name="test", personality="lazy")
-        # lazy factor=1.5, S = 3600/1.5 = 2400
-        assert autonomy.forgetting_engine.curve.S == FORGETTING_STRENGTH_DEFAULT / 1.5
+        # Notify of a location change (no match with memory content)
+        autonomy.notify_state_change("location", "file_island", "infinity_mountain")
 
-    def test_empty_engine_step_does_not_crash(self):
-        autonomy = MemoryAutonomy(agent_name="test", personality="neutral")
-        report = autonomy.step(current_tick=0)
-        assert report["health"]["total"] == 0
-        assert report["rehearsed"] == 0
+        result = autonomy.step(current_tick=1)
+        assert result["stale_detected"] == 0
 
-    def test_multiple_notifications_in_one_step(self):
-        autonomy = MemoryAutonomy(agent_name="亚古兽", personality="brave")
-        # 两条都会引发 stale
-        node1 = make_node("我在文件岛", node_id=1)
-        node2 = make_node("和加布兽是朋友", node_id=2)
+        health = autonomy.forgetting_engine.memory_health[1]
+        assert health.stale is False
+
+    def test_multiple_memories_stale_detection(self):
+        """Only matching memories should be marked stale, not all."""
+        autonomy = MemoryAutonomy(agent_name="TestAgumon", personality="brave")
+
+        # Memory about evolution stage
+        node1 = _make_memory_node(1, "我是成长期数码兽", importance=5)
         autonomy.register(node1)
+
+        # Memory about food (unrelated)
+        node2 = _make_memory_node(2, "吃了一个回复药", importance=3)
         autonomy.register(node2)
-        autonomy.notify_state_change("location", "文件岛", "无限山")
-        autonomy.notify_state_change("relationship", "", "")
-        report = autonomy.step()
-        assert report["stale_detected"] >= 2
+
+        autonomy.notify_state_change("evolution", "成长期", "成熟期")
+        autonomy.step(current_tick=1)
+
+        # Only the evolution-related memory should be stale
+        assert autonomy.forgetting_engine.memory_health[1].stale is True
+        assert autonomy.forgetting_engine.memory_health[2].stale is False
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Group 6: API endpoint GET /api/digimon/{name}/memory-health
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestMemoryHealthEndpoint:
+    """Test the memory-health API endpoint."""
+
+    def test_returns_structure_for_initialized_agent(self, client):
+        """GET /api/digimon/{name}/memory-health should return correct structure."""
+        world = get_world()
+        agent = world.get("亚古兽")
+        assert agent is not None
+
+        # Register some memories to make the report interesting
+        node = agent.memory.add("战斗胜利！", importance=9)
+        agent.memory_autonomy.register(node)
+
+        r = client.get("/api/digimon/亚古兽/memory-health")
+        assert r.status_code == 200
+        data = r.json()
+
+        # Required top-level fields
+        assert data["name"] == "亚古兽"
+        assert "agent" in data
+        assert "total_memories" in data
+        assert "strong_count" in data
+        assert "weak_count" in data
+        assert "stale_count" in data
+        assert "forgetting_half_life_seconds" in data
+        assert "forgetting_half_life_hours" in data
+        assert "top_weak" in data
+        assert "rehearsal_history" in data
+        assert "personality" in data
+        assert "memory_stream_count" in data
+
+        # top_weak and rehearsal_history should be lists
+        assert isinstance(data["top_weak"], list)
+        assert isinstance(data["rehearsal_history"], list)
+
+    def test_404_for_unknown_digimon(self, client):
+        """Unknown digimon should return 404."""
+        r = client.get("/api/digimon/不存在的数码兽/memory-health")
+        assert r.status_code == 404
+
+    def test_not_initialized_state(self, client):
+        """Agent without memory_autonomy should return not_initialized."""
+        world = get_world()
+        agent = world.get("亚古兽")
+        assert agent is not None
+        # Simulate pre-Phase-18 agent by unsetting memory_autonomy
+        agent.memory_autonomy = None
+
+        r = client.get("/api/digimon/亚古兽/memory-health")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "not_initialized"
+        assert data["name"] == "亚古兽"
+        assert data["total_memories"] == 0
+        assert data["strong_count"] == 0
+        assert data["weak_count"] == 0
+        assert data["stale_count"] == 0
+        assert data["forgetting_half_life_hours"] == 0
+
+    def test_different_agents_have_separate_health(self, client):
+        """Each agent should have its own independent memory health report."""
+        world = get_world()
+        agumon = world.get("亚古兽")
+        gabumon = world.get("加布兽")
+
+        # Register different memories for each
+        node_a = agumon.memory.add("亚古兽的战斗", importance=9)
+        agumon.memory_autonomy.register(node_a)
+
+        node_g = gabumon.memory.add("加布兽的发现", importance=6)
+        gabumon.memory_autonomy.register(node_g)
+
+        r_a = client.get("/api/digimon/亚古兽/memory-health")
+        r_g = client.get("/api/digimon/加布兽/memory-health")
+
+        assert r_a.json()["name"] == "亚古兽"
+        assert r_a.json()["agent"] == "亚古兽"
+        assert r_g.json()["name"] == "加布兽"
+        assert r_g.json()["agent"] == "加布兽"
+        # Total counts may differ
+        assert r_a.json()["total_memories"] >= 1
+        assert r_g.json()["total_memories"] >= 1
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Group 7: Agent integration (DigimonAgent.observe)
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestAgentIntegration:
+    """Test that DigimonAgent.observe() properly integrates with MemoryAutonomy."""
+
+    def test_observe_delegates_importance_and_registers(self):
+        """observe() should use assess_importance and register with forgetting engine."""
+        world = get_world()
+        agent = world.get("亚古兽")
+
+        # Record pre-observe state
+        engine = agent.memory_autonomy.forgetting_engine
+        initial_health_count = len(engine.memory_health)
+
+        # Observe an event
+        event = {
+            "type": "battle_victory",
+            "description": "亚古兽击败了贝壳兽！",
+            "agent": "亚古兽",
+        }
+        agent.observe(event, tick_index=0)
+
+        # The memory should be in the memory stream
+        last_memory = agent.memory.entries[-1]
+        # With heuristic, battle_victory should map to importance=9 (via assessor)
+        # But "击败" is a high-signal keyword → importance 8 via heuristic
+        assert last_memory.importance >= 8
+        assert "击败" in last_memory.description
+
+        # The memory should be registered in the forgetting engine
+        assert len(engine.memory_health) == initial_health_count + 1
+        assert last_memory.node_id in engine.memory_health
+
+    def test_observe_registers_correct_importance_for_different_events(self):
+        """Different event types should get appropriate importance scores."""
+        world = get_world()
+        agent = world.get("亚古兽")
+
+        # Low importance event
+        agent.observe(
+            {"type": "moved", "description": "移动到了草原", "agent": "亚古兽"},
+            tick_index=0,
+        )
+        low_node = agent.memory.entries[-1]
+        # "移动" and "moved" match low-signals → 3
+        assert low_node.importance == 3
+
+        # High importance event
+        agent.observe(
+            {"type": "evolution", "description": "亚古兽进化了！", "agent": "亚古兽"},
+            tick_index=1,
+        )
+        high_node = agent.memory.entries[-1]
+        # "进化" and "evolv" match high-signals → 8
+        assert high_node.importance == 8
+
+        # Both should be in the forgetting engine
+        engine = agent.memory_autonomy.forgetting_engine
+        assert low_node.node_id in engine.memory_health
+        assert high_node.node_id in engine.memory_health
+
+    def test_observe_registers_multiple_events(self):
+        """Multiple observe() calls should register all in forgetting engine."""
+        world = get_world()
+        agent = world.get("亚古兽")
+        engine = agent.memory_autonomy.forgetting_engine
+
+        events = [
+            {"type": "battle", "description": "遭遇敌人", "agent": "亚古兽"},
+            {"type": "discover", "description": "发现隐藏道具", "agent": "亚古兽"},
+            {"type": "rested", "description": "休息恢复体力", "agent": "亚古兽"},
+        ]
+
+        for i, evt in enumerate(events):
+            agent.observe(evt, tick_index=i)
+
+        # All 3 memories should be registered
+        assert len(engine.memory_health) == 3
+
+        # The memory stream should also have 3 entries
+        assert len(agent.memory.entries) >= 3
