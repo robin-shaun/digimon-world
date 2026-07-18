@@ -418,14 +418,14 @@
 
 ---
 
-## Phase 23: 思考成本与认知能量系统 ⏳ 20%
+## Phase 23: 思考成本与认知能量系统 ⏳ 60%
 
 **目标**: LLM 推理本身也是一种资源消耗。受 arXiv:2607.14865 "The Energy Society" 启发——agent 的推理成本直接与生存挂钩，token 消耗能量，能量归零 = 死亡（休眠）。当前 30 只数码兽每 tick 调用 LLM 反思+规划，没有任何节制。Phase 23 引入「认知能量池」：每次 LLM 调用按 token 量扣能量，简单规则行为免费，能量耗尽后 agent 进入休眠——只做基于规则的随机移动，直到通过休息/进食/社交恢复。
 
 **论文依据**: arXiv:2607.14865 "The Energy Society: A Simulation Environment for Studying Agent Cooperation under Survival Pressure" (2026-07-18)
 
 - [x] Task 1 — `thinking_cost.py` 核心模块: CognitiveEnergyPool（每 agent 一个能量池 0-100，初始 100，base_drain=1/tick，LLM 调用按 token_estimate 扣额外能量）+ DormancySystem（能量 ≤ 0 进入休眠模式，跳过 LLM 调用）+ EnergyRecovery（rest: +2/tick 待机恢复，social: +5/次互动，eat: +10/次觅食）✅ (43 tests)
-- [ ] Task 2 — 集成 DigimonAgent.step(): 反思/计划/对话前检查能量 → 低能量跳过 LLM，使用规则 fallback；调用后记录 token cost 并扣能量；dormant agent 只执行随机移动
-- [ ] Task 3 — API 端点: `GET /api/digimon/{name}/energy`（能量详情 + 历史分类账）、`GET /api/energy/ledger`（世界能量总览：活跃/休眠 agent 数、平均能量、总 LLM 调用次数）
+- [x] Task 2 — 集成 DigimonAgent.step(): 反思/计划/对话前检查能量 → 低能量跳过 LLM，使用规则 fallback；调用后记录 token cost 并扣能量；dormant agent 只执行随机移动 ✅
+- [x] Task 3 — API 端点: `GET /api/digimon/{name}/energy`（能量详情 + 历史分类账）、`GET /api/energy/ledger`（世界能量总览：活跃/休眠 agent 数、平均能量、总 LLM 调用次数）✅
 - [ ] Task 4 — 前端能量面板: 数码兽详情侧栏新增「⚡ 认知能量」tab，显示能量条 + 休眠标记 + 最近 5 次 LLM 调用成本记录
 - [ ] Task 5 — 集成测试 (≥25) + 端到端验证: verify_phase23.py（验证能量衰减/扣减/恢复/休眠/唤醒完整生命周期）

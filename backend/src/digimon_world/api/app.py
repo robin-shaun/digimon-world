@@ -63,6 +63,7 @@ from ..world import (
     get_daynight_system,
     get_director,
     get_ecology_system,
+    get_energy_ledger,
     get_landmark_system,
     get_multiverse,
     get_narrator,
@@ -814,6 +815,84 @@ def get_agent_conventions(name: str) -> dict[str, Any]:
             }
             for c in adopted
         ],
+    }
+
+
+# ---- Phase 23: 认知能量 API ----
+@app.get("/api/digimon/{name}/energy")
+def get_digimon_energy(name: str) -> dict[str, Any]:
+    """Phase 23: 数码兽认知能量详情。
+
+    返回该数码兽的 CognitiveEnergyPool 完整快照，包含：
+    - 当前能量 / 上限 / 是否休眠 / 能否思考
+    - 累计 LLM 调用次数 / token 消耗
+    - 最近 20 条能量变更历史
+    - 按类别统计的消耗/恢复分类账
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    ledger = get_energy_ledger()
+    pool = ledger.get_or_create(name)
+    energy_data = pool.to_dict()
+
+    # 分类账: 按 reason 分组汇总
+    category_ledger: dict[str, dict[str, Any]] = {}
+    for entry in pool.energy_history:
+        reason = entry["reason"]
+        if reason not in category_ledger:
+            category_ledger[reason] = {
+                "reason": reason,
+                "action": entry["action"],
+                "total_delta": 0,
+                "count": 0,
+            }
+        category_ledger[reason]["total_delta"] += entry["delta"]
+        category_ledger[reason]["count"] += 1
+
+    return {
+        "name": name,
+        "energy": energy_data,
+        "category_ledger": sorted(category_ledger.values(), key=lambda x: x["count"], reverse=True),
+    }
+
+
+@app.get("/api/energy/ledger")
+def get_world_energy_ledger() -> dict[str, Any]:
+    """Phase 23: 世界认知能量总览。
+
+    返回全局 EnergyLedger 统计摘要：
+    - 活跃/休眠 agent 数量及名称列表
+    - 平均能量值、总 LLM 调用次数、总 token 消耗
+    - 每个 agent 的简要能量快照（按能量从低到高排序）
+    """
+    ledger = get_energy_ledger()
+    stats = ledger.get_stats()
+
+    # 为每个 agent 生成简要快照
+    agents: list[dict[str, Any]] = []
+    for name, pool in sorted(ledger.pools.items(), key=lambda x: x[1].energy):
+        agents.append({
+            "name": name,
+            "energy": pool.energy,
+            "max_energy": pool.max_energy,
+            "is_dormant": pool.is_dormant,
+            "can_think": pool.can_think(),
+            "total_llm_calls": pool.total_llm_calls,
+            "total_tokens_spent": pool.total_tokens_spent,
+        })
+
+    # 活跃/休眠 agent 名称列表
+    active_names = [a["name"] for a in agents if not a["is_dormant"]]
+    dormant_names = [a["name"] for a in agents if a["is_dormant"]]
+
+    return {
+        **stats,
+        "active_names": active_names,
+        "dormant_names": dormant_names,
+        "agents": agents,
     }
 
 
