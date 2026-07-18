@@ -43,6 +43,7 @@ from .economy import (
     EconomySystem,
     get_economy_system,
 )
+from ..economy import get_energy_economy, reset_energy_economy
 from .events import StoryDirector, StoryEvent, get_director, reset_director
 from .factions import Faction, FactionRegistry, get_registry, reset_registry
 from .festivals import (
@@ -232,6 +233,7 @@ __all__ = [
     "get_director",
     "get_ecology_system",
     "get_economy_system",
+    "get_energy_economy",
     "get_energy_ledger",
     "get_env_events_system",
     "get_festival_system",
@@ -251,6 +253,7 @@ __all__ = [
     "reset_daynight_system",
     "reset_director",
     "reset_ecology_system",
+    "reset_energy_economy",
     "reset_env_events_system",
     "reset_festival_system",
     "reset_landmark_system",

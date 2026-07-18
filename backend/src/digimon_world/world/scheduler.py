@@ -46,6 +46,7 @@ from .relationships import RelationshipTracker, get_tracker
 from .seasons import SeasonSystem, get_season_system
 from .shared_conventions import get_convention_pool
 from .thinking_cost import RECOVER_SOCIAL
+from ..economy import get_energy_economy
 from .weather import WeatherSystem, get_weather_system
 from .world_state import WorldState
 
@@ -319,6 +320,16 @@ class WorldScheduler:
                 "Convention tick: +%d new, %d active",
                 convention_report["new_this_tick"],
                 convention_report["active"],
+            )
+        # 9.7 Phase 24 能量经济阶段:
+        #    债务衰败、绝望救济（低能量 agent 获得回报）、唤醒休眠朋友
+        economy_events = get_energy_economy().step(self._tick_count)
+        if economy_events:
+            logger.info(
+                "Energy economy tick: %d events (relief=%d, awaken=%d)",
+                len(economy_events),
+                sum(1 for e in economy_events if e["type"] == "reciprocal_relief"),
+                sum(1 for e in economy_events if e["type"] == "awaken"),
             )
         self._tick_count += 1
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次

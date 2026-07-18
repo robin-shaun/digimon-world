@@ -533,8 +533,10 @@ class TestConventionAPI:
         resp = client.get("/api/conventions")
         assert resp.status_code == 200
         data = resp.json()
-        assert isinstance(data, list)
-        assert len(data) == 0
+        assert isinstance(data, dict)
+        assert "conventions" in data
+        assert "stats" in data
+        assert len(data["conventions"]) == 0
 
     def test_list_conventions_with_data(self, client):
         """惯例池有数据时正确返回。"""
@@ -556,9 +558,10 @@ class TestConventionAPI:
         resp = client.get("/api/conventions")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) == 2
+        conventions = data["conventions"]
+        assert len(conventions) == 2
         # 验证字段
-        c0 = data[0]
+        c0 = conventions[0]
         assert "convention_id" in c0
         assert "term" in c0
         assert "adoption_count" in c0
@@ -580,9 +583,10 @@ class TestConventionAPI:
         resp = client.get("/api/conventions?sort_by=adoption_count")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) >= 2
+        conventions = data["conventions"]
+        assert len(conventions) >= 2
         # 第一个应是最多 adopters
-        assert data[0]["adoption_count"] >= data[1]["adoption_count"]
+        assert conventions[0]["adoption_count"] >= conventions[1]["adoption_count"]
 
     def test_list_conventions_filter_by_category(self, client):
         """按 category 过滤。"""
@@ -599,7 +603,8 @@ class TestConventionAPI:
         resp = client.get("/api/conventions?category=ritual")
         assert resp.status_code == 200
         data = resp.json()
-        assert all(c["category"] == "ritual" for c in data)
+        conventions = data["conventions"]
+        assert all(c["category"] == "ritual" for c in conventions)
 
     def test_get_convention_by_id(self, client):
         """获取单条惯例详情。"""
@@ -629,7 +634,6 @@ class TestConventionAPI:
 
     def test_get_agent_conventions(self, client):
         """获取特定 agent 的惯例快照。"""
-        # 需要先注册一个 agent 到 world
         pool = get_convention_pool()
         pool.register(Convention(
             convention_id="agumon_c1", term="亚古兽惯例1",
@@ -647,8 +651,8 @@ class TestConventionAPI:
         resp = client.get("/api/digimon/亚古兽/conventions")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["name"] == "亚古兽"
-        assert data["convention_count"] == 2
+        assert data["digimon"] == "亚古兽"
+        assert data["count"] == 2
         terms = {c["term"] for c in data["conventions"]}
         assert "亚古兽惯例1" in terms
         assert "亚古兽惯例2" in terms
@@ -664,7 +668,7 @@ class TestConventionAPI:
         resp = client.get("/api/digimon/亚古兽/conventions")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["convention_count"] == 0
+        assert data["count"] == 0
         assert data["conventions"] == []
 
     def test_convention_api_stats_integration(self, client):
@@ -683,8 +687,9 @@ class TestConventionAPI:
         resp = client.get("/api/conventions")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) >= 1
-        found = next(c for c in data if c["convention_id"] == "integ_test")
+        conventions = data["conventions"]
+        assert len(conventions) >= 1
+        found = next(c for c in conventions if c["convention_id"] == "integ_test")
         assert found["adoption_count"] == 3
         assert found["category"] == "behavior"
 

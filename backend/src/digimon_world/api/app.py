@@ -44,6 +44,11 @@ from pydantic import BaseModel, Field
 
 from .. import __version__
 from .pokedex import router as pokedex_router
+from .conventions import (
+    router as conventions_router,
+    digimon_conventions_router,
+)
+from ..economy import get_energy_economy
 from ..agents.achievements import AchievementSystem
 from ..agents.badges import BadgeSystem
 from ..agents.dialogue import Dialogue
@@ -217,6 +222,10 @@ app.add_middleware(
 
 # 数码兽图鉴 (静态资料库) 路由
 app.include_router(pokedex_router)
+
+# Phase 22: 共享惯例路由
+app.include_router(conventions_router)
+app.include_router(digimon_conventions_router)
 
 
 # ---- Routes ----
@@ -690,134 +699,6 @@ def get_digimon_insights(name: str) -> dict[str, Any]:
     return engine.assess(memory_autonomy, plan_engine, world_model)
 
 
-# ---- Phase 22: Convention API ----
-
-
-class ConventionSummary(BaseModel):
-    """Serialized convention for list endpoints."""
-
-    convention_id: str
-    term: str
-    category: str
-    adoption_count: int
-    use_count: int
-    strength: float
-    is_active: bool
-    last_used: str  # isoformat
-
-
-class ConventionDetail(BaseModel):
-    """Full convention detail + adopter list."""
-
-    convention_id: str
-    term: str
-    category: str
-    source_agents: list[str]
-    adopter_agents: list[str]
-    adoption_count: int
-    use_count: int
-    strength: float
-    is_active: bool
-    first_seen: str  # isoformat
-    last_used: str  # isoformat
-
-
-@app.get("/api/conventions")
-def list_conventions(
-    sort_by: str = "adoption_count",
-    category: str | None = None,
-    limit: int = 50,
-) -> list[ConventionSummary]:
-    """Phase 22: List active conventions.
-
-    Query params:
-    - sort_by: "adoption_count" | "strength" | "use_count" | "recent"
-    - category: filter by category ("term", "behavior", "ritual")
-    - limit: max results (default 50)
-    """
-    pool = get_convention_pool()
-
-    if category:
-        conventions = pool.get_by_category(category)
-        if sort_by == "strength":
-            conventions.sort(key=lambda c: c.strength, reverse=True)
-        elif sort_by == "use_count":
-            conventions.sort(key=lambda c: c.use_count, reverse=True)
-        elif sort_by == "recent":
-            conventions.sort(key=lambda c: c.last_used, reverse=True)
-        else:
-            conventions.sort(key=lambda c: c.adoption_count, reverse=True)
-        conventions = conventions[:limit]
-    else:
-        conventions = pool.get_active(sort_by=sort_by, limit=limit)
-
-    return [
-        ConventionSummary(
-            convention_id=c.convention_id,
-            term=c.term,
-            category=c.category,
-            adoption_count=c.adoption_count,
-            use_count=c.use_count,
-            strength=c.strength,
-            is_active=c.is_active,
-            last_used=c.last_used.isoformat(),
-        )
-        for c in conventions
-    ]
-
-
-@app.get("/api/conventions/{convention_id}")
-def get_convention(convention_id: str) -> ConventionDetail:
-    """Phase 22: Single convention detail + adopter list."""
-    pool = get_convention_pool()
-    c = pool.get(convention_id)
-    if c is None:
-        raise HTTPException(status_code=404, detail=f"Convention '{convention_id}' not found")
-    return ConventionDetail(
-        convention_id=c.convention_id,
-        term=c.term,
-        category=c.category,
-        source_agents=c.source_agents,
-        adopter_agents=c.adopter_agents,
-        adoption_count=c.adoption_count,
-        use_count=c.use_count,
-        strength=c.strength,
-        is_active=c.is_active,
-        first_seen=c.first_seen.isoformat(),
-        last_used=c.last_used.isoformat(),
-    )
-
-
-@app.get("/api/digimon/{name}/conventions")
-def get_agent_conventions(name: str) -> dict[str, Any]:
-    """Phase 22: Agent's adopted conventions snapshot."""
-    world = get_world()
-    agent = world.get(name)
-    if agent is None:
-        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
-
-    pool = get_convention_pool()
-    adopted = pool.get_by_agent(name)
-
-    return {
-        "name": name,
-        "convention_count": len(adopted),
-        "conventions": [
-            {
-                "convention_id": c.convention_id,
-                "term": c.term,
-                "category": c.category,
-                "adoption_count": c.adoption_count,
-                "use_count": c.use_count,
-                "strength": c.strength,
-                "is_active": c.is_active,
-                "last_used": c.last_used.isoformat(),
-            }
-            for c in adopted
-        ],
-    }
-
-
 # ---- Phase 23: 认知能量 API ----
 @app.get("/api/digimon/{name}/energy")
 def get_digimon_energy(name: str) -> dict[str, Any]:
@@ -893,6 +774,43 @@ def get_world_energy_ledger() -> dict[str, Any]:
         "active_names": active_names,
         "dormant_names": dormant_names,
         "agents": agents,
+    }
+
+
+# ---- Phase 24: 能量经济 API ----
+@app.get("/api/economy/stats")
+def get_economy_stats() -> dict[str, Any]:
+    """Phase 24: Energy economy statistics."""
+    economy = get_energy_economy()
+    return economy.get_economy_stats()
+
+
+@app.get("/api/economy/transfers")
+def get_economy_transfers(agent_name: str | None = None, limit: int = 50) -> dict[str, Any]:
+    """Phase 24: Energy transfer history."""
+    economy = get_energy_economy()
+    transfers = economy.get_transfer_history(agent_name=agent_name, limit=limit)
+    return {
+        "count": len(transfers),
+        "transfers": [t.to_dict() for t in transfers],
+    }
+
+
+@app.get("/api/altruism/{name}")
+def get_altruism(name: str) -> dict[str, Any]:
+    """Phase 24: Agent altruism score and debt rankings."""
+    economy = get_energy_economy()
+    world = get_world()
+    if name not in world.agents:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+    score = economy.altruism.get_altruism_score(name)
+    creditors = economy.altruism.get_top_creditors(name, n=10)
+    debtors = economy.altruism.get_top_debtors(name, n=10)
+    return {
+        "name": name,
+        "altruism_score": score,
+        "top_creditors": [{"name": c, "debt": round(d, 1)} for c, d in creditors],
+        "top_debtors": [{"name": d, "debt": round(v, 1)} for d, v in debtors],
     }
 
 

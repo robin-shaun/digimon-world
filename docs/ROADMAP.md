@@ -429,3 +429,20 @@
 - [x] Task 3 — API 端点: `GET /api/digimon/{name}/energy`（能量详情 + 历史分类账）、`GET /api/energy/ledger`（世界能量总览：活跃/休眠 agent 数、平均能量、总 LLM 调用次数）✅
 - [x] Task 4 — 前端能量面板: 数码兽详情侧栏新增「⚡ 认知能量」tab，显示能量条 + 休眠标记 + 最近 5 次 LLM 调用成本记录 ✅
 - [x] Task 5 — 集成测试 (53 tests) + 端到端验证: verify_phase23.py（验证能量衰减/扣减/恢复/休眠/唤醒完整生命周期，45/45 PASS）✅
+
+---
+
+## Phase 24: 能量经济与互惠利他 ✅ 100%
+
+**目标**: Phase 23 为每个 agent 引入了认知能量池，但 agent 之间只能各自管理自己的能量。Phase 24 在能量池之上构建 agent 间的能量经济：**互相转移/交易能量、利他行为、唤醒休眠朋友**。受生物学「互惠利他主义」启发——agent 帮助过的对象会产生「人情债」，债务随时间衰减，形成自然的回报循环。
+
+**论文依据**: Trivers (1971) "The Evolution of Reciprocal Altruism" + Axelrod & Hamilton (1981) "The Evolution of Cooperation"
+
+- [x] Task 1 — `economy/energy_economy.py` 核心模块: EnergyTransfer（不可变转移记录）+ ReciprocalAltruism（agent 间债务追踪+衰败）+ EnergyEconomy（转移验证/执行/机会扫描）✅ (728 行)
+- [x] Task 2 — API 端点: `GET /api/economy/stats`（能量经济统计）、`GET /api/economy/transfers`（转移历史 + agent 过滤）、`GET /api/altruism/{name}`（利他评分 + 债权人/欠债人排行）✅
+- [x] Task 3 — 调度器集成: 在 WorldScheduler.tick_once() 中添加 economy.step() 调用，每 tick 执行债务衰败、绝望救济、唤醒休眠好友 ✅
+- [x] Task 4 — 前端经济面板: 导演面板新增「⚡ 能量经济」tab，显示转移历史、利他排行榜、活跃债务关系图 ✅
+- [x] Task 5 — 集成测试 (65 条): EnergyTransfer + ReciprocalAltruism + EnergyEconomy + API 端点 ✅
+- [x] Task 6 — 端到端验证: verify_phase24.py（56/56 PASS，验证捐赠/交易/唤醒/债务衰败/互惠救济/API 端点完整生命周期）✅
+
+**完成标志**: Agent 之间可以互相帮助、产生人情债、在朋友低能量时主动回报——世界中有「利他经济」自然涌现。
