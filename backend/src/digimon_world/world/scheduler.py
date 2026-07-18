@@ -44,6 +44,7 @@ from .personality_engine import get_personality_engine
 from .relational_circle import RelationalCircle
 from .relationships import RelationshipTracker, get_tracker
 from .seasons import SeasonSystem, get_season_system
+from .shared_conventions import get_convention_pool
 from .weather import WeatherSystem, get_weather_system
 from .world_state import WorldState
 
@@ -309,6 +310,15 @@ class WorldScheduler:
         # 9.5 Phase 17 人格演化阶段:
         #    根据本 tick 发生的事件类型,推动数码兽人格维度漂移
         self._process_personality_events(agents)
+        # 9.6 Phase 22 共享惯例检测阶段:
+        #    扫描 agent 记忆，检测涌现的共享惯例，衰减已有惯例
+        convention_report = get_convention_pool().tick(agents)
+        if convention_report.get("new_this_tick", 0) > 0:
+            logger.info(
+                "Convention tick: +%d new, %d active",
+                convention_report["new_this_tick"],
+                convention_report["active"],
+            )
         self._tick_count += 1
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
