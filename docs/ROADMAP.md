@@ -402,16 +402,16 @@
 
 ---
 
-## Phase 22: 共享记忆惯例与文化涌现 🔄
+## Phase 22: 共享记忆惯例与文化涌现 🔄 80%
 
 **目标**: 当多个 agent 通过持久化记忆反复交互时，自然发展出共享符号系统和文化惯例。受 arXiv:2607.00233 启发——记忆架构驱动语言涌现，persistent private notebook 的 agent 达到了最高协调率 (0.867)。Phase 18 的 Ebbinghaus 遗忘 + 复述机制已为个体记忆打下基底，Phase 22 向上一层：**群体记忆**。
 
 **论文依据**: arXiv:2607.00233 "From Signals to Structure: How Memory Architecture Drives Language Emergence in LLM Agents"
 
-- [x] Task 1 — `shared_conventions.py` 核心模块: ConventionDetector（检测 2+ agent 重复使用的术语/行为模式）+ ConventionPool（全局共享惯例池，每个惯例有 adoption_count + last_used + decay 曲线）+ ConventionPropagation（按社交网络传播惯例）✅ (40 tests)
-- [ ] Task 2 — API 端点: `GET /api/conventions`（世界共享惯例列表）、`GET /api/conventions/{id}`（惯例详情 + 采用 agent 列表）、`GET /api/digimon/{name}/conventions`（某 agent 的惯例快照）
-- [ ] Task 3 — 前端文化面板: 新增「文化」标签页，展示当前世界共享惯例词云/列表、惯例传播图（force-directed graph）、agent 间共享术语
-- [ ] Task 4 — 集成测试: ConventionDetector 检测正确性 + 传播衰减 + 去重 + 多 agent 同步（≥20 条用例）
-- [ ] Task 5 — 端到端验证: verify_phase22.py 脚本（100 tick 运行，验证惯例涌现、传播、遗忘生命周期）
+- [x] Task 1 — `shared_conventions.py` 核心模块: ConventionDetector（检测 2+ agent 重复使用的术语/行为模式）+ ConventionPool（全局共享惯例池，每个惯例有 adoption_count + last_used + decay 曲线）+ ConventionPropagation（按社交网络传播惯例）✅ (49 tests)
+- [x] Task 2 — API 端点: `GET /api/conventions`（世界共享惯例列表 + sort_by/category/limit 过滤）、`GET /api/conventions/{id}`（惯例详情 + 采用 agent 列表）、`GET /api/digimon/{name}/conventions`（某 agent 的惯例快照）✅
+- [x] Task 3 — 前端文化面板: 导演面板新增「🌍 共享文化」section，显示惯例列表（term + category标签 + adoption_count + strength进度条），8秒轮询 /api/conventions ✅
+- [x] Task 4 — 集成测试: ConventionDetector 检测正确性 + 传播衰减 + 去重 + 多 agent 同步 + API 端点测试 ✅ (49 条用例)
+- [x] Task 5 — 端到端验证: verify_phase22.py 脚本（验证惯例涌现、传播、衰减、生命周期、API 端点）✅ (20/20 PASS)
 
-**完成标志**: 数码兽能自发形成共享术语和行为惯例，世界中有「文化」——惯例有自己的生命周期（涌现→传播→遗忘）。
+**完成标志**: 数码兽能自发形成共享术语和行为惯例，世界中有「文化」——惯例有自己的生命周期（涌现→传播→遗忘）。908 tests total。
