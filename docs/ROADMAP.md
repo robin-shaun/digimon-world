@@ -241,12 +241,16 @@
 |||||[████████████████████████] 100%  Phase 18 (Agent 自主记忆规划) ✅
 ||||||[████████████████████████] 100%  Phase 19 (计划持久化与上下文管理) ✅
 ||||||||||[████████████████████████] 100%  Phase 20 (自演化世界模型) ✅
-|||||||||||||[████████████████████████] 100%  Phase 21 (Agent 内省聚合仪表板) ✅
-||||||```
-|||
-||---
-||
-||## Phase 17: 人格深度系统 — 荣格心理学 MBTI 驱动
+|[████████████████████████] 100%  Phase 21 (Agent 内省聚合仪表板) ✅
+|[████████████████████████] 100%  Phase 22 (共享记忆惯例与文化涌现) ✅
+|[████████████████████████] 100%  Phase 23 (思考成本与认知能量系统) ✅
+|[████████████████████████] 100%  Phase 24 (能量经济与互惠利他) ✅
+|[░░░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 25 (Agent 上下文质量与可靠性工程) 🔄
+```
+
+---
+
+## Phase 12: 跨世界联动 + 玩家融入 + 生产就绪
 |
 |**目标**: 受 GitHub trending 项目 `evolving_personality` (1,199⭐) 启发，基于荣格心理学 MBTI 四维度给每只数码兽赋予动态演化的人格。人格随战斗/社交/进化经历自然漂移，并深度影响对话风格、战斗策略、关系兼容性。
 |
@@ -446,3 +450,20 @@
 - [x] Task 6 — 端到端验证: verify_phase24.py（56/56 PASS，验证捐赠/交易/唤醒/债务衰败/互惠救济/API 端点完整生命周期）✅
 
 **完成标志**: Agent 之间可以互相帮助、产生人情债、在朋友低能量时主动回报——世界中有「利他经济」自然涌现。
+
+---
+
+## Phase 25: Agent 上下文质量与可靠性工程 🔄 (0%)
+
+**目标**: Phase 21 提供个体 agent 内省（记忆/计划/世界观健康），Phase 22-24 构建了群体文化、能量、经济体系——但缺少一层**上下文质量监控**来保障所有认知系统正常运行。受 arXiv:2607.14275 "AI Agents Do Not Fail Alone: The Context Fails First" 启发，上下文工程质量是 agent 可靠性的**独立先行指标**。Phase 25 构建 ContextQualityMonitor，在每个 tick 对 agent 的上下文做快照诊断，自动生成优化建议。
+
+**论文依据**: arXiv:2607.14275 "AI Agents Do Not Fail Alone: The Context Fails First" (2026-07-18) — Agent 不独立失败：上下文弱时 agent 漂移、幻觉、误用工具、被注入攻击。
+
+- [ ] Task 1 — `context_quality.py` 核心模块: ContextQualitySnapshot + ContextHealthMonitor（每 tick 快照：记忆鲜度/相关性/计划时效性/上下文大小/一致性评分）+ ContextOptimizer（自动生成优化建议：记忆复述/压缩/plan恢复/规则重验证）
+- [ ] Task 2 — Agent 集成: DigimonAgent.step() 中调用 context_quality.snapshot()，生成诊断日志；低健康分数时触发 optimizer 建议
+- [ ] Task 3 — API 端点: `GET /api/digimon/{name}/context-health`（上下文健康报告 + 历史趋势）、`GET /api/context/overview`（世界级上下文健康总览：最需要关注的 5 个 agent）
+- [ ] Task 4 — 前端上下文健康面板: 内省仪表板新增「🔍 上下文健康」tab，显示六维雷达图（鲜度/相关性/时效性/覆盖度/大小/一致性）+ 优化建议操作按钮
+- [ ] Task 5 — 集成测试 (≥25): ContextHealthMonitor + Optimizer + 边界情况
+- [ ] Task 6 — 端到端验证: verify_phase25.py（20 tick 运行，验证快照准确性、诊断正确性、建议合理性）
+
+**完成标志**: 每个 agent 拥有上下文健康评分，世界级仪表板可监控所有 agent 的上下文质量——从「盲目信任」升级为「可观测可靠」。
