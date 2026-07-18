@@ -509,3 +509,194 @@ class TestConventionPropagation:
         with patch("random.random", return_value=0.5):
             count = prop.propagate_on_interaction("A", "B", "middle")
         assert count >= 1
+
+
+# ──────────────────────────────────────────────
+# Phase 22: Convention API 测试
+# ──────────────────────────────────────────────
+
+
+class TestConventionAPI:
+    """Convention API 端点集成测试。"""
+
+    @pytest.fixture
+    def client(self):
+        """创建 FastAPI TestClient。"""
+        from fastapi.testclient import TestClient
+        from digimon_world.api.app import app
+
+        # 用 lifespan 覆盖启动逻辑，避免真实调度器启动
+        return TestClient(app)
+
+    def test_list_conventions_empty(self, client):
+        """空惯例池返回空列表。"""
+        resp = client.get("/api/conventions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) == 0
+
+    def test_list_conventions_with_data(self, client):
+        """惯例池有数据时正确返回。"""
+        pool = get_convention_pool()
+        pool.register(Convention(
+            convention_id="api_test_1", term="API测试惯例",
+            source_agents=["亚古兽", "加布兽"],
+            adopter_agents=["亚古兽", "加布兽"],
+            use_count=5,
+        ))
+        pool.register(Convention(
+            convention_id="api_test_2", term="测试协商",
+            category="ritual",
+            source_agents=["比丘兽"],
+            adopter_agents=["比丘兽"],
+            use_count=2,
+        ))
+
+        resp = client.get("/api/conventions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+        # 验证字段
+        c0 = data[0]
+        assert "convention_id" in c0
+        assert "term" in c0
+        assert "adoption_count" in c0
+        assert "strength" in c0
+        assert "is_active" in c0
+
+    def test_list_conventions_sorted_by_adoption(self, client):
+        """list 按 adoption_count 排序。"""
+        pool = get_convention_pool()
+        pool.register(Convention(
+            convention_id="lo", term="低采用",
+            adopter_agents=["A"], use_count=1,
+        ))
+        pool.register(Convention(
+            convention_id="hi", term="高采用",
+            adopter_agents=["A", "B", "C"], use_count=10,
+        ))
+
+        resp = client.get("/api/conventions?sort_by=adoption_count")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) >= 2
+        # 第一个应是最多 adopters
+        assert data[0]["adoption_count"] >= data[1]["adoption_count"]
+
+    def test_list_conventions_filter_by_category(self, client):
+        """按 category 过滤。"""
+        pool = get_convention_pool()
+        pool.register(Convention(
+            convention_id="r1", term="仪式惯例", category="ritual",
+            adopter_agents=["A"], use_count=1,
+        ))
+        pool.register(Convention(
+            convention_id="t1", term="术语惯例", category="term",
+            adopter_agents=["B"], use_count=1,
+        ))
+
+        resp = client.get("/api/conventions?category=ritual")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert all(c["category"] == "ritual" for c in data)
+
+    def test_get_convention_by_id(self, client):
+        """获取单条惯例详情。"""
+        pool = get_convention_pool()
+        pool.register(Convention(
+            convention_id="detail_test", term="详情测试惯例",
+            source_agents=["亚古兽", "加布兽"],
+            adopter_agents=["亚古兽", "加布兽", "比丘兽"],
+            use_count=8,
+        ))
+
+        resp = client.get("/api/conventions/detail_test")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["convention_id"] == "detail_test"
+        assert data["term"] == "详情测试惯例"
+        assert data["adoption_count"] == 3
+        assert len(data["adopter_agents"]) == 3
+        assert "source_agents" in data
+        assert "first_seen" in data
+        assert "last_used" in data
+
+    def test_get_convention_not_found(self, client):
+        """不存在的惯例返回 404。"""
+        resp = client.get("/api/conventions/nonexistent")
+        assert resp.status_code == 404
+
+    def test_get_agent_conventions(self, client):
+        """获取特定 agent 的惯例快照。"""
+        # 需要先注册一个 agent 到 world
+        pool = get_convention_pool()
+        pool.register(Convention(
+            convention_id="agumon_c1", term="亚古兽惯例1",
+            adopter_agents=["亚古兽"], use_count=3,
+        ))
+        pool.register(Convention(
+            convention_id="agumon_c2", term="亚古兽惯例2",
+            adopter_agents=["亚古兽", "加布兽"], use_count=5,
+        ))
+        pool.register(Convention(
+            convention_id="gabu_c1", term="加布兽惯例",
+            adopter_agents=["加布兽"], use_count=1,
+        ))
+
+        resp = client.get("/api/digimon/亚古兽/conventions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "亚古兽"
+        assert data["convention_count"] == 2
+        terms = {c["term"] for c in data["conventions"]}
+        assert "亚古兽惯例1" in terms
+        assert "亚古兽惯例2" in terms
+
+    def test_get_agent_conventions_none(self, client):
+        """没有惯例的 agent 返回空。"""
+        pool = get_convention_pool()
+        pool.register(Convention(
+            convention_id="other_c", term="别人惯例",
+            adopter_agents=["别人"], use_count=1,
+        ))
+
+        resp = client.get("/api/digimon/亚古兽/conventions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["convention_count"] == 0
+        assert data["conventions"] == []
+
+    def test_convention_api_stats_integration(self, client):
+        """综合验证：列表 + 详情数据一致性。"""
+        pool = get_convention_pool()
+        cv = Convention(
+            convention_id="integ_test", term="集成测试惯例",
+            category="behavior",
+            source_agents=["亚古兽", "加布兽"],
+            adopter_agents=["亚古兽", "加布兽", "比丘兽"],
+            use_count=12,
+        )
+        pool.register(cv)
+
+        # 列表
+        resp = client.get("/api/conventions")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) >= 1
+        found = next(c for c in data if c["convention_id"] == "integ_test")
+        assert found["adoption_count"] == 3
+        assert found["category"] == "behavior"
+
+        # 详情
+        resp2 = client.get("/api/conventions/integ_test")
+        assert resp2.status_code == 200
+        detail = resp2.json()
+        assert detail["use_count"] == 12
+        assert detail["source_agents"] == ["亚古兽", "加布兽"]
+
+        # agent 快照 — 使用惯例池中已有的 agent 名
+        resp3 = client.get("/api/digimon/亚古兽/conventions")
+        assert resp3.status_code == 200
+        agent_data = resp3.json()
+        assert "集成测试惯例" in {c["term"] for c in agent_data["conventions"]}

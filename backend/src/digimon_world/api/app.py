@@ -58,6 +58,7 @@ from ..world import (
     WorldClock,
     WorldScheduler,
     compute_vitality,
+    get_convention_pool,
     get_dark_gear_system,
     get_daynight_system,
     get_director,
@@ -686,6 +687,134 @@ def get_digimon_insights(name: str) -> dict[str, Any]:
     world_model = getattr(agent, "world_model", None)
 
     return engine.assess(memory_autonomy, plan_engine, world_model)
+
+
+# ---- Phase 22: Convention API ----
+
+
+class ConventionSummary(BaseModel):
+    """Serialized convention for list endpoints."""
+
+    convention_id: str
+    term: str
+    category: str
+    adoption_count: int
+    use_count: int
+    strength: float
+    is_active: bool
+    last_used: str  # isoformat
+
+
+class ConventionDetail(BaseModel):
+    """Full convention detail + adopter list."""
+
+    convention_id: str
+    term: str
+    category: str
+    source_agents: list[str]
+    adopter_agents: list[str]
+    adoption_count: int
+    use_count: int
+    strength: float
+    is_active: bool
+    first_seen: str  # isoformat
+    last_used: str  # isoformat
+
+
+@app.get("/api/conventions")
+def list_conventions(
+    sort_by: str = "adoption_count",
+    category: str | None = None,
+    limit: int = 50,
+) -> list[ConventionSummary]:
+    """Phase 22: List active conventions.
+
+    Query params:
+    - sort_by: "adoption_count" | "strength" | "use_count" | "recent"
+    - category: filter by category ("term", "behavior", "ritual")
+    - limit: max results (default 50)
+    """
+    pool = get_convention_pool()
+
+    if category:
+        conventions = pool.get_by_category(category)
+        if sort_by == "strength":
+            conventions.sort(key=lambda c: c.strength, reverse=True)
+        elif sort_by == "use_count":
+            conventions.sort(key=lambda c: c.use_count, reverse=True)
+        elif sort_by == "recent":
+            conventions.sort(key=lambda c: c.last_used, reverse=True)
+        else:
+            conventions.sort(key=lambda c: c.adoption_count, reverse=True)
+        conventions = conventions[:limit]
+    else:
+        conventions = pool.get_active(sort_by=sort_by, limit=limit)
+
+    return [
+        ConventionSummary(
+            convention_id=c.convention_id,
+            term=c.term,
+            category=c.category,
+            adoption_count=c.adoption_count,
+            use_count=c.use_count,
+            strength=c.strength,
+            is_active=c.is_active,
+            last_used=c.last_used.isoformat(),
+        )
+        for c in conventions
+    ]
+
+
+@app.get("/api/conventions/{convention_id}")
+def get_convention(convention_id: str) -> ConventionDetail:
+    """Phase 22: Single convention detail + adopter list."""
+    pool = get_convention_pool()
+    c = pool.get(convention_id)
+    if c is None:
+        raise HTTPException(status_code=404, detail=f"Convention '{convention_id}' not found")
+    return ConventionDetail(
+        convention_id=c.convention_id,
+        term=c.term,
+        category=c.category,
+        source_agents=c.source_agents,
+        adopter_agents=c.adopter_agents,
+        adoption_count=c.adoption_count,
+        use_count=c.use_count,
+        strength=c.strength,
+        is_active=c.is_active,
+        first_seen=c.first_seen.isoformat(),
+        last_used=c.last_used.isoformat(),
+    )
+
+
+@app.get("/api/digimon/{name}/conventions")
+def get_agent_conventions(name: str) -> dict[str, Any]:
+    """Phase 22: Agent's adopted conventions snapshot."""
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    pool = get_convention_pool()
+    adopted = pool.get_by_agent(name)
+
+    return {
+        "name": name,
+        "convention_count": len(adopted),
+        "conventions": [
+            {
+                "convention_id": c.convention_id,
+                "term": c.term,
+                "category": c.category,
+                "adoption_count": c.adoption_count,
+                "use_count": c.use_count,
+                "strength": c.strength,
+                "is_active": c.is_active,
+                "last_used": c.last_used.isoformat(),
+            }
+            for c in adopted
+        ],
+    }
 
 
 # ---- Phase 4: 观察者/导演接口 ----
