@@ -331,6 +331,32 @@ class WorldScheduler:
                 sum(1 for e in economy_events if e["type"] == "reciprocal_relief"),
                 sum(1 for e in economy_events if e["type"] == "awaken"),
             )
+        # 9.8 Phase 25 上下文质量检测阶段:
+        #    对每只 agent 生成 ContextQualitySnapshot，诊断问题，
+        #    低健康分数的 agent 自动触发优化建议
+        from .context_quality import get_health_monitor, get_optimizer
+        monitor = get_health_monitor()
+        optimizer = get_optimizer()
+        critical_count = 0
+        for agent in agents:
+            snap = monitor.snapshot(agent, self._tick_count)
+            issues = monitor.diagnose(snap)
+            if snap.composite_health < 30.0:
+                critical_count += 1
+                actions = optimizer.recommend(snap, issues)
+                # Log optimization recommendations (no auto-execution)
+                for action in actions[:3]:
+                    logger.info(
+                        "ContextOptimizer: agent=%s action=%s priority=%d "
+                        "target=%s improvement=%.1f",
+                        agent.name, action.action_type, action.priority,
+                        action.target_system, action.estimated_improvement,
+                    )
+        if critical_count > 0:
+            logger.warning(
+                "ContextQuality: %d/%d agents in critical context health",
+                critical_count, len(agents),
+            )
         self._tick_count += 1
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:

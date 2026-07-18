@@ -94,6 +94,15 @@ from .seasons import (
     get_season_system,
     reset_season_system,
 )
+from .context_quality import (
+    ContextHealthMonitor,
+    ContextIssue,
+    ContextOptimizer,
+    ContextQualitySnapshot,
+    get_health_monitor,
+    get_optimizer,
+    reset_context_quality,
+)
 from .shared_conventions import (
     Convention,
     ConventionDetector,
@@ -161,6 +170,10 @@ __all__ = [
     "ConventionPool",
     "ConventionPropagation",
     "CPM_CHANGE_THRESHOLD",
+    "ContextHealthMonitor",
+    "ContextIssue",
+    "ContextOptimizer",
+    "ContextQualitySnapshot",
     "DAYS_PER_FESTIVAL",
     "DAYS_PER_SEASON",
     "DEFAULT_REGIONS",
@@ -237,6 +250,8 @@ __all__ = [
     "get_energy_ledger",
     "get_env_events_system",
     "get_festival_system",
+    "get_health_monitor",
+    "get_optimizer",
     "get_landmark_system",
     "get_multiverse",
     "get_narrator",
@@ -249,6 +264,7 @@ __all__ = [
     "get_weather_system",
     "get_world",
     "reset_convention_pool",
+    "reset_context_quality",
     "reset_dark_gear_system",
     "reset_daynight_system",
     "reset_director",

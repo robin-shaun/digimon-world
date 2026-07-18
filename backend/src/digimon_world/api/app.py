@@ -48,6 +48,10 @@ from .conventions import (
     router as conventions_router,
     digimon_conventions_router,
 )
+from .context_health import (
+    router as context_health_router,
+    digimon_context_health_router,
+)
 from ..economy import get_energy_economy
 from ..agents.achievements import AchievementSystem
 from ..agents.badges import BadgeSystem
@@ -63,7 +67,6 @@ from ..world import (
     WorldClock,
     WorldScheduler,
     compute_vitality,
-    get_convention_pool,
     get_dark_gear_system,
     get_daynight_system,
     get_director,
@@ -226,6 +229,10 @@ app.include_router(pokedex_router)
 # Phase 22: 共享惯例路由
 app.include_router(conventions_router)
 app.include_router(digimon_conventions_router)
+
+# Phase 25: 上下文质量路由
+app.include_router(context_health_router)
+app.include_router(digimon_context_health_router)
 
 
 # ---- Routes ----
