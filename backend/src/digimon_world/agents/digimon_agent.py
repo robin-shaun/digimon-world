@@ -35,6 +35,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _lazy_energy_pool():
+    """Phase 23: 延迟导入 CognitiveEnergyPool，避免循环依赖。"""
+    from ..world.thinking_cost import CognitiveEnergyPool  # noqa: PLC0415
+    return CognitiveEnergyPool()
+
+
 class EvolutionStage(str, Enum):
     """数码兽的进化阶段。
 
@@ -164,12 +170,19 @@ class DigimonAgent:
     fear_modifier: float = 1.0
     # 战斗概率修正 (天王活跃时 +30%,即 battle_chance 增加 30 个百分点)
     battle_probability_bonus: float = 0.0
+    # Phase 23: 认知能量池 — 管控 LLM 调用成本，能量耗尽后进入休眠
+    # 使用 lambda 工厂延迟导入避免循环依赖
+    cognitive_energy: Any = field(default_factory=lambda: _lazy_energy_pool())
 
     def __post_init__(self) -> None:
-        """dataclass 初始化后自动调用。Phase 18: 初始化记忆自主规划。Phase 19: 初始化计划持久化引擎引用。Phase 20: 初始化世界模型。"""
+        """dataclass 初始化后自动调用。Phase 18: 初始化记忆自主规划。Phase 19: 初始化计划持久化引擎引用。Phase 20: 初始化世界模型。Phase 23: 注册认知能量池。"""
         self._init_memory_autonomy()
         self._plan_engine = None  # lazy init on first use
         self.world_model = WorldModel(agent_name=self.name)
+        # Phase 23: 注册认知能量池到全局账本 (lazy import 避免循环依赖)
+        from ..world.thinking_cost import get_energy_ledger  # noqa: PLC0415
+        ledger = get_energy_ledger()
+        ledger.pools[self.name] = self.cognitive_energy
 
     def _get_plan_engine(self):
         """获取计划持久化引擎（lazy import 避免循环依赖）。"""
@@ -646,6 +659,9 @@ class DigimonAgent:
     ) -> dict[str, Any]:
         """主循环一步: observe → reflect_if_needed → plan_next → act。
 
+        每次 tick 都会执行认知能量消耗。能量不足时跳过 LLM 调用，
+        使用规则 fallback；能量耗尽后进入休眠，只做随机移动。
+
         Args:
             regions: region_id -> Region 映射,透传给 act() 做边界夹紧。
                      scheduler 会传 WorldState.regions;不传则退化为仅非负夹紧。
@@ -654,6 +670,11 @@ class DigimonAgent:
         Returns:
             act() 产出的世界事件。
         """
+        # Phase 23: 每 tick 被动消耗认知能量
+        self.cognitive_energy.tick()
+        can_think = self.cognitive_energy.can_think()
+        is_dormant = self.cognitive_energy.is_dormant
+
         # 0. CPM 情绪衰减(每次 tick 自然消退 5%)
         self._decay_mood()
         # 0.5. Phase 18: 记忆自主规划（遗忘曲线 + 过期检测 + 复述）
@@ -674,10 +695,24 @@ class DigimonAgent:
                     )
             except Exception:
                 pass
-        # 1. 触发反思(无副作用失败时静默)
-        await self.reflect_if_needed()
-        # 2. 重新生成计划
-        await self.plan_next()
+
+        # 1. 触发反思 (Phase 23: 能量不足时跳过 LLM 反思)
+        if can_think:
+            await self.reflect_if_needed()
+            # 反思约消耗 ~800 tokens (估算)
+            self.cognitive_energy.spend(800, "reflect")
+        elif not is_dormant:
+            logger.debug("%s 能量不足 (%d), 跳过 LLM 反思", self.name, self.cognitive_energy.energy)
+
+        # 2. 重新生成计划 (Phase 23: 能量不足时使用规则 fallback)
+        if can_think:
+            await self.plan_next()
+            # 计划生成约消耗 ~600 tokens
+            self.cognitive_energy.spend(600, "plan")
+        elif not self.current_plan:
+            # 无计划且无法思考 → 使用兜底计划
+            self.current_plan = "在附近闲逛, 保持警觉"
+
         # 2.5. Phase 20: 捕获行动前状态供世界模型学习
         pre_state = self._capture_world_state(tick_index)
         # 3. 执行并落事件到自身记忆
@@ -692,9 +727,27 @@ class DigimonAgent:
                 event,
                 tick_index,
             )
+        # 3.6. Phase 23: 能量恢复 — 休息事件触发能量恢复
+        if event.get("type") == "rested":
+            from ..world.thinking_cost import RECOVER_REST  # noqa: PLC0415
+            self.cognitive_energy.recover(RECOVER_REST, "rest")
+
         # 4. 从 mood_state 更新 mood 标签
         self.mood = self._derive_mood_label()
         return event
+
+    def apply_tick_energy(self) -> None:
+        """Phase 23: 对非 step() 路径（如 _step_with_cached_plan）应用每 tick 被动能量消耗。
+
+        调度器的缓存计划路径绕过 step(),但 agent 仍应消耗能量。
+        同时处理能量恢复（若 agent 当前计划是休息类）。
+        """
+        self.cognitive_energy.tick()
+        # 检查当前计划是否为休息 → 恢复能量
+        rest_triggers = {"休息", "睡觉", "睡", "等待", "发呆", "停"}
+        if self.current_plan and any(k in self.current_plan for k in rest_triggers):
+            from ..world.thinking_cost import RECOVER_REST  # noqa: PLC0415
+            self.cognitive_energy.recover(RECOVER_REST, "rest")
 
     # ---- 日记系统 ----
 

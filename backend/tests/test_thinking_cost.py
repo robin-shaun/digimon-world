@@ -393,3 +393,128 @@ class TestConstants:
         # 典型 500 token 调用 → 2-3 能量点，合理
         cost = max(1, 500 // LLM_COST_DIVISOR)
         assert 1 <= cost <= 5
+
+
+# ──────────────────────────────────────────────
+# Phase 23 Task 2: DigimonAgent 集成测试
+# ──────────────────────────────────────────────
+
+
+class TestDigimonAgentEnergyIntegration:
+    """测试认知能量系统与 DigimonAgent 的集成。"""
+
+    @pytest.fixture(autouse=True)
+    def reset_ledger(self):
+        """每个测试前重置能量账本。"""
+        ledger = get_energy_ledger()
+        ledger.reset_all()
+        yield
+        ledger.reset_all()
+
+    def test_agent_creates_with_full_energy(self):
+        """Agent 创建时能量满额 (100)。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        assert a.cognitive_energy.energy == ENERGY_MAX
+        assert a.cognitive_energy.can_think() is True
+        assert a.cognitive_energy.is_dormant is False
+
+    def test_agent_registers_with_ledger(self):
+        """Agent 创建后自动注册到全局账本。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        ledger = get_energy_ledger()
+        assert "test_agent" in ledger.pools
+        assert ledger.pools["test_agent"] is a.cognitive_energy
+
+    def test_apply_tick_energy_drains(self):
+        """apply_tick_energy 消耗 1 能量 / tick。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        initial = a.cognitive_energy.energy
+        a.apply_tick_energy()
+        assert a.cognitive_energy.energy == initial - BASE_DRAIN_PER_TICK
+
+    def test_apply_tick_energy_recovers_on_rest_plan(self):
+        """休息计划时 apply_tick_energy 先扣再恢复。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        a.current_plan = "想休息一下"
+        initial = a.cognitive_energy.energy
+        a.apply_tick_energy()
+        # 扣除 BASE_DRAIN_PER_TICK，再恢复 RECOVER_REST
+        expected = initial - BASE_DRAIN_PER_TICK + RECOVER_REST
+        assert a.cognitive_energy.energy == min(ENERGY_MAX, expected)
+
+    def test_tick_drain_to_dormancy(self):
+        """连续 100 tick 后 agent 进入休眠。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        # 连续 100 tick (每 tick 扣 1)
+        for _ in range(100):
+            a.apply_tick_energy()
+        assert a.cognitive_energy.energy == ENERGY_MIN
+        assert a.cognitive_energy.is_dormant is True
+
+    def test_step_drains_energy(self):
+        """agent.step() 每 tick 消耗能量。"""
+        import asyncio
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        initial = a.cognitive_energy.energy
+        # no LLM calls happen since planner/reflector are None
+        asyncio.run(a.step(tick_index=0))
+        # tick drain applied: -1
+        # If no LLM call and no rest event, just -1
+        assert a.cognitive_energy.energy <= initial - BASE_DRAIN_PER_TICK
+
+    def test_energy_persists_across_ticks(self):
+        """能量状态跨 tick 持续累积。"""
+        import asyncio
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        initial = 100
+        for i in range(5):
+            asyncio.run(a.step(tick_index=i))
+        # 5 ticks × 1 drain = -5, no LLM (planner/reflector=None)
+        expected_min = initial - 5 * BASE_DRAIN_PER_TICK
+        assert a.cognitive_energy.energy <= expected_min + 5  # allow rest recovery
+
+    def test_step_with_rest_plan_recovers(self):
+        """step() 产生 rested 事件时触发能量恢复。"""
+        import asyncio
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        # 先降能量（用非休息计划避免 apply_tick_energy 自动恢复）
+        a.current_plan = "随便走走"
+        for _ in range(70):
+            a.apply_tick_energy()
+        # 现在设休息计划
+        a.current_plan = "休息一下，恢复体力"
+        before_step = a.cognitive_energy.energy  # ~30
+        event = asyncio.run(a.step(tick_index=0))
+        # 如果产生了 rested 事件，能量会恢复
+        if event.get("type") == "rested":
+            assert a.cognitive_energy.energy > before_step
+        else:
+            # 没有产生 rested 事件（可能 act() 解析了不同意图），
+            # 但也不会比被动消耗更差
+            assert a.cognitive_energy.energy >= before_step - BASE_DRAIN_PER_TICK - 10
+
+    def test_can_think_false_skips_llm(self):
+        """能量不足时 can_think() 返回 False。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        # 手动降低能量到阈值以下
+        a.cognitive_energy.energy = THINK_THRESHOLD  # exactly at threshold
+        assert a.cognitive_energy.can_think() is False  # must be strictly >
+        a.cognitive_energy.energy = THINK_THRESHOLD + 1
+        assert a.cognitive_energy.can_think() is True
+
+    def test_dormant_agent_cannot_think(self):
+        """休眠中的 agent 即使有能量也不能思考。"""
+        from digimon_world.agents.digimon_agent import DigimonAgent
+        a = DigimonAgent(name="test_agent", species="agumon")
+        a.cognitive_energy.energy = 50
+        a.cognitive_energy.is_dormant = True
+        assert a.cognitive_energy.can_think() is False

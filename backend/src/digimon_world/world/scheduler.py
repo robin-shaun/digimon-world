@@ -45,6 +45,7 @@ from .relational_circle import RelationalCircle
 from .relationships import RelationshipTracker, get_tracker
 from .seasons import SeasonSystem, get_season_system
 from .shared_conventions import get_convention_pool
+from .thinking_cost import RECOVER_SOCIAL
 from .weather import WeatherSystem, get_weather_system
 from .world_state import WorldState
 
@@ -493,6 +494,10 @@ class WorldScheduler:
             a.last_interaction_at = now
             b.last_interaction_at = now
 
+            # Phase 23: 社交互动恢复认知能量
+            a.cognitive_energy.recover(RECOVER_SOCIAL, "social_dialogue")
+            b.cognitive_energy.recover(RECOVER_SOCIAL, "social_dialogue")
+
         # Phase 16: 战斗触发 — 对每对邻近 agent 独立检查, 与对话解耦
         # 仅在正常模式(非测试强制触发)下启用
         if self._dialogue_prob < 1.0:
@@ -521,6 +526,9 @@ class WorldScheduler:
                         # 敌对战斗后关系进一步恶化
                         if circle == RelationalCircle.HOSTILE:
                             self._relationships.record_battle(winner=a.name, loser=b.name)
+                        # Phase 23: 战斗互动也恢复少量认知能量（激烈活动刺激思维）
+                        a.cognitive_energy.recover(RECOVER_SOCIAL, "social_spar")
+                        b.cognitive_energy.recover(RECOVER_SOCIAL, "social_spar")
                     except Exception as e:
                         logger.warning("spar trigger failed for %s / %s: %s", a.name, b.name, e)
 
@@ -791,8 +799,11 @@ class WorldScheduler:
 
         适合: 计划缓存生效期 / 移动降频 tick。
         逻辑: 对 current_plan 做关键词解析 → 方向位移;无方向则随机一步。
+        不经过 agent.step(),因此单独应用每 tick 能量消耗。
         """
         try:
+            # Phase 23: 对缓存路径应用认知能量消耗
+            agent.apply_tick_energy()
             return agent.act(self._world.regions)
         except Exception as e:
             logger.exception("agent.act (cached) failed for %s: %s", agent.name, e)
