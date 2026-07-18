@@ -1430,8 +1430,9 @@
         let plansData = null;
         let worldModelData = null;
         let insightsData = null;
+        let energyData = null;
         try {
-            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp, enResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
@@ -1441,6 +1442,7 @@
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/plans', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/world-model', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/insights', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/energy', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
@@ -1451,6 +1453,7 @@
             if (plResp.ok) plansData = await plResp.json();
             if (wmResp.ok) worldModelData = await wmResp.json();
             if (insResp.ok) insightsData = await insResp.json();
+            if (enResp.ok) energyData = await enResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -1663,6 +1666,13 @@
         // ══════════════════════════════════════════════
         if (insightsData) {
             renderInsights(sb, insightsData);
+        }
+
+        // ══════════════════════════════════════════════
+        //  Phase 23: 认知能量面板
+        // ══════════════════════════════════════════════
+        if (energyData && energyData.energy) {
+            renderEnergyPanel(sb, energyData);
         }
     }
 
@@ -2002,6 +2012,108 @@
         if (radarCanvas) {
             drawInsightsRadar(radarCanvas, dims);
         }
+    }
+
+    /**
+     * Phase 23: 渲染认知能量面板到侧栏。
+     * 展示: 能量条 + 休眠标记 + 最近 LLM 调用成本记录 + 分类账。
+     */
+    function renderEnergyPanel(sb, data) {
+        if (!data || !data.energy) return;
+
+        var energy = data.energy;
+        var en = energy.energy != null ? energy.energy : 0;
+        var maxEn = energy.max_energy != null ? energy.max_energy : 100;
+        var isDormant = energy.is_dormant || false;
+        var canThink = energy.can_think !== false;
+        var totalCalls = energy.total_llm_calls || 0;
+        var totalTokens = energy.total_tokens_spent || 0;
+        var history = energy.energy_history || [];
+        var categoryLedger = data.category_ledger || [];
+
+        // 能量百分比与颜色
+        var enPct = Math.max(0, Math.min(100, Math.round((en / maxEn) * 100)));
+        var enColor;
+        if (isDormant) { enColor = '#ff6b6b'; }
+        else if (enPct <= 10) { enColor = '#ffb347'; }
+        else if (enPct <= 30) { enColor = '#ffd700'; }
+        else { enColor = '#00d4aa'; }
+
+        // 休眠标记
+        var dormancyBadge = isDormant
+            ? '<span class=\"mh-stat mh-stale\" style=\"animation:pulse 1.5s infinite;\">😴 休眠中</span>'
+            : (canThink ? '<span class=\"mh-stat mh-strong\">🧠 在线</span>' : '<span class=\"mh-stat\" style=\"color:#ffb347;\">⚠️ 低能量</span>');
+
+        var html = '<div class=\"detail-block\">' +
+            '<h4>⚡ 认知能量 <span class=\"plan-count\">Phase 23</span></h4>' +
+
+            // ── 能量条 + 百分比 ──
+            '<div style=\"display:flex;align-items:center;gap:10px;margin-bottom:4px;\">' +
+            '<div style=\"flex:1;\">' +
+            '<div class=\"hp-bar\" style=\"height:10px;background:#1a1f3a;\">' +
+            '<div class=\"hp-fill\" style=\"width:' + enPct + '%;height:100%;background:' + enColor + ';border-radius:4px;transition:width 0.5s;\"></div>' +
+            '</div>' +
+            '</div>' +
+            '<span style=\"font-size:16px;font-weight:700;color:' + enColor + ';min-width:52px;text-align:right;\">' + en + '/' + maxEn + '</span>' +
+            '</div>' +
+
+            // ── 状态标签 ──
+            '<div class=\"memory-health-stats\" style=\"margin-top:6px;\">' +
+            dormancyBadge +
+            '<span class=\"mh-stat mh-total\">LLM调用: ' + totalCalls + '</span>' +
+            '<span class=\"mh-stat\">Token: ' + totalTokens + '</span>' +
+            '</div>';
+
+        // ── 分类账 (按消耗类别) ──
+        if (categoryLedger.length > 0) {
+            html += '<h5 style=\"margin-top:10px;color:var(--text-secondary);font-size:12px;\">📊 能量分类账</h5>' +
+                '<ul class=\"mem-list\">';
+            for (var cl = 0; cl < categoryLedger.length && cl < 5; cl++) {
+                var entry = categoryLedger[cl];
+                var deltaSign = entry.total_delta >= 0 ? '+' : '';
+                var deltaColor = entry.total_delta >= 0 ? '#00d4aa' : '#ff6b6b';
+                var reasonIcon = '↕';
+                if (entry.reason === 'passive_drain') reasonIcon = '⏳';
+                else if (entry.reason === 'social_dialogue') reasonIcon = '💬';
+                else if (entry.reason === 'rest_recovery') reasonIcon = '💤';
+                else if (entry.reason === 'eat_recovery') reasonIcon = '🍎';
+                else if (entry.reason === 'reflect_cost') reasonIcon = '🧠';
+                else if (entry.reason === 'plan_cost') reasonIcon = '📋';
+                else if (entry.reason === 'dialogue_cost') reasonIcon = '🗣️';
+
+                html += '<li>' +
+                    '<span class=\"mem-imp\" style=\"background:rgba(255,255,255,0.05);color:' + deltaColor + ';font-weight:700;\">' +
+                    deltaSign + entry.total_delta + '</span>' +
+                    reasonIcon + ' ' + escapeHtml(entry.reason) +
+                    '<span style=\"color:var(--text-muted);font-size:10px;\"> ×' + entry.count + '</span>' +
+                    '</li>';
+            }
+            html += '</ul>';
+        }
+
+        // ── 最近能量历史 (最近 8 条) ──
+        var recentHistory = history.slice(-8).reverse();
+        if (recentHistory.length > 0) {
+            html += '<h5 style=\"margin-top:8px;color:var(--text-secondary);font-size:12px;\">📉 最近能量变动</h5>' +
+                '<ul class=\"mem-list\">';
+            for (var h = 0; h < recentHistory.length; h++) {
+                var hEntry = recentHistory[h];
+                var hDelta = hEntry.delta || 0;
+                var hSign = hDelta >= 0 ? '+' : '';
+                var hColor = hDelta >= 0 ? '#00d4aa' : '#ff6b6b';
+                var hAfter = hEntry.energy_after != null ? hEntry.energy_after : '?';
+
+                html += '<li style=\"font-size:11px;\">' +
+                    '<span style=\"color:' + hColor + ';font-weight:700;margin-right:4px;\">' + hSign + hDelta + '</span>' +
+                    '→ ' + hAfter +
+                    '<span style=\"color:var(--text-muted);margin-left:4px;\">' + escapeHtml(hEntry.reason || '') + '</span>' +
+                    '</li>';
+            }
+            html += '</ul>';
+        }
+
+        html += '</div>';
+        sb.insertAdjacentHTML('beforeend', html);
     }
 
     /**
