@@ -25,18 +25,15 @@ from pathlib import Path
 _backend_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_backend_root / "src"))
 
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient  # noqa: E402
 
-from digimon_world.api.app import app
+from digimon_world.api.app import app  # noqa: E402
 from digimon_world.world.context_quality import (  # noqa: E402
-    CONTEXT_SIZE_WARNING,
     ContextHealthMonitor,
     ContextIssue,
     ContextOptimizer,
     ContextQualitySnapshot,
-    OptimizationAction,
     get_health_monitor,
-    get_optimizer,
     reset_context_quality,
 )
 
