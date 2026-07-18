@@ -245,7 +245,7 @@
 |[████████████████████████] 100%  Phase 22 (共享记忆惯例与文化涌现) ✅
 |[████████████████████████] 100%  Phase 23 (思考成本与认知能量系统) ✅
 |[████████████████████████] 100%  Phase 24 (能量经济与互惠利他) ✅
-|[░░░░░░░░░░░░░░░░░░░░░░░░]   0%  Phase 25 (Agent 上下文质量与可靠性工程) 🔄
+||[██████████████████░░░░░░]  50%  Phase 25 (Agent 上下文质量与可靠性工程) 🔄
 ```
 
 ---
@@ -453,15 +453,15 @@
 
 ---
 
-## Phase 25: Agent 上下文质量与可靠性工程 🔄 (0%)
+## Phase 25: Agent 上下文质量与可靠性工程 🔄 (50%)
 
 **目标**: Phase 21 提供个体 agent 内省（记忆/计划/世界观健康），Phase 22-24 构建了群体文化、能量、经济体系——但缺少一层**上下文质量监控**来保障所有认知系统正常运行。受 arXiv:2607.14275 "AI Agents Do Not Fail Alone: The Context Fails First" 启发，上下文工程质量是 agent 可靠性的**独立先行指标**。Phase 25 构建 ContextQualityMonitor，在每个 tick 对 agent 的上下文做快照诊断，自动生成优化建议。
 
 **论文依据**: arXiv:2607.14275 "AI Agents Do Not Fail Alone: The Context Fails First" (2026-07-18) — Agent 不独立失败：上下文弱时 agent 漂移、幻觉、误用工具、被注入攻击。
 
-- [ ] Task 1 — `context_quality.py` 核心模块: ContextQualitySnapshot + ContextHealthMonitor（每 tick 快照：记忆鲜度/相关性/计划时效性/上下文大小/一致性评分）+ ContextOptimizer（自动生成优化建议：记忆复述/压缩/plan恢复/规则重验证）
-- [ ] Task 2 — Agent 集成: DigimonAgent.step() 中调用 context_quality.snapshot()，生成诊断日志；低健康分数时触发 optimizer 建议
-- [ ] Task 3 — API 端点: `GET /api/digimon/{name}/context-health`（上下文健康报告 + 历史趋势）、`GET /api/context/overview`（世界级上下文健康总览：最需要关注的 5 个 agent）
+- [x] Task 1 — `context_quality.py` 核心模块: ContextQualitySnapshot + ContextHealthMonitor（每 tick 快照：记忆鲜度/相关性/计划时效性/上下文大小/一致性评分）+ ContextOptimizer（自动生成优化建议：记忆复述/压缩/plan恢复/规则重验证）✅ (766行, 29 tests)
+- [x] Task 2 — Scheduler 集成: tick_once() 中调用 context_quality.snapshot()，生成诊断日志；低健康分数时触发 optimizer 建议 ✅
+- [x] Task 3 — API 端点: `GET /api/digimon/{name}/context-health`（上下文健康报告 + 历史趋势）、`GET /api/context/overview`（世界级上下文健康总览：最需要关注的 5 个 agent）✅ (已部署验证)
 - [ ] Task 4 — 前端上下文健康面板: 内省仪表板新增「🔍 上下文健康」tab，显示六维雷达图（鲜度/相关性/时效性/覆盖度/大小/一致性）+ 优化建议操作按钮
 - [ ] Task 5 — 集成测试 (≥25): ContextHealthMonitor + Optimizer + 边界情况
 - [ ] Task 6 — 端到端验证: verify_phase25.py（20 tick 运行，验证快照准确性、诊断正确性、建议合理性）
