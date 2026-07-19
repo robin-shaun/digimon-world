@@ -39,7 +39,7 @@ import random as _random_mod
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, ClassVar
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # 可选导入（解耦，允许测试时隔离）
@@ -409,9 +409,7 @@ class TechNode:
         if not set(self.prerequisite_node_ids).issubset(unlocked_node_ids):
             return False
         # 引用数达标
-        if prerequisite_citation_total < self.required_citation_count:
-            return False
-        return True
+        return not prerequisite_citation_total < self.required_citation_count
 
     def unlock(self, tick: int) -> bool:
         """解锁本节点。
@@ -1097,10 +1095,10 @@ __all__ = [
     # 数据结构
     "InventedSkill",
     "KnowledgeItem",
-    "TechNode",
     # 引擎
     "KnowledgePool",
     "KnowledgePropagation",
+    "TechNode",
     "TechTree",
     # 单例
     "get_knowledge_pool",

@@ -7,7 +7,7 @@ CRUD/传播/发明、TechTree/TechNode 解锁逻辑、KnowledgePropagation 传�
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import pytest
 
@@ -28,7 +28,6 @@ from digimon_world.economy.knowledge_economy import (
     get_knowledge_pool,
     reset_knowledge_pool,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Mock Helpers
