@@ -246,7 +246,30 @@
 |[████████████████████████] 100%  Phase 23 (思考成本与认知能量系统) ✅
 |[████████████████████████] 100%  Phase 24 (能量经济与互惠利他) ✅
 ||███████████████████████████| 100%  Phase 25 (Agent 上下文质量与可靠性工程) ✅
+|||███████████████████████████| 100%  Phase 26 (社会互动驱动的人格动态演化) ✅
 ```
+
+---
+
+## Phase 27: 数码世界知识经济与技术传播 🔄 (进行中)
+
+**目标**: 受调研启发——Agentic AI Scientific Community (arXiv:2607.12122) 的引用经济 + Stable-Alignment (⭐356) 的社会训练——Phase 27 让数码兽能「发明」知识和技能，通过社会互动传播，形成数码世界的「学术圈」和「技术树」。引用量高的知识传播更广，数码兽按声望/关系距离互相学习。
+
+**论文依据**:
+- arXiv:2607.12122 "Agentic AI Scientific Community" — Influence economy between agents
+- agi-templar/Stable-Alignment (⭐356) — Social training signals
+- arXiv:2607.12231 "GEST-Engine" — From event graphs to synthetic representations
+
+**基础设施**: Phase 5 (技能系统) + Phase 22 (共享惯例) + Phase 24 (利他经济) + Phase 26 (人格演化)
+
+- [ ] Task 1 — `knowledge_economy.py` 核心模块: KnowledgeItem（知识条目：发明者、领域、摘要、引用计数、被引用列表）+ SkillInvention（数码兽基于经验/环境组合发明新技能）+ KnowledgePropagation（知识沿社会网络传播，传播概率依赖关系强度 + 引用数）+ TechTree（世界级技术树，节点解锁依赖前置知识传播度）
+- [ ] Task 2 — DigimonAgent 集成: 每个 tick agent 检查是否可通过组合已有知识发明新东西；对话中传播知识；高引用 knowledge 触发世界事件「新兴知识热点」
+- [ ] Task 3 — API 端点: `GET /api/knowledge`（世界知识图谱与技术树）、`GET /api/knowledge/hot`（当前热门知识/高引用条目）、`GET /api/digimon/{name}/inventions`（该数码兽的发明历史）
+- [ ] Task 4 — 前端知识面板: 世界地图侧栏新增「📚 知识」tab，显示技术树 + 热门知识列表 + 搜索 + 数码兽详情中展示「发明」列表
+- [ ] Task 5 — 集成测试 (≥30): KnowledgeItem 引用链 + SkillInvention 触发条件 + KnowledgePropagation 传播概率 + API 端点
+- [ ] Task 6 — 端到端验证: verify_phase27.py
+
+**完成标志**: 数码兽能够「发明」新技能和知识，知识沿社会网络传播，形成世界级技术树。热门知识引发世界事件。
 
 ---
 
