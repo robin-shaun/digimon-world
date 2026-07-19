@@ -11,5 +11,8 @@
     "test:particles": "node tests/test_particles.js",
     "test:audio": "node tests/test_audio.js",
     "test:integration": "node tests/test_integration.js"
+  },
+  "dependencies": {
+    "canvas": "^3.2.3"
   }
 }

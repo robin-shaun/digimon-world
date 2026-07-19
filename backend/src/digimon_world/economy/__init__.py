@@ -1,11 +1,29 @@
 from .energy_economy import EnergyEconomy, EnergyTransfer, ReciprocalAltruism
+from .knowledge_economy import (
+    InventedSkill,
+    KnowledgeItem,
+    KnowledgePool,
+    KnowledgePropagation,
+    TechNode,
+    TechTree,
+    get_knowledge_pool,
+    reset_knowledge_pool,
+)
 
 __all__ = [
     "EnergyEconomy",
     "EnergyTransfer",
+    "InventedSkill",
+    "KnowledgeItem",
+    "KnowledgePool",
+    "KnowledgePropagation",
     "ReciprocalAltruism",
+    "TechNode",
+    "TechTree",
     "get_energy_economy",
+    "get_knowledge_pool",
     "reset_energy_economy",
+    "reset_knowledge_pool",
 ]
 
 # ---- 进程级单例 ----

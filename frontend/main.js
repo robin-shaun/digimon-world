@@ -661,18 +661,18 @@
                     ctx.stroke();
                 }
             } else {
-                // ═══ 像素精灵图模式: 48×48 精灵图居中 ═══
+                // ═══ 高清精灵图模式: 128×128 精灵图居中 (Phase 27) ═══
                 const dy = y + bounce + walkBounce;
                 const speciesKey = (d.species || d.name).toLowerCase().replace(/[\s\-]/g, '_');
 
-                // 选中/高亮光环
-                const aura = ctx.createRadialGradient(x, dy, 8, x, dy, 28);
+                // 选中/高亮光环 (Phase 27: 适配128px精灵)
+                const aura = ctx.createRadialGradient(x, dy, 16, x, dy, 70);
                 aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.7)' : 'rgba(0, 212, 255, 0.6)');
                 aura.addColorStop(0.5, 'rgba(0, 212, 255, 0.2)');
                 aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = aura;
                 ctx.beginPath();
-                ctx.arc(x, dy, 28, 0, Math.PI * 2);
+                ctx.arc(x, dy, 70, 0, Math.PI * 2);
                 ctx.fill();
 
                 // 选中环
@@ -680,7 +680,7 @@
                     ctx.strokeStyle = '#ffd700';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(x, dy, 27, 0, Math.PI * 2);
+                    ctx.arc(x, dy, 68, 0, Math.PI * 2);
                     ctx.stroke();
                 }
 
@@ -710,19 +710,20 @@
 
                 const spriteCanvas = window.SPRITE_PIXEL ? SPRITE_PIXEL.getSprite(d.species || d.name) : null;
                 if (spriteCanvas) {
-                    ctx.drawImage(spriteCanvas, -24, -24, 48, 48);
+                    // 128×128 高清精灵图 (Phase 27)
+                    ctx.drawImage(spriteCanvas, -64, -64, 128, 128);
                 } else {
-                    // 兜底：找不到精灵图时用物种色画方块
+                    // 兜底：找不到精灵图时用物种色画方块 (Phase 27: 64×64)
                     const spriteCfg2 = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.species || d.name) : null;
                     const fallbackColor = spriteCfg2 ? spriteCfg2.color : '#aabbcc';
                     ctx.fillStyle = fallbackColor;
-                    ctx.fillRect(-14, -14, 28, 28);
+                    ctx.fillRect(-32, -32, 64, 64);
                     ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(-6, -6, 4, 4);
-                    ctx.fillRect(2, -6, 4, 4);
+                    ctx.fillRect(-14, -14, 10, 10);
+                    ctx.fillRect(4, -14, 10, 10);
                     ctx.fillStyle = '#000000';
-                    ctx.fillRect(-4, -5, 2, 3);
-                    ctx.fillRect(3, -5, 2, 3);
+                    ctx.fillRect(-10, -12, 5, 6);
+                    ctx.fillRect(6, -12, 5, 6);
                 }
                 ctx.restore();
 
@@ -731,7 +732,7 @@
                 ctx.font = '10px monospace';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
-                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, dy - 28);
+                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, dy - 72);
 
                 // 键盘焦点: 青色虚线环
                 const kfIdx2 = state.keyboardFocusIndex;
@@ -741,7 +742,7 @@
                     ctx.lineWidth = 2;
                     ctx.setLineDash([4, 3]);
                     ctx.beginPath();
-                    ctx.arc(x, dy, 19, 0, Math.PI * 2);
+                    ctx.arc(x, dy, 65, 0, Math.PI * 2);
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
@@ -1261,7 +1262,7 @@
             const animSt = window.ANIM ? ANIM.manager.get(d.name) : null;
             const dx = world.x - (animSt ? animSt.renderX() : d.position.x);
             const dy = world.y - (animSt ? animSt.renderY() : d.position.y);
-            const hitRadius = 22 / zoom; // 缩放感知的碰撞半径
+            const hitRadius = 56 / zoom; // Phase 27: 适配128px精灵
             if (dx * dx + dy * dy < hitRadius * hitRadius) {
                 state.selectedName = d.name;
                 state.keyboardFocusIndex = state.digimon.indexOf(d);  // 同步键盘焦点
@@ -1325,7 +1326,7 @@
         for (const d of state.digimon) {
             const dx = world.x - d.position.x;
             const dy = world.y - d.position.y;
-            const hitRadius = 28 / zoom;  // 触控用更大的碰撞半径
+            const hitRadius = 62 / zoom;  // Phase 27: 触控用更大的碰撞半径
             if (dx * dx + dy * dy < hitRadius * hitRadius) {
                 state.selectedName = d.name;
                 state.keyboardFocusIndex = state.digimon.indexOf(d);  // 同步键盘焦点
