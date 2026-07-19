@@ -269,3 +269,77 @@ def test_personality_endpoint_idempotent(client: TestClient) -> None:
     assert r2.status_code == 200
     assert r1.json()["type_code"] == r2.json()["type_code"]
     assert r1.json()["evolution_count"] == r2.json()["evolution_count"]
+
+
+# ---- Phase 26: 人格动力学 API ----
+def test_personality_endpoint_returns_dynamics(client: TestClient) -> None:
+    """Phase 26: /api/digimon/{name}/personality 包含动力学字段。"""
+    r = client.get("/api/digimon/亚古兽/personality")
+    assert r.status_code == 200
+    data = r.json()
+    # Phase 26 新增字段
+    assert "dynamics" in data
+    assert "trajectory" in data
+    assert isinstance(data["trajectory"], list)
+    assert "top_influencers" in data
+    assert isinstance(data["top_influencers"], list)
+    assert "influences_on" in data
+    assert isinstance(data["influences_on"], list)
+    assert "personality_shifts" in data
+    assert isinstance(data["personality_shifts"], list)
+
+
+def test_personality_network_endpoint(client: TestClient) -> None:
+    """Phase 26: GET /api/personality/network 返回影响力网络。"""
+    r = client.get("/api/personality/network")
+    assert r.status_code == 200
+    data = r.json()
+    assert "nodes" in data
+    assert "edges" in data
+    assert "summary" in data
+    assert isinstance(data["nodes"], list)
+    assert isinstance(data["edges"], list)
+    assert "total_interactions" in data["summary"]
+    assert "total_agents_in_network" in data["summary"]
+    # 检查节点结构
+    if data["nodes"]:
+        node = data["nodes"][0]
+        assert "name" in node
+        assert "mbti_type" in node
+        assert "stability" in node
+    # 检查边结构
+    if data["edges"]:
+        edge = data["edges"][0]
+        assert "source" in edge
+        assert "target" in edge
+        assert "weight" in edge
+
+
+def test_personality_shifts_endpoint(client: TestClient) -> None:
+    """Phase 26: GET /api/personality/shifts 返回人格转变列表。"""
+    r = client.get("/api/personality/shifts")
+    assert r.status_code == 200
+    data = r.json()
+    assert "shifts" in data
+    assert "total" in data
+    assert "total_significant" in data
+    assert "by_agent" in data
+    assert isinstance(data["shifts"], list)
+    assert isinstance(data["total"], int)
+    assert isinstance(data["by_agent"], dict)
+
+
+def test_personality_shifts_endpoint_with_filter(client: TestClient) -> None:
+    """Phase 26: /api/personality/shifts 支持 limit + min_significance。"""
+    # limit 参数
+    r = client.get("/api/personality/shifts?limit=5")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["shifts"]) <= 5
+
+    # min_significance 参数
+    r = client.get("/api/personality/shifts?min_significance=0.9")
+    assert r.status_code == 200
+    data = r.json()
+    for s in data["shifts"]:
+        assert s["significance"] >= 0.9

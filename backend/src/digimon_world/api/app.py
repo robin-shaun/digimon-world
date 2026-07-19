@@ -1240,13 +1240,14 @@ def get_digimon_relations(name: str) -> dict[str, Any]:
     }
 
 
-# ---- Phase 17: MBTI 人格档案 API ----
+# ---- Phase 17 + Phase 26: 人格档案 + 动力学 API ----
 @app.get("/api/digimon/{name}/personality")
 def get_digimon_personality(name: str) -> dict[str, Any]:
-    """返回数码兽的 MBTI 人格档案。
+    """返回数码兽的 MBTI 人格档案 + 动力学数据。
 
     基于荣格心理学四维度 (EI/SN/TF/JP) 的动态人格系统。
     包含类型代码、各维度值/强度、演化历史、创建时间等。
+    Phase 26 新增: 人格向量轨迹、漂移距离、稳定性、影响力网络。
 
     Raises:
         404: 数码兽不存在。
@@ -1287,7 +1288,184 @@ def get_digimon_personality(name: str) -> dict[str, Any]:
     profile_dict["is_clear"] = profile.is_clear_type()
     profile_dict["dominant_dimension"] = profile.dominant_dimension()
 
+    # ---- Phase 26: 人格动力学增强 ----
+    try:
+        from ..world.personality_dynamics import get_personality_dynamics_engine
+
+        dynamics = get_personality_dynamics_engine()
+        vec = dynamics.get_vector(name)
+        if vec is not None:
+            profile_dict["dynamics"] = vec.to_dict()
+            profile_dict["trajectory"] = dynamics.get_personality_trajectory(name)
+            # 最影响此 agent 的前 5 个 influencer
+            top_influencers = dynamics.influence_tracker.get_top_influencers(name)
+            profile_dict["top_influencers"] = [
+                {"name": inf[0], "total_influence": round(inf[1], 3)}
+                for inf in top_influencers
+            ]
+            # 此 agent 影响的其他人
+            profile_dict["influences_on"] = [
+                {"name": k, "total_influence": round(v, 3)}
+                for k, v in dynamics.influence_tracker.get_influence_network().get(name, {}).items()
+            ]
+            # 与此 agent 相关的重大转变
+            profile_dict["personality_shifts"] = [
+                {
+                    "old_type": s.old_type,
+                    "new_type": s.new_type,
+                    "drift_distance": round(s.drift_distance, 4),
+                    "tick": s.tick,
+                    "description": s.description,
+                    "significance": round(s.significance, 4),
+                }
+                for s in dynamics.shifts
+                if s.agent_name == name
+            ]
+        else:
+            profile_dict["dynamics"] = None
+            profile_dict["trajectory"] = []
+            profile_dict["top_influencers"] = []
+            profile_dict["influences_on"] = []
+            profile_dict["personality_shifts"] = []
+    except ImportError:
+        profile_dict["dynamics"] = None
+        profile_dict["trajectory"] = []
+        profile_dict["top_influencers"] = []
+        profile_dict["influences_on"] = []
+        profile_dict["personality_shifts"] = []
+
     return profile_dict
+
+
+# ---- Phase 26: 人格影响力网络 API ----
+@app.get("/api/personality/network")
+def get_personality_network() -> dict[str, Any]:
+    """返回 agent 间社会影响力网络图。
+
+    节点: agent 名称
+    边: influencer → influenced (total_magnitude)
+
+    Returns:
+        {
+            \"nodes\": [{\"name\": \"亚古兽\", \"type\": \"INFP\", ...}],
+            \"edges\": [{\"source\": \"亚古兽\", \"target\": \"加布兽\", \"weight\": 0.85}],
+            \"summary\": {\"total_interactions\": 42, \"total_agents\": 30, ...}
+        }
+    """
+    try:
+        from ..world.personality_dynamics import get_personality_dynamics_engine
+
+        dynamics = get_personality_dynamics_engine()
+        network = dynamics.influence_tracker.get_influence_network()
+
+        # 收集节点
+        world = get_world()
+        all_agents = set(network.keys())
+        for targets in network.values():
+            all_agents.update(targets.keys())
+
+        # 补充所有注册 agent（即使还没有影响力记录）
+        for agent_name in world.agents:
+            all_agents.add(agent_name)
+
+        nodes = []
+        for agent_name in sorted(all_agents):
+            vec = dynamics.get_vector(agent_name)
+            agent = world.get(agent_name)
+            node = {
+                "name": agent_name,
+                "mbti_type": vec.mbti_type() if vec else "???",
+                "stability": round(vec.stability_score, 4) if vec else 1.0,
+                "drift_from_original": round(vec.drift_from_original(), 4) if vec else 0.0,
+            }
+            if agent is not None:
+                node["stage"] = agent.stage.value if hasattr(agent.stage, 'value') else str(agent.stage)
+                node["species"] = agent.species
+            nodes.append(node)
+
+        # 构建边
+        edges = []
+        for influencer, targets in network.items():
+            for influenced, total_mag in targets.items():
+                if total_mag > 0.001:  # 过滤极微小的边
+                    edges.append({
+                        "source": influencer,
+                        "target": influenced,
+                        "weight": round(total_mag, 4),
+                    })
+
+        # 汇总
+        total_interactions = len(dynamics.influence_tracker)
+        influences_on_someone = len(network)
+        influenced_by_someone = len({t for targets in network.values() for t in targets})
+
+        return {
+            "nodes": nodes,
+            "edges": sorted(edges, key=lambda e: e["weight"], reverse=True),
+            "summary": {
+                "total_interactions": total_interactions,
+                "total_agents_in_network": len(nodes),
+                "agents_exerting_influence": influences_on_someone,
+                "agents_being_influenced": influenced_by_someone,
+            },
+        }
+    except ImportError:
+        return {"nodes": [], "edges": [], "summary": {"error": "personality_dynamics 模块未加载"}}
+
+
+# ---- Phase 26: 人格重大转变事件 API ----
+@app.get("/api/personality/shifts")
+def get_personality_shifts(limit: int = 20, min_significance: float = 0.0) -> dict[str, Any]:
+    """返回最近的重大人格转变事件列表。
+
+    Args:
+        limit: 返回事件数量上限 (默认 20)。
+        min_significance: 最低显著度阈值 [0, 1] (默认 0.0 返回全部)。
+
+    Returns:
+        {
+            \"shifts\": [{agent_name, old_type, new_type, drift_distance, tick, description, significance}],
+            \"total\": 42,
+            \"by_agent\": {\"亚古兽\": [\"INFP→ENFP\", ...], ...}
+        }
+    """
+    try:
+        from ..world.personality_dynamics import get_personality_dynamics_engine
+
+        dynamics = get_personality_dynamics_engine()
+        all_shifts = dynamics.shifts
+
+        # 按 significant + tick 过滤/排序
+        filtered = [s for s in all_shifts if s.significance >= min_significance]
+        filtered.sort(key=lambda s: s.tick, reverse=True)
+        recent = filtered[:limit]
+
+        # 按 agent 分组
+        by_agent: dict[str, list[str]] = {}
+        for s in all_shifts:
+            by_agent.setdefault(s.agent_name, []).append(
+                f"{s.old_type}→{s.new_type}"
+            )
+
+        return {
+            "shifts": [
+                {
+                    "agent_name": s.agent_name,
+                    "old_type": s.old_type,
+                    "new_type": s.new_type,
+                    "drift_distance": round(s.drift_distance, 4),
+                    "tick": s.tick,
+                    "description": s.description,
+                    "significance": round(s.significance, 4),
+                }
+                for s in recent
+            ],
+            "total": len(all_shifts),
+            "total_significant": len(filtered),
+            "by_agent": {k: v for k, v in by_agent.items()},
+        }
+    except ImportError:
+        return {"shifts": [], "total": 0, "total_significant": 0, "by_agent": {}}
 
 
 # ---- 排行榜 API ----
