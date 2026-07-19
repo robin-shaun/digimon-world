@@ -262,9 +262,9 @@
 
 **基础设施**: Phase 5 (技能系统) + Phase 22 (共享惯例) + Phase 24 (利他经济) + Phase 26 (人格演化)
 
-- [ ] Task 1 — `knowledge_economy.py` 核心模块: KnowledgeItem（知识条目：发明者、领域、摘要、引用计数、被引用列表）+ SkillInvention（数码兽基于经验/环境组合发明新技能）+ KnowledgePropagation（知识沿社会网络传播，传播概率依赖关系强度 + 引用数）+ TechTree（世界级技术树，节点解锁依赖前置知识传播度）
-- [ ] Task 2 — DigimonAgent 集成: 每个 tick agent 检查是否可通过组合已有知识发明新东西；对话中传播知识；高引用 knowledge 触发世界事件「新兴知识热点」
-- [ ] Task 3 — API 端点: `GET /api/knowledge`（世界知识图谱与技术树）、`GET /api/knowledge/hot`（当前热门知识/高引用条目）、`GET /api/digimon/{name}/inventions`（该数码兽的发明历史）
+- [x] Task 1 — `knowledge_economy.py` 核心模块: KnowledgeItem（知识条目：发明者、领域、摘要、引用计数、被引用列表）+ SkillInvention（数码兽基于经验/环境组合发明新技能）+ KnowledgePropagation（知识沿社会网络传播，传播概率依赖关系强度 + 引用数）+ TechTree（世界级技术树，节点解锁依赖前置知识传播度）✅ (1108行, 58 tests)
+- [x] Task 2 — Scheduler 集成: 每 tick 调用 propagate() 传播知识 + check_inventions() 触发发明；invention 事件写入世界日志 ✅
+- [x] Task 3 — API 端点: `GET /api/knowledge`（世界知识图谱与技术树）、`GET /api/knowledge/hot`（当前热门知识/高引用条目）、`GET /api/digimon/{name}/inventions`（该数码兽的发明历史）✅
 - [ ] Task 4 — 前端知识面板: 世界地图侧栏新增「📚 知识」tab，显示技术树 + 热门知识列表 + 搜索 + 数码兽详情中展示「发明」列表
 - [ ] Task 5 — 集成测试 (≥30): KnowledgeItem 引用链 + SkillInvention 触发条件 + KnowledgePropagation 传播概率 + API 端点
 - [ ] Task 6 — 端到端验证: verify_phase27.py
@@ -493,7 +493,7 @@
 
 ---
 
-## Phase 26: 社会互动驱动的人格动态演化 🔄 (进行中)
+## Phase 26: 社会互动驱动的人格动态演化 ✅ (100%)
 
 **目标**: Phase 17 赋予每只数码兽静态 MBTI 类型，但现实中人格在社会互动中持续演化。受今日调研启发——Stable-Alignment (⭐356) 用 DPO 训练社会对齐、Digital Pantheon (arXiv:2607.15095) 追踪 coalition 形成时的人格一致性——Phase 26 让数码兽的人格在社会互动中**动态演化**。每次对话、战斗、帮助、交易都会产生微小的「人格漂移」。Agent 不再是固定的 INFP/ESTJ，而是在社会关系中**成为自己**。
 

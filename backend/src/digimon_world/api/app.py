@@ -825,6 +825,84 @@ def get_altruism(name: str) -> dict[str, Any]:
     }
 
 
+# ---- Phase 27: 知识经济 API ----
+@app.get("/api/knowledge")
+def get_knowledge() -> dict[str, Any]:
+    """世界知识图谱与技术树。
+
+    Returns:
+        {stats, hot_items, tech_tree, domains}
+    """
+    from ..economy.knowledge_economy import get_knowledge_pool
+    pool = get_knowledge_pool()
+    return pool.to_dict()
+
+
+@app.get("/api/knowledge/hot")
+def get_knowledge_hot(limit: int = 10) -> dict[str, Any]:
+    """当前热门知识 / 高引用条目。
+
+    Args:
+        limit: 返回数量 (默认 10)。
+
+    Returns:
+        {hot: [{id, name, domain, citation_count, inventor_id, is_hot}], total}
+    """
+    from ..economy.knowledge_economy import get_knowledge_pool
+    pool = get_knowledge_pool()
+    hot = pool.get_hot(n=limit)
+    return {
+        "hot": [
+            {
+                "id": ki.id,
+                "name": ki.name,
+                "domain": ki.domain,
+                "citation_count": ki.citation_count,
+                "inventor_id": ki.inventor_id,
+                "is_hot": ki.is_hot,
+                "description": ki.description,
+            }
+            for ki in hot
+        ],
+        "total": len(hot),
+    }
+
+
+@app.get("/api/digimon/{name}/inventions")
+def get_digimon_inventions(name: str) -> dict[str, Any]:
+    """获取某只数码兽的发明历史。
+
+    Returns:
+        {name, inventions: [...], count, known_count}
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    from ..economy.knowledge_economy import get_knowledge_pool
+    pool = get_knowledge_pool()
+    inventions = pool.get_by_inventor(name)
+    known = pool.agent_known_items(name)
+    return {
+        "name": name,
+        "inventions": [
+            {
+                "id": inv.id,
+                "name": inv.name,
+                "domain": inv.domain,
+                "citation_count": inv.citation_count,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "description": inv.description,
+                "is_hot": inv.is_hot,
+            }
+            for inv in inventions
+        ],
+        "count": len(inventions),
+        "known_count": len(known),
+    }
+
+
 # ---- Phase 4: 观察者/导演接口 ----
 @app.post("/api/director/inject_event")
 def director_inject_event(req: InjectEventRequest) -> dict[str, Any]:

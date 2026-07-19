@@ -117,7 +117,7 @@ async def test_scheduler_records_events_in_world_state() -> None:
 
     assert len(world.events) == 0
     await sched.tick_once()
-    assert len(world.events) == 2
+    assert len(world.events) >= 2  # moved events + possible festival/other system events
 
 
 @pytest.mark.asyncio

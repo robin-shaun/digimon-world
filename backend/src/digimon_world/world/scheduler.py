@@ -377,6 +377,33 @@ class WorldScheduler:
                     )
             except Exception as e:
                 logger.debug("Personality dynamics step failed: %s", e)
+        # 9.85 Phase 27 知识经济阶段:
+        #    每 tick 传播知识 + 检查是否有 agent 有资格发明新技能
+        try:
+            from ..economy.knowledge_economy import get_knowledge_pool
+            pool = get_knowledge_pool()
+            spread_count = pool.propagate(self._tick_count)
+            new_skills = pool.check_inventions(agents, self._tick_count)
+            if new_skills:
+                for skill in new_skills:
+                    event = {
+                        "type": "knowledge_invention",
+                        "agent": skill.inventor_id,
+                        "skill_name": skill.name,
+                        "domain": skill.domain,
+                        "power": skill.power,
+                        "tick": self._tick_count,
+                        "at": self._clock.now.isoformat() if self._clock.now else None,
+                    }
+                    self._world.events.append(event)
+                logger.info(
+                    "KnowledgePool: %d inventions @ tick %d (spread=%d)",
+                    len(new_skills), self._tick_count, spread_count,
+                )
+            elif spread_count > 0:
+                logger.info("KnowledgePool: %d spreads @ tick %d", spread_count, self._tick_count)
+        except Exception as e:
+            logger.debug("Knowledge economy step failed: %s", e)
         # 9.9 Phase 25 上下文质量检测阶段:
         #    对每只 agent 生成 ContextQualitySnapshot，诊断问题，
         #    低健康分数的 agent 自动触发优化建议
