@@ -483,8 +483,8 @@
 
 - [x] Task 1 — `personality_dynamics.py` 核心模块: PersonalityVector（四维连续人格向量 E/I, S/N, T/F, J/P）+ SocialInfluence（对话/战斗/帮助/交易四种互动对不同维度的漂移量）+ PersonalityEvolution（追踪人格轨迹 + 检测显著 shift 事件 + 人格稳定性评分）✅ (721行, 59 tests)
 - [x] Task 2 — Scheduler 集成 + DigimonAgent 集成: 每次 social 互动后记录人格漂移；每 N tick 计算累积漂移并更新 agent 人格向量；显著性 shift 触发世界事件广播 ✅
-- [ ] Task 3 — API 端点: `GET /api/digimon/{name}/personality`（人格向量历史轨迹 + 当前 MBTI + 距离原始类型的偏移量）、`GET /api/personality/network`（agent 间社会影响力网络图）、`GET /api/personality/shifts`（最近的显著人格 shift 事件列表）
-- [ ] Task 4 — 前端人格演化面板: 数码兽详情新增「🧬 人格演化」tab，显示四维雷达图（原始 vs 当前）+ 人格轨迹时间线 + "重大性格转变"事件列表
+- [x] Task 3 — API 端点: `GET /api/digimon/{name}/personality`（人格向量历史轨迹 + 当前 MBTI + 距离原始类型的偏移量）、`GET /api/personality/network`（agent 间社会影响力网络图）、`GET /api/personality/shifts`（最近的显著人格 shift 事件列表）✅
+- [x] Task 4 — 前端人格演化面板: 数码兽详情新增「🧬 人格演化」tab，显示四维雷达图（原始 vs 当前）+ 人格轨迹时间线 + "重大性格转变"事件列表 ✅
 - [ ] Task 5 — 集成测试 (≥30): PersonalityVector 计算 + SocialInfluence 漂移累积 + PersonalityEvolution 检测 + API 端点
 - [ ] Task 6 — 端到端验证: verify_phase26.py（验证人格初始化/互动漂移/shift 检测/API 端点完整生命周期）
 
