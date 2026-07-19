@@ -640,6 +640,83 @@ class ContextOptimizer:
         actions.sort(key=lambda a: a.priority, reverse=True)
         return actions
 
+    def execute(
+        self,
+        agent_name: str,
+        action_type: str,
+    ) -> dict:
+        """执行单个优化操作。
+
+        将前端 action_type 映射到后端子系统，
+        调用相应引擎执行优化。
+
+        Args:
+            agent_name: 数码兽名称
+            action_type: 操作类型（与前端 CH_ACTION_LABELS 对齐）
+
+        Returns:
+            {"success": bool, "message": str}
+        """
+        from ..world import get_world
+
+        world = get_world()
+        agent = world.get(agent_name)
+        if agent is None:
+            return {"success": False, "message": f"Agent '{agent_name}' not found"}
+
+        # 动作类型 -> 类别映射
+        action_map: dict[str, str] = {
+            "memory_repeat": "staleness",
+            "memory_compress": "overload",
+            "plan_restore": "plan_drift",
+            "rule_revalidate": "coherence",
+            "prune_stale": "staleness",
+            "coherence_repair": "coherence",
+        }
+
+        category = action_map.get(action_type)
+        if category is None:
+            return {"success": False, "message": f"Unknown action_type: {action_type}"}  # noqa: F841
+
+        try:
+            # 获取最新快照用于诊断
+            monitor = get_health_monitor()
+            snapshot = monitor.latest_snapshot(agent_name)
+            if snapshot is None:
+                return {"success": False, "message": "No snapshot available yet"}
+
+            if action_type == "memory_repeat" or action_type == "prune_stale":
+                # 触发记忆复述或清理：调用 MemoryStream 方法
+                if hasattr(agent, "memory") and hasattr(agent.memory, "rehearse"):
+                    agent.memory.rehearse(top_k=10)
+                result = {"success": True, "message": "记忆复述/清理已触发"}
+
+            elif action_type == "memory_compress":
+                # 触发记忆压缩
+                if hasattr(agent, "memory") and hasattr(agent.memory, "compress_memories"):
+                    agent.memory.compress_memories(max_tokens=4000)
+                result = {"success": True, "message": "记忆压缩已触发"}
+
+            elif action_type == "plan_restore":
+                # 触发计划恢复
+                if hasattr(agent, "plans") and hasattr(agent.plans, "resume_active_plan"):
+                    agent.plans.resume_active_plan()
+                result = {"success": True, "message": "计划上下文恢复已触发"}
+
+            elif action_type == "rule_revalidate" or action_type == "coherence_repair":
+                # 触发规则重验证
+                if hasattr(agent, "world_model") and hasattr(agent.world_model, "revalidate_rules"):
+                    agent.world_model.revalidate_rules(force=True)
+                result = {"success": True, "message": "一致性重验证已触发"}
+
+            else:
+                result = {"success": True, "message": f"Optimization '{action_type}' queued"}
+
+        except Exception as e:
+            result = {"success": False, "message": f"Optimization failed: {e}"}
+
+        return result
+
     @staticmethod
     def _map_issue_to_action(
         snapshot: ContextQualitySnapshot,

@@ -1431,8 +1431,9 @@
         let worldModelData = null;
         let insightsData = null;
         let energyData = null;
+        let contextHealthData = null;
         try {
-            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp, enResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp, enResp, chResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
@@ -1443,6 +1444,7 @@
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/world-model', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/insights', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/energy', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/context-health', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
@@ -1454,6 +1456,7 @@
             if (wmResp.ok) worldModelData = await wmResp.json();
             if (insResp.ok) insightsData = await insResp.json();
             if (enResp.ok) energyData = await enResp.json();
+            if (chResp.ok) contextHealthData = await chResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -1673,6 +1676,13 @@
         // ══════════════════════════════════════════════
         if (energyData && energyData.energy) {
             renderEnergyPanel(sb, energyData);
+        }
+
+        // ══════════════════════════════════════════════
+        //  Phase 25: 上下文健康面板
+        // ══════════════════════════════════════════════
+        if (contextHealthData && contextHealthData.composite_health != null) {
+            renderContextHealth(sb, contextHealthData);
         }
     }
 
@@ -2114,6 +2124,279 @@
 
         html += '</div>';
         sb.insertAdjacentHTML('beforeend', html);
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 25: 上下文健康面板渲染
+    // ══════════════════════════════════════════════
+
+    /** 上下文问题严重度图标映射 */
+    var CH_SEVERITY_ICONS = { critical: '🔴', warning: '🟡', info: '🔵' };
+
+    /** 推荐操作的中文标签映射 */
+    var CH_ACTION_LABELS = {
+        memory_repeat: '🔄 记忆复述',
+        memory_compress: '🗜️ 压缩旧记忆',
+        plan_restore: '📋 恢复计划上下文',
+        rule_revalidate: '✅ 规则重验证',
+        prune_stale: '🧹 清理过期记忆',
+        coherence_repair: '🔧 一致性修复',
+    };
+
+    /**
+     * 渲染上下文健康面板到侧栏。
+     * 显示: 综合健康分数 + 六维雷达图 (Canvas) + 诊断问题列表 + 优化建议按钮。
+     */
+    function renderContextHealth(sb, data) {
+        var score = data.composite_health != null ? Math.round(data.composite_health) : 0;
+        var dims = data.dimensions || {};
+        var issues = data.issues || [];
+        var recs = data.recommendations || [];
+        var tick = data.tick || '?';
+
+        // 综合评分颜色
+        var scoreColor = score >= 70 ? '#00d4aa' : (score >= 40 ? '#ffb347' : '#ff6b6b');
+        var scoreLabel = score >= 70 ? '健康' : (score >= 40 ? '关注' : '严重');
+
+        var html = '<div class="detail-block">' +
+            '<h4>🔍 上下文健康 <span class="plan-count">Phase 25</span></h4>' +
+            '<div class="insight-overall" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">' +
+            '<div class="insight-score-ring" style="width:56px;height:56px;border-radius:50%;border:3px solid ' + scoreColor +
+            ';display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:' + scoreColor +
+            ';flex-shrink:0;">' + score + '</div>' +
+            '<div>' +
+            '<span style="color:' + scoreColor + ';font-weight:700;font-size:14px;">' + scoreLabel + '</span>' +
+            '<span style="color:var(--text-secondary);font-size:11px;display:block;">tick ' + tick + '</span>' +
+            '<div class="insight-score-bar-bg" style="width:180px;height:6px;background:#1a1f3a;border-radius:3px;margin-top:4px;">' +
+            '<div class="insight-score-bar" style="width:' + Math.min(100, score) + '%;height:100%;background:' + scoreColor +
+            ';border-radius:3px;transition:width 0.5s;"></div>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+
+        // ─── 六维雷达图 (Canvas) ───
+        html += '<canvas class="context-health-radar-canvas" width="260" height="260"></canvas>';
+
+        // ─── 六维明细 ───
+        var dimKeys = ['staleness', 'relevance', 'currency', 'coverage', 'coherence', 'size'];
+        var dimIcons = { staleness: '📅', relevance: '🎯', currency: '⏰', coverage: '🗺️', coherence: '🧩', size: '📦' };
+        var dimLabels = { staleness: '记忆鲜度', relevance: '记忆相关', currency: '计划时效', coverage: '世界覆盖', coherence: '一致性', size: '上下文大小' };
+        // size 是估计 token 数，不是 0-1，需要特殊处理
+        var sizeValue = dims.size || 0;
+        var dimFixed = {};
+        for (var dk = 0; dk < dimKeys.length; dk++) {
+            var kk = dimKeys[dk];
+            if (kk === 'size') {
+                dimFixed[kk] = sizeValue > 20000 ? 100 : (sizeValue > 10000 ? 50 : 30);
+            } else {
+                var raw = dims[kk] != null ? dims[kk] : 0;
+                dimFixed[kk] = Math.round(raw * 100);
+            }
+        }
+
+        for (var di = 0; di < dimKeys.length; di++) {
+            var key = dimKeys[di];
+            var val = dimFixed[key];
+            var icon = dimIcons[key] || '📊';
+            var label = dimLabels[key] || key;
+            var vColor = val >= 70 ? '#00d4aa' : (val >= 40 ? '#ffb347' : '#ff6b6b');
+
+            html += '<div style="margin-top:6px;padding:4px 0;border-top:1px solid #1a1f3a;">' +
+                '<span>' + icon + ' <strong>' + label + '</strong></span>' +
+                '<span style="float:right;color:' + vColor + ';font-weight:700;">' +
+                (key === 'size' ? (sizeValue > 20000 ? '⚠️ 大' : (sizeValue > 10000 ? '适中' : '精简')) : (val + '%')) +
+                '</span></div>';
+        }
+
+        // ─── 诊断问题列表 ───
+        if (issues.length > 0) {
+            var criticalIssues = issues.filter(function(i) { return i.severity === 'critical'; });
+            var warningIssues = issues.filter(function(i) { return i.severity === 'warning'; });
+
+            html += '<div style="margin-top:10px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.15);">' +
+                '<h5 style="color:var(--text-secondary);font-size:12px;margin:0 0 4px;">⚠️ ' +
+                '严重: ' + criticalIssues.length + ' · 警告: ' + warningIssues.length + '</h5>';
+
+            for (var iIdx = 0; iIdx < Math.min(issues.length, 5); iIdx++) {
+                var iss = issues[iIdx];
+                var sevIcon = CH_SEVERITY_ICONS[iss.severity] || '⚪';
+                html += '<div style="font-size:11px;margin:3px 0;padding:2px 4px;background:rgba(255,107,107,0.1);border-radius:3px;">' +
+                    sevIcon + ' ' + escapeHtml(iss.message || iss.dimension || '') +
+                    '</div>';
+            }
+            html += '</div>';
+        }
+
+        // ─── 优化建议 + 操作按钮 ───
+        if (recs.length > 0) {
+            html += '<div style="margin-top:10px;padding-top:8px;border-top:2px solid rgba(0,212,170,0.3);">' +
+                '<h5 style="color:#00d4aa;font-size:12px;margin:0 0 6px;">💡 优化建议</h5>';
+
+            for (var rIdx = 0; rIdx < Math.min(recs.length, 3); rIdx++) {
+                var rec = recs[rIdx];
+                var actionLabel = CH_ACTION_LABELS[rec.action] || rec.action || '优化';
+                var recDesc = rec.description || '';
+                html += '<div style="margin:4px 0;padding:6px 8px;background:rgba(0,212,170,0.08);border-radius:4px;border-left:2px solid #00d4aa;">' +
+                    '<div style="font-size:12px;font-weight:600;color:#00d4aa;margin-bottom:3px;">' + actionLabel + '</div>' +
+                    '<div style="font-size:11px;color:var(--text-secondary);">' + escapeHtml(recDesc) + '</div>' +
+                    '<button class="ch-opt-btn" data-action="' + escapeHtml(rec.action) + '" ' +
+                    'data-agent="' + escapeHtml(data.agent) + '" ' +
+                    'style="margin-top:4px;padding:3px 10px;font-size:11px;background:rgba(0,212,170,0.2);color:#00d4aa;' +
+                    'border:1px solid rgba(0,212,170,0.4);border-radius:3px;cursor:pointer;">' +
+                    '⚡ 一键优化</button>' +
+                    '</div>';
+            }
+            html += '</div>';
+        }
+
+        html += '</div>';
+        sb.insertAdjacentHTML('beforeend', html);
+
+        // ─── 绘制六维雷达图 ───
+        var radarCanvas = sb.querySelector('.context-health-radar-canvas');
+        if (radarCanvas) {
+            drawContextHealthRadar(radarCanvas, dimFixed, dimKeys, dimLabels);
+        }
+
+        // ─── 绑定优化按钮事件 ───
+        var optBtns = sb.querySelectorAll('.ch-opt-btn');
+        for (var oi = 0; oi < optBtns.length; oi++) {
+            optBtns[oi].addEventListener('click', function(e) {
+                var btn = e.target;
+                var action = btn.dataset.action;
+                var agent = btn.dataset.agent;
+                btn.textContent = '⏳ 执行中…';
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+
+                fetch(API_BASE + '/api/context/optimize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ agent: agent, action: action }),
+                }).then(function(resp) {
+                    if (resp.ok) {
+                        btn.textContent = '✅ 已完成';
+                        btn.style.background = 'rgba(0,212,170,0.4)';
+                    } else {
+                        btn.textContent = '❌ 失败';
+                        btn.style.background = 'rgba(255,107,107,0.3)';
+                        btn.style.color = '#ff6b6b';
+                    }
+                }).catch(function() {
+                    btn.textContent = '❌ 网络错误';
+                    btn.style.background = 'rgba(255,107,107,0.3)';
+                    btn.style.color = '#ff6b6b';
+                }).finally(function() {
+                    setTimeout(function() {
+                        btn.textContent = '⚡ 一键优化';
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                        btn.style.background = 'rgba(0,212,170,0.2)';
+                        btn.style.color = '#00d4aa';
+                    }, 3000);
+                });
+            });
+        }
+    }
+
+    /**
+     * 绘制六维上下文健康雷达图。
+     * 维度: staleness, relevance, currency, coverage, coherence, size
+     */
+    function drawContextHealthRadar(canvas, dims, dimKeys, dimLabels) {
+        var c = canvas.getContext('2d');
+        var w = canvas.width;   // 260
+        var h = canvas.height;  // 260
+        var cx = w / 2;
+        var cy = h / 2;
+        var radius = Math.min(w, h) * 0.35;
+        var numAxes = dimKeys.length;
+        var angleStep = (2 * Math.PI) / numAxes;
+
+        // 暗色背景
+        c.fillStyle = 'rgba(10, 14, 39, 0.6)';
+        c.fillRect(0, 0, w, h);
+
+        // ── 画同心参考环 ──
+        for (var ring = 1; ring <= 3; ring++) {
+            var ringR = (radius / 3) * ring;
+            c.beginPath();
+            for (var i = 0; i < numAxes; i++) {
+                var angle = i * angleStep - Math.PI / 2;
+                var vx = cx + ringR * Math.cos(angle);
+                var vy = cy + ringR * Math.sin(angle);
+                if (i === 0) c.moveTo(vx, vy);
+                else c.lineTo(vx, vy);
+            }
+            c.closePath();
+            c.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            c.lineWidth = 1;
+            c.stroke();
+        }
+
+        // ── 画轴线 ──
+        for (var ai = 0; ai < numAxes; ai++) {
+            var angle = ai * angleStep - Math.PI / 2;
+            var endX = cx + radius * Math.cos(angle);
+            var endY = cy + radius * Math.sin(angle);
+            c.beginPath();
+            c.moveTo(cx, cy);
+            c.lineTo(endX, endY);
+            c.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            c.lineWidth = 1;
+            c.stroke();
+
+            // 轴标签
+            var labelR = radius + 18;
+            var lx = cx + labelR * Math.cos(angle);
+            var ly = cy + labelR * Math.sin(angle);
+            c.fillStyle = '#aaa';
+            c.font = '9px "SF Mono", Consolas, monospace';
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.fillText(dimLabels[dimKeys[ai]] || dimKeys[ai], lx, ly);
+        }
+
+        // ── 画数据多边形 ──
+        c.beginPath();
+        for (var di = 0; di < numAxes; di++) {
+            var val = dims[dimKeys[di]] || 0;
+            var angle = di * angleStep - Math.PI / 2;
+            var dataR = (val / 100) * radius;
+            var dx = cx + dataR * Math.cos(angle);
+            var dy = cy + dataR * Math.sin(angle);
+            if (di === 0) c.moveTo(dx, dy);
+            else c.lineTo(dx, dy);
+        }
+        c.closePath();
+
+        // 填充 (半透明)
+        var fillGrad = c.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        fillGrad.addColorStop(0, 'rgba(0, 212, 170, 0.25)');
+        fillGrad.addColorStop(1, 'rgba(0, 212, 170, 0.05)');
+        c.fillStyle = fillGrad;
+        c.fill();
+
+        // 边框
+        c.strokeStyle = 'rgba(0, 212, 170, 0.7)';
+        c.lineWidth = 2;
+        c.stroke();
+
+        // ── 画数据点 ──
+        for (var dpi = 0; dpi < numAxes; dpi++) {
+            var pval = dims[dimKeys[dpi]] || 0;
+            var pangle = dpi * angleStep - Math.PI / 2;
+            var pdataR = (pval / 100) * radius;
+            var px = cx + pdataR * Math.cos(pangle);
+            var py = cy + pdataR * Math.sin(pangle);
+            c.beginPath();
+            c.arc(px, py, 3.5, 0, 2 * Math.PI);
+            c.fillStyle = '#00d4aa';
+            c.fill();
+            c.strokeStyle = '#fff';
+            c.lineWidth = 1;
+            c.stroke();
+        }
     }
 
     /**

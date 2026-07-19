@@ -161,4 +161,54 @@ def get_context_overview() -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# 路由: POST /api/context/optimize
+# ---------------------------------------------------------------------------
+
+@router.post("/context/optimize")
+def optimize_context(body: dict[str, Any]) -> dict[str, Any]:
+    """执行上下文优化操作。
+
+    接收前端「一键优化」按钮的请求，
+    调用 ContextOptimizer.execute() 执行实际优化。
+
+    Request body:
+        {"agent": "Agumon", "action": "memory_repeat"}
+
+    支持的操作类型 (与前端 CH_ACTION_LABELS 对齐):
+        - memory_repeat: 记忆复述
+        - memory_compress: 压缩旧记忆
+        - plan_restore: 恢复计划上下文
+        - rule_revalidate: 规则重验证
+        - prune_stale: 清理过期记忆
+        - coherence_repair: 一致性修复
+    """
+    agent_name = body.get("agent")
+    action_type = body.get("action")
+
+    if not agent_name or not action_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Both 'agent' and 'action' are required fields",
+        )
+
+    valid_actions = {
+        "memory_repeat", "memory_compress", "plan_restore",
+        "rule_revalidate", "prune_stale", "coherence_repair",
+    }
+    if action_type not in valid_actions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action '{action_type}'. Valid: {sorted(valid_actions)}",
+        )
+
+    optimizer = get_optimizer()
+    result = optimizer.execute(agent_name, action_type)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("message", "Optimization failed"))
+
+    return result
+
+
 __all__ = ["router", "digimon_context_health_router"]
