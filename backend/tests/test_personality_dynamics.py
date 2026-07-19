@@ -6,19 +6,17 @@
 from __future__ import annotations
 
 import math
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from digimon_world.world.personality_dynamics import (
     _DEFAULT_INFLUENCE_FACTOR,
-    _DIMS,
     _MAX_DEBT_NORMALIZE,
     _SHIFT_DRIFT_THRESHOLD,
     INTERACTION_BASE_VECTORS,
     PersonalityDynamicsEngine,
     PersonalityShift,
-    PersonalitySnapshot,
     PersonalityVector,
     SocialInfluenceRecord,
     SocialInfluenceTracker,
@@ -28,7 +26,6 @@ from digimon_world.world.personality_dynamics import (
 from digimon_world.world.personality_engine import (
     PersonalityEvolutionEngine,
     PersonalityProfile,
-    get_personality_engine,
     reset_personality_engine,
 )
 

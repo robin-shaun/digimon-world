@@ -1563,6 +1563,11 @@
             if (prCanvas) drawPersonalityRadar(prCanvas, personalityData);
         }
 
+        // Phase 26: 人格动力学面板
+        if (personalityData && personalityData.dynamics) {
+            renderPersonalityDynamics(sb, personalityData);
+        }
+
         // Phase 18: 记忆健康面板
         if (memoryHealthData && memoryHealthData.status !== 'not_initialized') {
             const total = memoryHealthData.total_memories || 0;
@@ -2879,6 +2884,263 @@
                     c.stroke();
                 }
             }
+
+            c.globalAlpha = 1.0;
+            c.textBaseline = 'alphabetic';
+            c.textAlign = 'left';
+        }
+
+    // ══════════════════════════════════════════════
+    //  Phase 26: 人格动力学面板渲染
+    // ══════════════════════════════════════════════
+
+        /**
+         * 渲染 Phase 26 人格动力学面板到侧栏。
+         * 显示：当前 vs 原始人格雷达图、漂移信息、轨迹时间线、影响者、重大转变。
+         */
+        function renderPersonalityDynamics(sb, data) {
+            var dyn = data.dynamics;
+            var html = '<div class="detail-block">' +
+                '<h4>🧬 人格演化 <span class="plan-count">Phase 26</span></h4>';
+
+            // ─── A) 当前 vs 原始人格四维雷达图 ───
+            html += '<canvas class="personality-dynamics-canvas" width="260" height="260"></canvas>';
+
+            // ─── B) 漂移信息 ───
+            var driftPct = Math.round((dyn.drift_from_original || 0) * 100);
+            var stabilityPct = Math.round((dyn.stability_score || 0) * 100);
+            var stabilityColor = stabilityPct >= 75 ? '#00d4aa' : (stabilityPct >= 50 ? '#ffb347' : '#ff6b6b');
+
+            html += '<div style="margin-top:8px;padding:8px;background:#1a1f3a;border-radius:4px;">' +
+                '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">' +
+                '从 <span style="color:#74b9ff;font-weight:700;">' + escapeHtml(dyn.original_type || '??') + '</span>' +
+                ' → <span style="color:#ffb347;font-weight:700;">' + escapeHtml(dyn.current_type || '??') + '</span>' +
+                '</div>' +
+                '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">' +
+                '漂移距离: <span style="color:#ffb347;font-weight:600;">' + driftPct + '%</span>' +
+                '<div class="insight-score-bar-bg" style="width:100%;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;margin-top:3px;">' +
+                '<div style="width:' + Math.min(100, driftPct) + '%;height:100%;background:#ffb347;border-radius:3px;transition:width 0.5s;"></div>' +
+                '</div></div>' +
+                '<div style="font-size:11px;color:var(--text-secondary);">' +
+                '稳定性评分: <span style="color:' + stabilityColor + ';font-weight:600;">' + stabilityPct + '%</span>' +
+                '<div class="insight-score-bar-bg" style="width:100%;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;margin-top:3px;">' +
+                '<div style="width:' + Math.min(100, stabilityPct) + '%;height:100%;background:' + stabilityColor + ';border-radius:3px;transition:width 0.5s;"></div>' +
+                '</div></div>' +
+                '</div>';
+
+            // ─── C) 人格轨迹时间线 (最近 5 条) ───
+            var trajectory = data.trajectory || [];
+            if (trajectory.length > 0) {
+                var recentTraj = trajectory.slice(-5);
+                html += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #1a1f3a;">' +
+                    '<h5 style="color:var(--text-secondary);font-size:12px;margin:0 0 4px;">📜 人格轨迹 (最近 ' + recentTraj.length + ')</h5>';
+
+                for (var ti = 0; ti < recentTraj.length; ti++) {
+                    var ts = recentTraj[ti];
+                    html += '<div style="font-size:10px;padding:3px 6px;margin:2px 0;background:rgba(0,212,170,0.05);border-radius:3px;color:var(--text-secondary);">' +
+                        '<span style="color:#00d4aa;font-weight:600;">t' + (ts.tick != null ? ts.tick : '?') + '</span> ' +
+                        '<span style="color:#ffd700;font-weight:600;">' + escapeHtml(ts.type || '??') + '</span>' +
+                        ' &nbsp;E/I:' + (ts.ei != null ? ts.ei.toFixed(2) : '?') +
+                        ' S/N:' + (ts.sn != null ? ts.sn.toFixed(2) : '?') +
+                        ' T/F:' + (ts.tf != null ? ts.tf.toFixed(2) : '?') +
+                        ' J/P:' + (ts.jp != null ? ts.jp.toFixed(2) : '?') +
+                        '</div>';
+                }
+                html += '</div>';
+            }
+
+            // ─── D) 最具影响力的互动对象 (前 3) ───
+            var influencers = data.top_influencers || [];
+            if (influencers.length > 0) {
+                html += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #1a1f3a;">' +
+                    '<h5 style="color:var(--text-secondary);font-size:12px;margin:0 0 4px;">👥 最具影响力</h5>';
+
+                for (var ii = 0; ii < Math.min(influencers.length, 3); ii++) {
+                    var inf = influencers[ii];
+                    var infScore = inf.total_influence != null ? (inf.total_influence * 100).toFixed(1) : '?';
+                    html += '<div style="font-size:11px;padding:3px 6px;margin:2px 0;color:var(--text-secondary);">' +
+                        '<span style="color:#74b9ff;">' + escapeHtml(inf.name || '?') + '</span>' +
+                        ': <span style="color:#ffb347;font-weight:600;">' + infScore + '%</span>' +
+                        '</div>';
+                }
+                html += '</div>';
+            }
+
+            // ─── E) 重大性格转变 ───
+            var shifts = data.personality_shifts || [];
+            if (shifts.length > 0) {
+                html += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #1a1f3a;">' +
+                    '<h5 style="color:var(--text-secondary);font-size:12px;margin:0 0 4px;">⚡ 重大转变</h5>';
+
+                for (var si = 0; si < shifts.length; si++) {
+                    var shift = shifts[si];
+                    var shiftDist = shift.drift_distance != null ? Math.round(shift.drift_distance * 100) : '?';
+                    html += '<div style="font-size:10px;padding:4px 6px;margin:3px 0;background:rgba(255,107,107,0.08);border-radius:3px;border-left:2px solid #ff6b6b;">' +
+                        '<span style="color:#74b9ff;font-weight:600;">' + escapeHtml(shift.old_type || '?') + '</span>' +
+                        ' → <span style="color:#ffb347;font-weight:600;">' + escapeHtml(shift.new_type || '?') + '</span>' +
+                        ' <span style="color:var(--text-secondary);">(tick ' + (shift.tick != null ? shift.tick : '?') + ')</span>' +
+                        '<span style="float:right;color:#ff6b6b;font-size:10px;">距离: ' + shiftDist + '%</span>' +
+                        (shift.description ? '<br><span style="color:var(--text-secondary);font-size:9px;">' + escapeHtml(shift.description) + '</span>' : '') +
+                        '</div>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div>';
+            sb.insertAdjacentHTML('beforeend', html);
+
+            // ─── 绘制当前 vs 原始人格雷达图 ───
+            var canvas = sb.querySelector('.personality-dynamics-canvas');
+            if (canvas) {
+                drawPersonalityDynamicsRadar(canvas, dyn);
+            }
+        }
+
+        /**
+         * 在 Canvas 上绘制 Phase 26 当前 vs 原始人格对比雷达图。
+         * 蓝色半透明多边形 = 原始人格，橙/金色半透明多边形 = 当前人格。
+         * 4 条轴 (45° 偏移钻石形): 右上=E/I, 左上=S/N, 左下=T/F, 右下=J/P。
+         */
+        function drawPersonalityDynamicsRadar(canvas, dyn) {
+            var c = canvas.getContext('2d');
+            var w = canvas.width;
+            var h = canvas.height;
+            var cx = w / 2;
+            var cy = h / 2;
+            var maxR = 105;
+
+            c.clearRect(0, 0, w, h);
+
+            // 暗色背景
+            c.fillStyle = 'rgba(10, 14, 39, 0.55)';
+            c.beginPath();
+            c.roundRect(4, 4, w - 8, h - 8, 8);
+            c.fill();
+
+            // 四轴: 右上=E/I, 左上=S/N, 左下=T/F, 右下=J/P
+            var axes = [
+                { angle: -Math.PI / 4,       dim: 'ei', pos: 'E', neg: 'I', color: '#ff6b6b' },
+                { angle: -Math.PI * 3 / 4,   dim: 'sn', pos: 'S', neg: 'N', color: '#ffb347' },
+                { angle: Math.PI * 3 / 4,    dim: 'tf', pos: 'T', neg: 'F', color: '#74b9ff' },
+                { angle: Math.PI / 4,        dim: 'jp', pos: 'J', neg: 'P', color: '#6c5ce7' },
+            ];
+
+            // 参考圆环
+            for (var ri = 0; ri < 3; ri++) {
+                var ring = [1, 0.66, 0.33][ri];
+                var r = maxR * ring;
+                c.strokeStyle = 'rgba(139, 149, 199, 0.18)';
+                c.lineWidth = 0.5;
+                c.beginPath();
+                c.arc(cx, cy, r, 0, Math.PI * 2);
+                c.stroke();
+            }
+
+            // 轴线 + 正负极标签
+            for (var ai = 0; ai < axes.length; ai++) {
+                var ax = axes[ai];
+                var ex = cx + Math.cos(ax.angle) * maxR;
+                var ey = cy + Math.sin(ax.angle) * maxR;
+                var exn = cx - Math.cos(ax.angle) * maxR;
+                var eyn = cy - Math.sin(ax.angle) * maxR;
+
+                c.strokeStyle = 'rgba(139, 149, 199, 0.3)';
+                c.lineWidth = 0.8;
+                c.beginPath();
+                c.moveTo(exn, eyn);
+                c.lineTo(ex, ey);
+                c.stroke();
+
+                c.fillStyle = ax.color;
+                c.font = 'bold 11px monospace';
+                c.textAlign = 'center';
+                c.textBaseline = 'middle';
+                c.fillText(ax.pos, cx + Math.cos(ax.angle) * (maxR + 14), cy + Math.sin(ax.angle) * (maxR + 14));
+
+                c.fillStyle = 'rgba(139, 149, 199, 0.6)';
+                c.font = '10px monospace';
+                c.fillText(ax.neg, cx - Math.cos(ax.angle) * (maxR + 14), cy - Math.sin(ax.angle) * (maxR + 14));
+            }
+
+            // ── 原始人格多边形 (蓝色, 虚线) ──
+            var origVals = dyn.original_values || {};
+            var origPoints = axes.map(function(ax) {
+                var val = origVals[ax.dim] != null ? origVals[ax.dim] : 0;
+                return {
+                    x: cx + Math.cos(ax.angle) * val * maxR,
+                    y: cy + Math.sin(ax.angle) * val * maxR,
+                };
+            });
+
+            c.fillStyle = 'rgba(116, 185, 255, 0.18)';
+            c.strokeStyle = 'rgba(116, 185, 255, 0.6)';
+            c.lineWidth = 2;
+            c.setLineDash([5, 3]);
+            c.beginPath();
+            c.moveTo(origPoints[0].x, origPoints[0].y);
+            for (var oi = 1; oi < origPoints.length; oi++) {
+                c.lineTo(origPoints[oi].x, origPoints[oi].y);
+            }
+            c.closePath();
+            c.fill();
+            c.stroke();
+            c.setLineDash([]);
+
+            // 原始人格顶点 (小方点)
+            for (var opi = 0; opi < origPoints.length; opi++) {
+                var opt = origPoints[opi];
+                c.fillStyle = 'rgba(116, 185, 255, 0.8)';
+                c.fillRect(opt.x - 3, opt.y - 3, 6, 6);
+            }
+
+            // ── 当前人格多边形 (橙色, 实线) ──
+            var currPoints = axes.map(function(ax) {
+                var val = dyn[ax.dim] != null ? dyn[ax.dim] : 0;
+                return {
+                    x: cx + Math.cos(ax.angle) * val * maxR,
+                    y: cy + Math.sin(ax.angle) * val * maxR,
+                };
+            });
+
+            c.fillStyle = 'rgba(255, 179, 71, 0.18)';
+            c.strokeStyle = 'rgba(255, 179, 71, 0.8)';
+            c.lineWidth = 2;
+            c.beginPath();
+            c.moveTo(currPoints[0].x, currPoints[0].y);
+            for (var ci = 1; ci < currPoints.length; ci++) {
+                c.lineTo(currPoints[ci].x, currPoints[ci].y);
+            }
+            c.closePath();
+            c.fill();
+            c.stroke();
+
+            // 当前人格顶点 (圆点 + 光晕)
+            for (var pi = 0; pi < currPoints.length; pi++) {
+                var pt = currPoints[pi];
+                c.fillStyle = axes[pi].color;
+                c.globalAlpha = 0.9;
+                c.beginPath();
+                c.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                c.fill();
+                c.globalAlpha = 1.0;
+            }
+
+            // 中心点
+            c.fillStyle = '#ffd700';
+            c.beginPath();
+            c.arc(cx, cy, 3, 0, Math.PI * 2);
+            c.fill();
+
+            // 图例
+            c.font = '9px monospace';
+            c.textAlign = 'left';
+            c.textBaseline = 'top';
+            c.fillStyle = 'rgba(116, 185, 255, 0.9)';
+            c.fillRect(cx - 56, maxR + 22, 10, 4);
+            c.fillText('原始 ' + escapeHtml(dyn.original_type || ''), cx - 42, maxR + 20);
+            c.fillStyle = 'rgba(255, 179, 71, 0.9)';
+            c.fillRect(cx + 14, maxR + 22, 10, 4);
+            c.fillText('当前 ' + escapeHtml(dyn.current_type || ''), cx + 28, maxR + 20);
 
             c.globalAlpha = 1.0;
             c.textBaseline = 'alphabetic';
