@@ -41,6 +41,11 @@ from .landmarks import LandmarkSystem, get_landmark_system
 from .affect_propagation import AffectPropagationEngine
 from .cooperation_thresholds import get_circle_between, get_interaction_modifier
 from .personality_engine import get_personality_engine
+from .personality_dynamics import (
+    get_personality_dynamics_engine,
+    reset_personality_dynamics_engine,  # noqa: F401
+    _SHIFT_DRIFT_THRESHOLD,  # noqa: F401
+)
 from .relational_circle import RelationalCircle
 from .relationships import RelationshipTracker, get_tracker
 from .seasons import SeasonSystem, get_season_system
@@ -64,6 +69,9 @@ SNAPSHOT_INTERVAL_TICKS = 500
 # 相遇半径(像素): 距离小于此值才可能触发对话
 DIALOGUE_RADIUS = 200                     # 相遇触发距离(px),10只数码兽需更宽范围
 DIALOGUE_COOLDOWN_MINUTES = 10            # 对话冷却(世界分钟)
+
+# 人格动力学步进间隔（每多少 tick 检测一次重大人格转变）
+PERSONALITY_DYNAMICS_INTERVAL = 50
 
 # Phase 11: LLM 调用批量化 — 降低每 tick 的 LLM 调用密度
 # 30 只数码兽,每 tick 全调 LLM 不可行
@@ -331,7 +339,44 @@ class WorldScheduler:
                 sum(1 for e in economy_events if e["type"] == "reciprocal_relief"),
                 sum(1 for e in economy_events if e["type"] == "awaken"),
             )
-        # 9.8 Phase 25 上下文质量检测阶段:
+        # 9.8 Phase 26 人格动力学阶段:
+        #    每 N tick 执行稳定性计算 + 重大人格转变检测
+        #    显著 shift 广播为世界事件
+        if self._tick_count % PERSONALITY_DYNAMICS_INTERVAL == 0:
+            try:
+                dynamics = get_personality_dynamics_engine()
+                new_shifts = dynamics.step(self._tick_count)
+                for shift in new_shifts:
+                    # 世界事件广播
+                    event = {
+                        "type": "personality_shift",
+                        "agent": shift.agent_name,
+                        "old_type": shift.old_type,
+                        "new_type": shift.new_type,
+                        "drift_distance": shift.drift_distance,
+                        "description": shift.description,
+                        "tick": self._tick_count,
+                        "at": self._clock.now.isoformat() if self._clock.now else None,
+                    }
+                    self._world.events.append(event)
+                    # 让当事 agent 记忆这次重大人格转变
+                    target = self._world.get(shift.agent_name)
+                    if target is not None:
+                        target.observe({
+                            "type": "personality_shift",
+                            "description": (
+                                f"我的性格发生了重大转变：从 {shift.old_type} "
+                                f"变为 {shift.new_type}"
+                            ),
+                            "importance": 9,
+                        })
+                    logger.info(
+                        "PersonalityDynamics Step: tick=%d %s → world event broadcast",
+                        self._tick_count, shift.agent_name,
+                    )
+            except Exception as e:
+                logger.debug("Personality dynamics step failed: %s", e)
+        # 9.9 Phase 25 上下文质量检测阶段:
         #    对每只 agent 生成 ContextQualitySnapshot，诊断问题，
         #    低健康分数的 agent 自动触发优化建议
         from .context_quality import get_health_monitor, get_optimizer
@@ -527,6 +572,22 @@ class WorldScheduler:
                 mbti_a=mbti_a, mbti_b=mbti_b,
             )
 
+            # Phase 26: 记录对话互动的人格影响力（双向）
+            try:
+                dynamics = get_personality_dynamics_engine()
+                dynamics.record_interaction(
+                    influencer=a.name, influenced=b.name,
+                    interaction_type="dialogue", magnitude=0.5,
+                    tick=self._tick_count,
+                )
+                dynamics.record_interaction(
+                    influencer=b.name, influenced=a.name,
+                    interaction_type="dialogue", magnitude=0.5,
+                    tick=self._tick_count,
+                )
+            except Exception:
+                pass
+
             # 刷新双方冷却时间戳
             a.last_interaction_at = now
             b.last_interaction_at = now
@@ -563,6 +624,21 @@ class WorldScheduler:
                         # 敌对战斗后关系进一步恶化
                         if circle == RelationalCircle.HOSTILE:
                             self._relationships.record_battle(winner=a.name, loser=b.name)
+                        # Phase 26: 战斗也影响人格（胜利方更果断，失败方更内向）
+                        try:
+                            dynamics = get_personality_dynamics_engine()
+                            dynamics.record_interaction(
+                                influencer=a.name, influenced=b.name,
+                                interaction_type="battle", magnitude=0.7,
+                                tick=self._tick_count,
+                            )
+                            dynamics.record_interaction(
+                                influencer=b.name, influenced=a.name,
+                                interaction_type="battle", magnitude=0.3,
+                                tick=self._tick_count,
+                            )
+                        except Exception:
+                            pass
                         # Phase 23: 战斗互动也恢复少量认知能量（激烈活动刺激思维）
                         a.cognitive_energy.recover(RECOVER_SOCIAL, "social_spar")
                         b.cognitive_energy.recover(RECOVER_SOCIAL, "social_spar")
