@@ -30,7 +30,7 @@ Director 观察势力版图时,派系比一堆边更直观。
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 # 关系高于此值的两只自动归入同一派系
 EMERGENCE_THRESHOLD: float = 30.0
@@ -49,8 +49,8 @@ class Faction:
     def __init__(
         self,
         faction_id: str,
-        members: Optional[set[str]] = None,
-        name: Optional[str] = None,
+        members: set[str] | None = None,
+        name: str | None = None,
         origin: str = "emergent",
     ) -> None:
         self.faction_id = faction_id
@@ -122,7 +122,7 @@ class FactionRegistry:
         }
 
         emergent: list[Faction] = []
-        for root, members in groups.items():
+        for root, members in groups.items():  # noqa: B007
             # 单成员(无任何强关系)不成派系
             if len(members) < 2:
                 continue
@@ -138,7 +138,7 @@ class FactionRegistry:
         self,
         faction_id: str,
         members: list[str],
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> Faction:
         """导演凭空创建(或覆盖)一个命名派系。origin 标记为 'director'。"""
         faction = Faction(
@@ -156,14 +156,14 @@ class FactionRegistry:
         faction = self._factions.get(faction_id)
         return sorted(faction.members) if faction is not None else []
 
-    def get_faction(self, faction_id: str) -> Optional[Faction]:
+    def get_faction(self, faction_id: str) -> Faction | None:
         return self._factions.get(faction_id)
 
     def all_factions(self) -> list[Faction]:
         """全部派系,按 id 排序(确定性)。"""
         return [self._factions[fid] for fid in sorted(self._factions)]
 
-    def faction_of(self, name: str) -> Optional[str]:
+    def faction_of(self, name: str) -> str | None:
         """某只数码兽所属派系 id(命中多个时取 id 字典序最小)。无归属 → None。"""
         hits = sorted(fid for fid, f in self._factions.items() if name in f.members)
         return hits[0] if hits else None
@@ -201,7 +201,7 @@ class FactionRegistry:
 
 
 # ---- 进程级单例 ----
-_registry: Optional[FactionRegistry] = None
+_registry: FactionRegistry | None = None
 
 
 def get_registry() -> FactionRegistry:

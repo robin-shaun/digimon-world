@@ -21,8 +21,8 @@ import logging
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Phase 24 economy 可选依赖 — ReciprocalAltruism 债务影响 influence_factor
@@ -108,7 +108,7 @@ class SocialInfluenceRecord:
 
     def __post_init__(self) -> None:
         if not self.timestamp:
-            self.timestamp = datetime.now(timezone.utc).isoformat()
+            self.timestamp = datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -445,7 +445,7 @@ class PersonalityDynamicsEngine:
         self.shifts: list[PersonalityShift] = []
 
         # Phase 24 ReciprocalAltruism 可选依赖
-        self._altruism: Optional[Any] = None
+        self._altruism: Any | None = None
         if _HAS_ECONOMY and _ReciprocalAltruism is not None:
             self._altruism = _ReciprocalAltruism()
 
@@ -474,7 +474,7 @@ class PersonalityDynamicsEngine:
             )
         return self.vectors[agent_name]
 
-    def get_vector(self, agent_name: str) -> Optional[PersonalityVector]:
+    def get_vector(self, agent_name: str) -> PersonalityVector | None:
         """获取已有的人格向量（不自动创建）。"""
         return self.vectors.get(agent_name)
 
@@ -704,7 +704,7 @@ class PersonalityDynamicsEngine:
 # 全局单例
 # ===========================================================================
 
-_dynamics_engine: Optional[PersonalityDynamicsEngine] = None
+_dynamics_engine: PersonalityDynamicsEngine | None = None
 
 
 def get_personality_dynamics_engine() -> PersonalityDynamicsEngine:

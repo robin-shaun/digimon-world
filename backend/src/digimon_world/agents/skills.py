@@ -25,10 +25,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from .digimon_agent import EvolutionStage
-
 
 # ----------------------------------------------------------------------------
 # 技能类型
@@ -153,7 +151,7 @@ def all_skills_for(species: str) -> list[Skill]:
     return result
 
 
-def find_skill(species: str, name: str) -> Optional[Skill]:
+def find_skill(species: str, name: str) -> Skill | None:
     """按招式名查找某 species 的技能,找不到返回 None。"""
     for skill in all_skills_for(species):
         if skill.name == name:
@@ -162,10 +160,10 @@ def find_skill(species: str, name: str) -> Optional[Skill]:
 
 
 __all__ = [
+    "DIGIMON_SKILLS",
     "Skill",
     "SkillType",
-    "DIGIMON_SKILLS",
-    "skills_for",
     "all_skills_for",
     "find_skill",
+    "skills_for",
 ]

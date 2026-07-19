@@ -21,23 +21,23 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, ClassVar, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from ..memory.memory_stream import MemoryStream
 from ..memory.memory_autonomy import MemoryAutonomy
+from ..memory.memory_stream import MemoryStream
 from ..memory.world_model import WorldModel
 
 if TYPE_CHECKING:
+    from ..world.world_state import Region
     from .planner import Planner
     from .reflector import Reflector
-    from ..world.world_state import Region
 
 logger = logging.getLogger(__name__)
 
 
 def _lazy_energy_pool():
     """Phase 23: 延迟导入 CognitiveEnergyPool，避免循环依赖。"""
-    from ..world.thinking_cost import CognitiveEnergyPool  # noqa: PLC0415
+    from ..world.thinking_cost import CognitiveEnergyPool
     return CognitiveEnergyPool()
 
 
@@ -142,9 +142,9 @@ class DigimonAgent:
     location: tuple[int, int] = (0, 0)
     stats: DigimonStats = field(default_factory=DigimonStats)
     memory: MemoryStream = field(default_factory=MemoryStream)
-    memory_autonomy: Optional[Any] = None  # Phase 18: set in __post_init__
-    world_model: Optional[WorldModel] = None  # Phase 20: set in __post_init__
-    current_plan: Optional[str] = None
+    memory_autonomy: Any | None = None  # Phase 18: set in __post_init__
+    world_model: WorldModel | None = None  # Phase 20: set in __post_init__
+    current_plan: str | None = None
     mood: str = "calm"  # calm/excited/tired/scared/curious
     # CPM 情绪演化管道: 连续情绪向量,每次 tick 积累+衰减
     # 维度: joy, sadness, anger, fear (均为 0.0~1.0)
@@ -153,12 +153,12 @@ class DigimonAgent:
     # 以及它的强烈度(0-1)。影响 plan_next() 的行动倾向。
     latent_desire: str = ""
     desire_strength: float = 0.0
-    reflector: Optional["Reflector"] = field(default=None, repr=False)
-    planner: Optional["Planner"] = field(default=None, repr=False)
-    last_reflection_at: Optional[datetime] = None
-    last_planned_at: Optional[datetime] = None
+    reflector: Reflector | None = field(default=None, repr=False)
+    planner: Planner | None = field(default=None, repr=False)
+    last_reflection_at: datetime | None = None
+    last_planned_at: datetime | None = None
     # 最近一次与其它数码兽互动(对话)的世界时刻,用于互动冷却
-    last_interaction_at: Optional[datetime] = None
+    last_interaction_at: datetime | None = None
     # Phase 3: 战斗胜利累计(用于触发进化)。由 battle API 在赢家身上 +1。
     battle_victories: int = 0
     # 个性特征: {trait_name: 0-10},初始化时随机 3 个突出特征
@@ -180,25 +180,25 @@ class DigimonAgent:
         self._plan_engine = None  # lazy init on first use
         self.world_model = WorldModel(agent_name=self.name)
         # Phase 23: 注册认知能量池到全局账本 (lazy import 避免循环依赖)
-        from ..world.thinking_cost import get_energy_ledger  # noqa: PLC0415
+        from ..world.thinking_cost import get_energy_ledger
         ledger = get_energy_ledger()
         ledger.pools[self.name] = self.cognitive_energy
 
     def _get_plan_engine(self):
         """获取计划持久化引擎（lazy import 避免循环依赖）。"""
         if self._plan_engine is None:
-            from .plan_persistence import get_plan_engine  # noqa: PLC0415
+            from .plan_persistence import get_plan_engine
             self._plan_engine = get_plan_engine()
         return self._plan_engine
 
     def apply_dark_masters_effects(self) -> bool:
         """当黑暗四天王事件激活时,增加恐惧和战斗倾向。
-        
+
         调用此方法后:
         - fear_modifier 设为 1.2 (恐惧 +20%)
         - battle_probability_bonus 设为 0.3 (战斗概率 +30%)
         - mood_state['fear'] 立即提升 0.2
-        
+
         Returns:
             True 如果之前未激活(首次激活)
         """
@@ -446,8 +446,8 @@ class DigimonAgent:
     }
 
     def get_bounds(
-        self, regions: dict[str, "Region"] | None
-    ) -> Optional[tuple[int, int, int, int]]:
+        self, regions: dict[str, Region] | None
+    ) -> tuple[int, int, int, int] | None:
         """查自己所在 region 的移动边界 (min_x, min_y, max_x, max_y)。
 
         Args:
@@ -465,7 +465,7 @@ class DigimonAgent:
         return region.bounds
 
     def act(
-        self, regions: dict[str, "Region"] | None = None
+        self, regions: dict[str, Region] | None = None
     ) -> dict[str, Any]:
         """执行当前计划的第一步,产生世界事件。
 
@@ -654,7 +654,7 @@ class DigimonAgent:
 
     async def step(
         self,
-        regions: dict[str, "Region"] | None = None,
+        regions: dict[str, Region] | None = None,
         tick_index: int = 0,
     ) -> dict[str, Any]:
         """主循环一步: observe → reflect_if_needed → plan_next → act。
@@ -729,7 +729,7 @@ class DigimonAgent:
             )
         # 3.6. Phase 23: 能量恢复 — 休息事件触发能量恢复
         if event.get("type") == "rested":
-            from ..world.thinking_cost import RECOVER_REST  # noqa: PLC0415
+            from ..world.thinking_cost import RECOVER_REST
             self.cognitive_energy.recover(RECOVER_REST, "rest")
 
         # 4. 从 mood_state 更新 mood 标签
@@ -746,7 +746,7 @@ class DigimonAgent:
         # 检查当前计划是否为休息 → 恢复能量
         rest_triggers = {"休息", "睡觉", "睡", "等待", "发呆", "停"}
         if self.current_plan and any(k in self.current_plan for k in rest_triggers):
-            from ..world.thinking_cost import RECOVER_REST  # noqa: PLC0415
+            from ..world.thinking_cost import RECOVER_REST
             self.cognitive_energy.recover(RECOVER_REST, "rest")
 
     # ---- 日记系统 ----

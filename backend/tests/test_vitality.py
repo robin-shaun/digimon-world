@@ -55,7 +55,7 @@ def test_compute_vitality_to_dict() -> None:
     assert "interaction_rate" in d
     assert "mood_variance" in d
     assert "overall_vitality" in d
-    assert all(isinstance(v, (int, float)) for v in d.values())
+    assert all(isinstance(v, int | float) for v in d.values())
 
 
 def test_compute_vitality_event_diversity() -> None:

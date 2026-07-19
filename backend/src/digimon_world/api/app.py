@@ -35,7 +35,7 @@ import random
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,24 +43,15 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from .. import __version__
-from .pokedex import router as pokedex_router
-from .conventions import (
-    router as conventions_router,
-    digimon_conventions_router,
-)
-from .context_health import (
-    router as context_health_router,
-    digimon_context_health_router,
-)
-from ..economy import get_energy_economy
+from .. import tts as tts_module
 from ..agents.achievements import AchievementSystem
 from ..agents.badges import BadgeSystem
 from ..agents.dialogue import Dialogue
 from ..agents.evolution import EvolutionSystem
 from ..agents.healing import get_healing_system
 from ..battle import BattleEngine, BattleResult, spar
+from ..economy import get_energy_economy
 from ..llm.client import get_client
-from .. import tts as tts_module
 from ..world import (
     RelationalCircle,
     RelationalDistance,
@@ -84,6 +75,19 @@ from ..world import (
     get_world,
     persistence,
 )
+from .context_health import (
+    digimon_context_health_router,
+)
+from .context_health import (
+    router as context_health_router,
+)
+from .conventions import (
+    digimon_conventions_router,
+)
+from .conventions import (
+    router as conventions_router,
+)
+from .pokedex import router as pokedex_router
 
 logger = logging.getLogger("digimon.api")
 
@@ -156,7 +160,7 @@ class BattleStartResponse(BaseModel):
     """战斗结果 + 触发的进化事件。"""
 
     result: dict[str, Any]
-    evolution: Optional[dict[str, Any]] = None
+    evolution: dict[str, Any] | None = None
     event_id: int
 
 
@@ -202,7 +206,7 @@ async def lifespan(_app: FastAPI):
 
     # shutdown
     for attr in ("broadcaster", "scheduler_task"):
-        task: Optional[asyncio.Task] = getattr(_app.state, attr, None)
+        task: asyncio.Task | None = getattr(_app.state, attr, None)
         if task is not None:
             task.cancel()
 
@@ -353,7 +357,7 @@ def get_regions() -> dict[str, Any]:
       ]
     }
     """
-    from ..world.world_state import WORLD_WIDTH, WORLD_HEIGHT
+    from ..world.world_state import WORLD_HEIGHT, WORLD_WIDTH
 
     # 区域推荐渲染颜色
     region_colors = {
@@ -470,7 +474,7 @@ async def list_snapshots() -> dict[str, Any]:
 async def create_snapshot(req: SnapshotCreateRequest = SnapshotCreateRequest()) -> dict[str, Any]:
     """手动创建世界快照。"""
     world = get_world()
-    scheduler: Optional[WorldScheduler] = getattr(app.state, "scheduler", None)
+    scheduler: WorldScheduler | None = getattr(app.state, "scheduler", None)
     tick = scheduler.tick_count if scheduler is not None else 0
 
     mgr = get_snapshot_manager()
@@ -511,9 +515,9 @@ def get_scheduler_status() -> dict[str, Any]:
     返回 running / tick_count / current_world_time。
     调度器尚未启动(如未走 startup)时返回 running=False 的兜底值。
     """
-    scheduler: Optional[WorldScheduler] = getattr(app.state, "scheduler", None)
-    task: Optional[asyncio.Task] = getattr(app.state, "scheduler_task", None)
-    clock: Optional[WorldClock] = getattr(app.state, "world_clock", None)
+    scheduler: WorldScheduler | None = getattr(app.state, "scheduler", None)
+    task: asyncio.Task | None = getattr(app.state, "scheduler_task", None)
+    clock: WorldClock | None = getattr(app.state, "world_clock", None)
 
     running = task is not None and not task.done()
     return {
@@ -944,7 +948,7 @@ def director_speed(req: SpeedRequest) -> dict[str, Any]:
 def director_state() -> dict[str, Any]:
     """导演视角状态: 当前流速 / 世界时间 / 最近 10 条事件 / 派系列表 / 环境数据。"""
     world = get_world()
-    clock: Optional[WorldClock] = getattr(app.state, "world_clock", None)
+    clock: WorldClock | None = getattr(app.state, "world_clock", None)
     return {
         "ratio": world.real_to_world_ratio,
         "current_world_time": clock.format_clock() if clock is not None else None,
@@ -1026,7 +1030,7 @@ async def start_battle(req: BattleStartRequest) -> BattleStartResponse:
     result = await engine.run_battle(a, b, llm_client=llm_client)
 
     # 赢家 +1 victory, 写记忆, 触发进化
-    evo_result_dict: Optional[dict[str, Any]] = None
+    evo_result_dict: dict[str, Any] | None = None
     if result.winner_name is not None:
         winner = world.get(result.winner_name)
         if winner is not None:
@@ -1462,7 +1466,7 @@ def get_personality_shifts(limit: int = 20, min_significance: float = 0.0) -> di
             ],
             "total": len(all_shifts),
             "total_significant": len(filtered),
-            "by_agent": {k: v for k, v in by_agent.items()},
+            "by_agent": dict(by_agent.items()),
         }
     except ImportError:
         return {"shifts": [], "total": 0, "total_significant": 0, "by_agent": {}}
@@ -1670,7 +1674,7 @@ def get_digimon_plans(name: str) -> dict[str, Any]:
     if agent is None:
         raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
 
-    from ..agents.plan_persistence import get_plan_engine  # noqa: PLC0415
+    from ..agents.plan_persistence import get_plan_engine
 
     engine = get_plan_engine()
     history = engine.get_history(name, limit=10)
@@ -1696,7 +1700,7 @@ def get_digimon_plan_detail(name: str, plan_id: str) -> dict[str, Any]:
     if agent is None:
         raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
 
-    from ..agents.plan_persistence import get_plan_engine  # noqa: PLC0415
+    from ..agents.plan_persistence import get_plan_engine
 
     engine = get_plan_engine()
     cp = engine.get_by_id(plan_id)
@@ -2079,7 +2083,7 @@ def list_world_digimon(world_id: str) -> dict[str, Any]:
 
 
 # 内存存储(后续持久化到 SQLite)
-_chosen_children: dict[str, "ChosenChildAgent"] = {}
+_chosen_children: dict[str, ChosenChildAgent] = {}
 
 
 class CreateChosenChildRequest(BaseModel):
@@ -2115,7 +2119,7 @@ def create_chosen_child(req: CreateChosenChildRequest) -> dict[str, Any]:
     try:
         crest = Crest(req.crest)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid crest '{req.crest}'. Valid: {[c.value for c in Crest]}")
+        raise HTTPException(status_code=400, detail=f"Invalid crest '{req.crest}'. Valid: {[c.value for c in Crest]}") from None
 
     child = ChosenChildAgent(
         name=req.name,
@@ -2241,8 +2245,8 @@ def health_perf() -> dict[str, Any]:
             "event_count": event_count,
             "ws_connections": len(manager.active),
             "clock_tick": (
-                getattr(app.state, "scheduler", None)
-                and getattr(app.state.scheduler, "tick_count", 0) or 0
+                (getattr(app.state, "scheduler", None)
+                and getattr(app.state.scheduler, "tick_count", 0)) or 0
             ),
         },
     }
@@ -2310,11 +2314,11 @@ async def get_digimon_tts(name: str, text: str | None = None) -> Response:
     try:
         audio = await tts_module.speak_digimon(name, text)
         if not audio:
-            raise HTTPException(status_code=500, detail="TTS 生成失败 (空音频)")
+            raise HTTPException(status_code=500, detail="TTS 生成失败 (空音频)") from None
         return Response(content=audio, media_type="audio/wav")
     except Exception as e:
         logger.error(f"TTS 端点异常: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"TTS 生成失败: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS 生成失败: {e}") from e
 
 
 @app.post("/api/tts/speak")
@@ -2324,11 +2328,11 @@ async def speak_digimon_api(req: SpeakRequest) -> Response:
     try:
         audio = await tts_module.speak_digimon(req.name, req.text)
         if not audio:
-            raise HTTPException(status_code=500, detail="TTS 生成失败 (空音频)")
+            raise HTTPException(status_code=500, detail="TTS 生成失败 (空音频)") from None
         return Response(content=audio, media_type="audio/wav")
     except Exception as e:
         logger.error(f"TTS speak 端点异常: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"TTS 生成失败: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS 生成失败: {e}") from e
 
 
 async def _position_broadcaster() -> None:

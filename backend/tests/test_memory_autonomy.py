@@ -21,17 +21,18 @@ import pytest
 from fastapi.testclient import TestClient
 
 from digimon_world.api import app
-from digimon_world.world import get_world, reset_world
 from digimon_world.memory.memory_autonomy import (
+    MAX_REHEARSAL_PER_STEP,
+    REHEARSAL_STRENGTH_THRESHOLD,
     EbbinghausCurve,
     ForgettingEngine,
     MemoryAutonomy,
     MemoryHealth,
     MemoryRehearsal,
-    REHEARSAL_STRENGTH_THRESHOLD,
-    MAX_REHEARSAL_PER_STEP,
 )
 from digimon_world.memory.memory_stream import MemoryNode
+from digimon_world.world import get_world, reset_world
+
 # ═══════════════════════════════════════════════════════════════════
 
 

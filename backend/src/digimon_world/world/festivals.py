@@ -36,7 +36,7 @@ FestivalSystem - 数码世界节日
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 # 每隔多少"世界天"办一次节日
 DAYS_PER_FESTIVAL: int = 30
@@ -89,7 +89,7 @@ class FestivalSystem:
     def __init__(self, start_day: int = 0) -> None:
         self.current_day: int = max(0, start_day)
         # 尚未点火过任何节日(即便 start_day 恰好落在节日日,也留待首次 update 点火)
-        self.last_festival_day: Optional[int] = None
+        self.last_festival_day: int | None = None
 
     # ---- 纯函数:世界天 → 节日 ----
     @staticmethod
@@ -118,7 +118,7 @@ class FestivalSystem:
         world_day: int,
         world_state: Any = None,
         tracker: Any = None,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """推进到指定世界天;若跨入一个尚未庆祝的节日日则点火。
 
         点火动作(仅在提供 world_state 时施加增益):
@@ -181,7 +181,7 @@ class FestivalSystem:
         elapsed_minutes: int,
         world_state: Any = None,
         tracker: Any = None,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """便捷入口: 直接吃 WorldClock.elapsed_minutes 推进。"""
         return self.update(
             self.day_from_minutes(elapsed_minutes),
@@ -225,7 +225,7 @@ class FestivalSystem:
 
 
 # ---- 进程级单例 ----
-_festival_system: Optional[FestivalSystem] = None
+_festival_system: FestivalSystem | None = None
 
 
 def get_festival_system() -> FestivalSystem:

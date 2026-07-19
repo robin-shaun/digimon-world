@@ -22,7 +22,6 @@ from digimon_world.world.thinking_cost import (
     get_energy_ledger,
 )
 
-
 # ──────────────────────────────────────────────
 # Fixtures
 # ──────────────────────────────────────────────
@@ -258,7 +257,7 @@ class TestEnergyHistory:
     """能量历史记录测试。"""
 
     def test_history_limited_to_20(self, fresh_pool):
-        for i in range(25):
+        for i in range(25):  # noqa: B007
             fresh_pool.tick()
         assert len(fresh_pool.energy_history) == 20
 
@@ -459,6 +458,7 @@ class TestDigimonAgentEnergyIntegration:
     def test_step_drains_energy(self):
         """agent.step() 每 tick 消耗能量。"""
         import asyncio
+
         from digimon_world.agents.digimon_agent import DigimonAgent
         a = DigimonAgent(name="test_agent", species="agumon")
         initial = a.cognitive_energy.energy
@@ -471,6 +471,7 @@ class TestDigimonAgentEnergyIntegration:
     def test_energy_persists_across_ticks(self):
         """能量状态跨 tick 持续累积。"""
         import asyncio
+
         from digimon_world.agents.digimon_agent import DigimonAgent
         a = DigimonAgent(name="test_agent", species="agumon")
         initial = 100
@@ -483,6 +484,7 @@ class TestDigimonAgentEnergyIntegration:
     def test_step_with_rest_plan_recovers(self):
         """step() 产生 rested 事件时触发能量恢复。"""
         import asyncio
+
         from digimon_world.agents.digimon_agent import DigimonAgent
         a = DigimonAgent(name="test_agent", species="agumon")
         # 先降能量（用非休息计划避免 apply_tick_energy 自动恢复）

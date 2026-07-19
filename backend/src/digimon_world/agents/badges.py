@@ -25,9 +25,9 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .digimon_agent import DigimonAgent
-    from ..world.world_state import WorldState
     from ..world.relationships import RelationshipTracker
+    from ..world.world_state import WorldState
+    from .digimon_agent import DigimonAgent
 
 
 class Badge(str, Enum):
@@ -57,13 +57,13 @@ class BadgeSystem:
 
     def __init__(
         self,
-        world: "WorldState",
-        tracker: "RelationshipTracker",
+        world: WorldState,
+        tracker: RelationshipTracker,
     ) -> None:
         self._world = world
         self._tracker = tracker
 
-    def evaluate(self, agent: "DigimonAgent") -> list[dict[str, Any]]:
+    def evaluate(self, agent: DigimonAgent) -> list[dict[str, Any]]:
         """计算该数码兽当前满足条件的所有徽章。
 
         Returns:
@@ -101,7 +101,7 @@ class BadgeSystem:
 
         return earned
 
-    def _check_friendship(self, agent: "DigimonAgent") -> bool:
+    def _check_friendship(self, agent: DigimonAgent) -> bool:
         """检查是否有任一关系分超过阈值。"""
         pairs = self._tracker.all_pairs()
         for pair in pairs:
@@ -111,7 +111,7 @@ class BadgeSystem:
                     return True
         return False
 
-    def _check_hope(self, agent: "DigimonAgent") -> bool:
+    def _check_hope(self, agent: DigimonAgent) -> bool:
         """进化到 champion 或以上即获得 HOPE。"""
         from .digimon_agent import EvolutionStage
 
@@ -122,7 +122,7 @@ class BadgeSystem:
         }
         return agent.stage in advanced_stages
 
-    def _check_knowledge(self, agent: "DigimonAgent") -> bool:
+    def _check_knowledge(self, agent: DigimonAgent) -> bool:
         """检查是否探索过全部地图区域。
 
         通过遍历记忆流中的描述,匹配已知 region_id,

@@ -185,7 +185,7 @@ class MemoryStream:
         dedup_window = self.moved_dedup_tick_window
         seen_groups: dict[tuple, list[int]] = {}  # (memory_type, desc_hash) -> [indices]
 
-        for i, node in enumerate(self.entries):
+        for key, node in enumerate(self._nodes):
             if node.memory_type in ("observation",) and node.importance < 5:
                 # 提取类型关键词(如 moved、rested 等)
                 key = (node.memory_type, self._event_type_key(node))
@@ -254,7 +254,7 @@ class MemoryStream:
             # 旧的中等记忆转为摘要
             if stale_mid:
                 summary_node = self.generate_summary(stale_mid, current_tick)
-                kept_mid = [summary_node] + kept_mid  # 摘要放前面
+                kept_mid = [summary_node] + kept_mid  # noqa: RUF005 摘要放前面
                 summarized += len(stale_mid)
             mid = kept_mid
         elif mid and len(mid) > self.mid_imp_keep:

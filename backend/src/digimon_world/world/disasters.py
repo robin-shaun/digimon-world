@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import random
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .relationships import RelationshipTracker
@@ -108,10 +108,10 @@ class DisasterSystem:
         history: 历史灾难记录(每次点火追加一条,供前端 / 调试查看)。
     """
 
-    def __init__(self, seed: Optional[int] = None) -> None:
-        self.active: Optional[Disaster] = None
-        self.started_at_tick: Optional[int] = None
-        self.ends_at_tick: Optional[int] = None
+    def __init__(self, seed: int | None = None) -> None:
+        self.active: Disaster | None = None
+        self.started_at_tick: int | None = None
+        self.ends_at_tick: int | None = None
         self.history: list[dict[str, Any]] = []
         self._rng = random.Random(seed)
 
@@ -133,7 +133,7 @@ class DisasterSystem:
         return self.active is not None
 
     @property
-    def label(self) -> Optional[str]:
+    def label(self) -> str | None:
         """当前灾难显示名;无灾难返回 None。"""
         return DISASTER_LABELS[self.active] if self.active else None
 
@@ -141,10 +141,10 @@ class DisasterSystem:
     def process(
         self,
         tick_count: int,
-        world: Optional["WorldState"] = None,
-        tracker: Optional["RelationshipTracker"] = None,
-        rng: Optional[random.Random] = None,
-    ) -> Optional[dict[str, Any]]:
+        world: WorldState | None = None,
+        tracker: RelationshipTracker | None = None,
+        rng: random.Random | None = None,
+    ) -> dict[str, Any] | None:
         """一次 tick 的灾难处理:先结算解除,再判定是否点火新灾难。
 
         流程:
@@ -166,9 +166,8 @@ class DisasterSystem:
             本次新点火的灾难事件字典;未点火(含仅解除 / 未命中)返回 None。
         """
         # 1. 结算解除
-        if self.active is not None and self.ends_at_tick is not None:
-            if tick_count >= self.ends_at_tick:
-                self._clear(world, tick_count)
+        if self.active is not None and self.ends_at_tick is not None and tick_count >= self.ends_at_tick:
+            self._clear(world, tick_count)
 
         # 2. 灾难进行中不再叠加新灾难
         if self.active is not None:
@@ -189,8 +188,8 @@ class DisasterSystem:
         self,
         disaster: Disaster,
         tick_count: int,
-        world: Optional["WorldState"],
-        tracker: Optional["RelationshipTracker"],
+        world: WorldState | None,
+        tracker: RelationshipTracker | None,
     ) -> dict[str, Any]:
         """点火一场灾难:设状态机 + 施加一次性伤害 + 记录事件。"""
         self.active = disaster
@@ -241,7 +240,7 @@ class DisasterSystem:
             world.events.append(payload)
         return payload
 
-    def _clear(self, world: Optional["WorldState"], tick_count: int) -> None:
+    def _clear(self, world: WorldState | None, tick_count: int) -> None:
         """解除当前灾难,恢复常态,并写一条解除事件。"""
         ended = self.active
         self.active = None
@@ -277,7 +276,7 @@ class DisasterSystem:
 
 
 # ---- 进程级单例 ----
-_disaster_system: Optional[DisasterSystem] = None
+_disaster_system: DisasterSystem | None = None
 
 
 def get_disaster_system() -> DisasterSystem:

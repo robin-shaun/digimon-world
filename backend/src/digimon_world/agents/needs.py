@@ -155,17 +155,17 @@ def prioritized_plan(needs: NeedsState, base_plan: str | None) -> str:
 
 
 __all__ = [
+    "FORAGE_PLAN",
+    "FORAGE_RESTORE",
+    "HUNGER_DECAY_PER_TICK",
     "HUNGER_MAX",
     "HUNGER_MIN",
-    "HUNGER_DECAY_PER_TICK",
     "HUNGRY_THRESHOLD",
-    "FORAGE_RESTORE",
-    "FoodType",
     "REGION_FOOD",
-    "food_sources",
+    "FoodType",
     "NeedsState",
-    "FORAGE_PLAN",
-    "should_forage",
+    "food_sources",
     "forage",
     "prioritized_plan",
+    "should_forage",
 ]

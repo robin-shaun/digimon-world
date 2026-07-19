@@ -105,8 +105,8 @@ def _action_similarity(action_a: str, action_b: str) -> float:
     """两个动作字符串的相似度（基于关键词重叠）。"""
     if action_a == action_b:
         return 1.0
-    words_a = set(w.lower() for w in re.findall(r"\w+", action_a) if len(w) >= 3)
-    words_b = set(w.lower() for w in re.findall(r"\w+", action_b) if len(w) >= 3)
+    words_a = {w.lower() for w in re.findall(r"\w+", action_a) if len(w) >= 3}
+    words_b = {w.lower() for w in re.findall(r"\w+", action_b) if len(w) >= 3}
     if not words_a or not words_b:
         return 0.0
     return len(words_a & words_b) / len(words_a | words_b)
@@ -170,7 +170,7 @@ class Episode:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Episode":
+    def from_dict(cls, data: dict[str, Any]) -> Episode:
         ts = data.get("timestamp")
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
@@ -200,7 +200,7 @@ class Rule:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Rule":
+    def from_dict(cls, data: dict[str, Any]) -> Rule:
         ts = data.get("timestamp")
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
@@ -268,7 +268,7 @@ class EpisodicMemory:
         return {"episodes": [ep.to_dict() for ep in self.episodes], "_max_episodes": self._max_episodes}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "EpisodicMemory":
+    def from_dict(cls, data: dict[str, Any]) -> EpisodicMemory:
         mem = cls(_max_episodes=data.get("_max_episodes", MAX_EPISODES))
         for ep_data in data.get("episodes", []):
             mem.episodes.append(Episode.from_dict(ep_data))
@@ -324,10 +324,10 @@ class SemanticMemory:
     def _merge_rules(self, new_rules: list[Rule]) -> None:
         existing: dict[tuple, int] = {}
         for i, rule in enumerate(self.rules):
-            key = tuple(sorted(rule.condition.items())) + (rule.conclusion,)
+            key = (*tuple(sorted(rule.condition.items())), rule.conclusion)
             existing[key] = i
         for new_rule in new_rules:
-            key = tuple(sorted(new_rule.condition.items())) + (new_rule.conclusion,)
+            key = (*tuple(sorted(new_rule.condition.items())), new_rule.conclusion)
             if key in existing:
                 old = self.rules[existing[key]]
                 if new_rule.confidence > old.confidence:
@@ -352,7 +352,7 @@ class SemanticMemory:
         return {"rules": [r.to_dict() for r in self.rules], "_max_rules": self._max_rules}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SemanticMemory":
+    def from_dict(cls, data: dict[str, Any]) -> SemanticMemory:
         mem = cls(_max_rules=data.get("_max_rules", MAX_RULES))
         for r_data in data.get("rules", []):
             mem.rules.append(Rule.from_dict(r_data))
@@ -525,7 +525,7 @@ class WorldModel:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WorldModel":
+    def from_dict(cls, data: dict[str, Any]) -> WorldModel:
         return cls(
             agent_name=data.get("agent_name", "unknown"),
             episodic=EpisodicMemory.from_dict(data.get("episodes", {})),

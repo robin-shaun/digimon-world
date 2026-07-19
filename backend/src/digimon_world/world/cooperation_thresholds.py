@@ -56,7 +56,7 @@ COOPERATION_FACTORS: dict[RelationalCircle, float] = {
 def get_interaction_modifier(
     agent_a: str,
     agent_b: str,
-    tracker: "RelationshipTracker",
+    tracker: RelationshipTracker,
     interaction_type: str,
 ) -> float:
     """获取两个 agent 之间的互动概率乘数。
@@ -90,7 +90,7 @@ def get_interaction_modifier(
 def get_circle_between(
     agent_a: str,
     agent_b: str,
-    tracker: "RelationshipTracker",
+    tracker: RelationshipTracker,
 ) -> RelationalCircle:
     """获取两个 agent 之间的关系圈层 (从 agent_a 的视角)。
 

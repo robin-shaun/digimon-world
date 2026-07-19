@@ -2,6 +2,7 @@
 import random
 
 import pytest
+
 from digimon_world.world.dark_gears import (
     GEAR_DAMAGE_PER_BATTLE,
     GEAR_DEFAULT_HP,

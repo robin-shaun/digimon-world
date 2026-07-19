@@ -25,6 +25,7 @@ Persistence - SQLite 持久化
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -152,8 +153,8 @@ def _ensure_parent_dir(db_path: str) -> None:
 
 
 async def save(
-    world_state: "WorldState",
-    tracker: "RelationshipTracker",
+    world_state: WorldState,
+    tracker: RelationshipTracker,
     db_path: str = DEFAULT_DB_PATH,
 ) -> None:
     """全量保存世界状态到 SQLite。
@@ -262,8 +263,8 @@ async def save(
 
 
 async def load(
-    world_state: "WorldState",
-    tracker: "RelationshipTracker",
+    world_state: WorldState,
+    tracker: RelationshipTracker,
     db_path: str = DEFAULT_DB_PATH,
 ) -> bool:
     """从 SQLite 全量恢复世界状态到内存。
@@ -338,10 +339,8 @@ async def load(
     world_state.agents = new_agents
     world_state.events = new_events
     if "real_to_world_ratio" in meta:
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             world_state.real_to_world_ratio = int(meta["real_to_world_ratio"])
-        except (TypeError, ValueError):
-            pass
 
     # 关系表: 清空后重灌
     tracker._vectors.clear()

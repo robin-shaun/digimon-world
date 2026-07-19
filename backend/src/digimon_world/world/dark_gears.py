@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .world_state import WorldState
@@ -115,8 +115,8 @@ class DarkGearSystem:
     def process(
         self,
         tick_count: int,
-        world: "WorldState | None" = None,
-    ) -> Optional[DarkGear]:
+        world: WorldState | None = None,
+    ) -> DarkGear | None:
         """每 tick 主入口：清理 + 尝试投放。
 
         Returns:
@@ -161,7 +161,7 @@ class DarkGearSystem:
         return gear
 
     def _pick_target_sub_region(
-        self, world: "WorldState | None"
+        self, world: WorldState | None
     ) -> str:
         """选择投放齿轮的目标子区域。
 
@@ -312,9 +312,9 @@ class DarkGearSystem:
             "active_gears": [g.to_dict() for g in self.active_gears],
             "total_placed": self._gear_counter,
             "threat_level": self.threat_level,
-            "infected_sub_regions": list(set(
+            "infected_sub_regions": list({
                 g.sub_region_id for g in self.active_gears
-            )),
+            }),
         }
 
     def reset(self) -> None:

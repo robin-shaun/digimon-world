@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from digimon_world.agents.digimon_agent import DigimonAgent
 from digimon_world.agents.dialogue import FALLBACK_LINE, Dialogue
+from digimon_world.agents.digimon_agent import DigimonAgent
 from digimon_world.llm.client import (
     ChatRequest,
     ChatResponse,

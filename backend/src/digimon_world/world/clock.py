@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Optional
 
 
 @dataclass
@@ -34,7 +33,7 @@ class WorldClock:
 
     start: datetime = field(default_factory=datetime.utcnow)
     real_to_world_ratio: int = 60
-    now: Optional[datetime] = None
+    now: datetime | None = None
     paused: bool = False
 
     def __post_init__(self) -> None:

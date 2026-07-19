@@ -25,7 +25,6 @@ Phase 20: 自进化世界模型 (WorldEvolver, arXiv:2606.30639)
 
 详细设计: docs/DESIGN.md 第 3.2 节
 """
-from .memory_stream import MemoryNode, MemoryStream
 from .memory_autonomy import (
     EbbinghausCurve,
     ForgettingEngine,
@@ -35,7 +34,7 @@ from .memory_autonomy import (
     MemoryRehearsal,
     MemoryUpdateDetector,
 )
-
+from .memory_stream import MemoryNode, MemoryStream
 from .world_model import (
     Episode,
     EpisodicMemory,

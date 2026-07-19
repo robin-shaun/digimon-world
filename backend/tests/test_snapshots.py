@@ -6,19 +6,20 @@ Phase 13⑤: 世界快照存档测试
 """
 
 import asyncio
+import contextlib
 import os
 import tempfile
 
 import pytest
 
+from digimon_world.world import persistence
+from digimon_world.world.relationships import get_tracker, reset_tracker
 from digimon_world.world.snapshots import (
     SnapshotManager,
     get_snapshot_manager,
     reset_snapshot_manager,
 )
 from digimon_world.world.world_state import get_world, reset_world
-from digimon_world.world.relationships import get_tracker, reset_tracker
-from digimon_world.world import persistence
 
 
 @pytest.fixture(autouse=True)
@@ -42,16 +43,14 @@ def tmp_dirs():
     yield base, snap_dir, world_db
     # cleanup
     import shutil
-    try:
+    with contextlib.suppress(Exception):
         shutil.rmtree(base)
-    except Exception:
-        pass
 
 
 @pytest.mark.asyncio
 async def test_snapshot_create_and_list(tmp_dirs):
     """创建快照并列出。"""
-    base, snap_dir, world_db = tmp_dirs
+    _base, snap_dir, world_db = tmp_dirs
 
     # 先 save 一个 world 到 world_db
     world = get_world()
@@ -74,7 +73,7 @@ async def test_snapshot_create_and_list(tmp_dirs):
 @pytest.mark.asyncio
 async def test_snapshot_restore(tmp_dirs):
     """创建快照 → 修改 world → 回滚 → 验证恢复。"""
-    base, snap_dir, world_db = tmp_dirs
+    _base, snap_dir, world_db = tmp_dirs
 
     world = get_world()
     tracker = get_tracker()
@@ -103,7 +102,7 @@ async def test_snapshot_restore(tmp_dirs):
 @pytest.mark.asyncio
 async def test_snapshot_restore_nonexistent(tmp_dirs):
     """回滚不存在的快照返回 False。"""
-    base, snap_dir, world_db = tmp_dirs
+    _base, snap_dir, world_db = tmp_dirs
     mgr = SnapshotManager(snapshot_dir=snap_dir, keep=10)
     ok = await mgr.restore("snap_nonexistent", world_db)
     assert not ok
@@ -112,7 +111,7 @@ async def test_snapshot_restore_nonexistent(tmp_dirs):
 @pytest.mark.asyncio
 async def test_snapshot_prune(tmp_dirs):
     """超出 keep 数量的旧快照被清理。"""
-    base, snap_dir, world_db = tmp_dirs
+    _base, snap_dir, world_db = tmp_dirs
 
     world = get_world()
     tracker = get_tracker()
@@ -140,7 +139,7 @@ async def test_snapshot_prune(tmp_dirs):
 @pytest.mark.asyncio
 async def test_snapshot_count(tmp_dirs):
     """count() 返回正确数量。"""
-    base, snap_dir, world_db = tmp_dirs
+    _base, snap_dir, world_db = tmp_dirs
 
     world = get_world()
     tracker = get_tracker()
@@ -176,8 +175,9 @@ async def test_reset_singleton():
 @pytest.mark.asyncio
 async def test_api_list_snapshots(tmp_dirs):
     """API: GET /api/snapshots 返回空列表。"""
-    from digimon_world.api.app import app
     from fastapi.testclient import TestClient
+
+    from digimon_world.api.app import app
 
     client = TestClient(app)
     response = client.get("/api/snapshots")
@@ -191,8 +191,10 @@ async def test_api_list_snapshots(tmp_dirs):
 async def test_api_create_snapshot_no_db(tmp_dirs):
     """API: POST /api/snapshots 在 world.db 不存在时报错。"""
     import os
-    from digimon_world.api.app import app
+
     from fastapi.testclient import TestClient
+
+    from digimon_world.api.app import app
 
     # 确保 world.db 不存在
     if os.path.exists(persistence.DEFAULT_DB_PATH):
@@ -209,8 +211,9 @@ async def test_api_create_snapshot_no_db(tmp_dirs):
 @pytest.mark.asyncio
 async def test_api_restore_nonexistent():
     """API: POST /api/snapshots/nonexistent/restore 返回 404。"""
-    from digimon_world.api.app import app
     from fastapi.testclient import TestClient
+
+    from digimon_world.api.app import app
 
     client = TestClient(app)
     response = client.post("/api/snapshots/nonexistent_999/restore")

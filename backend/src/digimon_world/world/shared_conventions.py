@@ -26,7 +26,7 @@ import string
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import jieba
 
@@ -134,7 +134,7 @@ class ConventionDetector:
         "这个", "那个", "这里", "那里", "怎么", "因为", "所以", "但是",
         "如果", "虽然", "然后", "并且", "或者", "不过", "还是", "只是",
         "自己", "我们", "他们", "它们", "你们", "大家", "所有", "任何",
-        "现在", "马上", "正在", "已经", "就要", "忽然", "突然", "终于",
+        "现在", "马上", "正在", "就要", "忽然", "突然", "终于",
         "开始", "继续", "结束", "完成", "发现", "看见", "听到", "觉得",
         "应该", "能够", "需要", "想要", "希望", "喜欢", "讨厌", "害怕",
         "可能", "也许", "一定", "必须", "当然", "果然", "竟然", "居然",
@@ -182,7 +182,7 @@ class ConventionDetector:
         # 3. 跨 agent 统计
         word_agent_count: Counter[str] = Counter()
         word_total_count: Counter[str] = Counter()
-        for name, wc in agent_words.items():
+        for name, wc in agent_words.items():  # noqa: B007
             for word in wc:
                 word_agent_count[word] += 1
                 word_total_count[word] += wc[word]
@@ -565,8 +565,8 @@ class ConventionPropagation:
             传播成功的惯例数
         """
         # 获取双方的惯例
-        a_convs = set(c.convention_id for c in self.pool.get_by_agent(agent_a))
-        b_convs = set(c.convention_id for c in self.pool.get_by_agent(agent_b))
+        a_convs = {c.convention_id for c in self.pool.get_by_agent(agent_a)}
+        b_convs = {c.convention_id for c in self.pool.get_by_agent(agent_b)}
 
         # A 有但 B 没有 → 尝试从 A 传播给 B
         a_only = a_convs - b_convs
@@ -580,15 +580,13 @@ class ConventionPropagation:
 
         # A → B
         for cid in a_only:
-            if random.random() < weight:
-                if self.pool.adopt(cid, agent_b):
-                    propagated += 1
+            if random.random() < weight and self.pool.adopt(cid, agent_b):
+                propagated += 1
 
         # B → A
         for cid in b_only:
-            if random.random() < weight:
-                if self.pool.adopt(cid, agent_a):
-                    propagated += 1
+            if random.random() < weight and self.pool.adopt(cid, agent_a):
+                propagated += 1
 
         if propagated > 0:
             logger.debug(

@@ -25,11 +25,12 @@ Agent 上下文质量与可靠性工程 — Phase 25 核心模块
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Literal, Optional
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class ContextQualitySnapshot:
     context_size_estimate: int = 0
     coherence_score: float = 0.0
     composite_health: float = 0.0
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -143,7 +144,7 @@ class ContextQualitySnapshot:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ContextQualitySnapshot":
+    def from_dict(cls, data: dict[str, Any]) -> ContextQualitySnapshot:
         return cls(
             agent_name=data["agent_name"],
             tick=data["tick"],
@@ -395,7 +396,7 @@ class ContextHealthMonitor:
         snaps = self._history.get(agent_name, [])
         return snaps[-limit:] if limit > 0 else list(snaps)
 
-    def latest_snapshot(self, agent_name: str) -> Optional[ContextQualitySnapshot]:
+    def latest_snapshot(self, agent_name: str) -> ContextQualitySnapshot | None:
         """返回某 agent 最近一次快照，无记录时返回 None。"""
         snaps = self._history.get(agent_name, [])
         return snaps[-1] if snaps else None
@@ -482,10 +483,8 @@ class ContextHealthMonitor:
                 engine = getattr(agent, attr)
                 break
         if engine is None and hasattr(agent, "_get_plan_engine"):
-            try:
+            with contextlib.suppress(Exception):
                 engine = agent._get_plan_engine()
-            except Exception:
-                pass
 
         if engine is None:
             return 0.3  # 默认：无 checkpoint 时
@@ -625,14 +624,12 @@ class ContextOptimizer:
         # 去重：同一 category 只取最高 severity 的 issue
         seen: dict[str, ContextIssue] = {}
         for issue in issues:
-            if issue.category not in seen:
-                seen[issue.category] = issue
-            elif (issue.severity == "critical"
+            if issue.category not in seen or (issue.severity == "critical"
                   and seen[issue.category].severity == "warning"):
                 seen[issue.category] = issue
 
         actions: list[OptimizationAction] = []
-        for category, issue in seen.items():
+        for _category, issue in seen.items():
             action = self._map_issue_to_action(snapshot, issue)
             if action:
                 actions.append(action)
@@ -676,7 +673,7 @@ class ContextOptimizer:
 
         category = action_map.get(action_type)
         if category is None:
-            return {"success": False, "message": f"Unknown action_type: {action_type}"}  # noqa: F841
+            return {"success": False, "message": f"Unknown action_type: {action_type}"}
 
         try:
             # 获取最新快照用于诊断
@@ -816,8 +813,8 @@ def _estimate_improvement(
 # 全局单例
 # ──────────────────────────────────────────────
 
-_monitor: Optional[ContextHealthMonitor] = None
-_optimizer: Optional[ContextOptimizer] = None
+_monitor: ContextHealthMonitor | None = None
+_optimizer: ContextOptimizer | None = None
 
 
 def get_health_monitor() -> ContextHealthMonitor:

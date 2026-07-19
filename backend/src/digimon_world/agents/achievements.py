@@ -81,7 +81,7 @@ class AchievementSystem:
         achievements = system.evaluate(agent)
     """
 
-    def evaluate(self, agent: "DigimonAgent") -> list[dict[str, Any]]:
+    def evaluate(self, agent: DigimonAgent) -> list[dict[str, Any]]:
         """计算该数码兽当前满足条件的所有里程碑。
 
         Returns:
@@ -170,7 +170,7 @@ class AchievementSystem:
 
         return earned
 
-    def _check_first_dialogue(self, agent: "DigimonAgent") -> bool:
+    def _check_first_dialogue(self, agent: DigimonAgent) -> bool:
         """检查是否完成过至少一次对话。
 
         通过扫描记忆流中是否有对话/相遇记录来判定:
@@ -185,7 +185,7 @@ class AchievementSystem:
                 return True
         return False
 
-    def _check_first_evolution(self, agent: "DigimonAgent") -> bool:
+    def _check_first_evolution(self, agent: DigimonAgent) -> bool:
         """检查是否已经历过至少一次进化。
 
         判定(满足其一即可):
@@ -204,7 +204,7 @@ class AchievementSystem:
 
         return False
 
-    def _check_social_butterfly(self, agent: "DigimonAgent") -> bool:
+    def _check_social_butterfly(self, agent: DigimonAgent) -> bool:
         """检查是否与 5+ 只不同数码兽对话过。
 
         通过扫描记忆流中对话/相遇记录,在描述中提取数码兽名字来判定。
@@ -223,7 +223,7 @@ class AchievementSystem:
                     unique_partners.add(name)
         return len(unique_partners) >= SOCIAL_BUTTERFLY_MIN_UNIQUE
 
-    def _check_explorer(self, agent: "DigimonAgent") -> bool:
+    def _check_explorer(self, agent: DigimonAgent) -> bool:
         """检查是否访问过所有核心地标。
 
         通过扫描记忆流描述中是否提到各地标名来判定。
@@ -236,7 +236,7 @@ class AchievementSystem:
                     visited_regions.add(landmark)
         return EXPLORER_CORE_LANDMARKS.issubset(visited_regions)
 
-    def _check_breeder(self, agent: "DigimonAgent") -> bool:
+    def _check_breeder(self, agent: DigimonAgent) -> bool:
         """检查是否成功繁衍过后代。
 
         通过扫描记忆流中繁殖事件来判定(breeding 事件会写入

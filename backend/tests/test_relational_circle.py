@@ -4,15 +4,15 @@ Tests for relational_circle.py — 差序格局 (Differential Mode of Associatio
 Inspired by ACL 2026 paper arXiv:2606.23764
 """
 
+from digimon_world.world.relational_circle import (
+    AffectVector,
+    RelationalCircle,
+    RelationalDistance,
+)
 from digimon_world.world.relationships import (
     RelationshipTracker,
     RelationshipVector,
     reset_tracker,
-)
-from digimon_world.world.relational_circle import (
-    RelationalCircle,
-    AffectVector,
-    RelationalDistance,
 )
 
 

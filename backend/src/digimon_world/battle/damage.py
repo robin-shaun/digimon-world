@@ -101,10 +101,10 @@ class DamageCalculator:
 
 
 __all__ = [
+    "NORMAL_MULTIPLIER",
     "SKILL_BONUS",
     "STRONG_MULTIPLIER",
     "WEAK_MULTIPLIER",
-    "NORMAL_MULTIPLIER",
     "DamageCalculator",
     "get_attribute_multiplier",
     "is_strong_against",

@@ -28,7 +28,7 @@ EnvironmentalEventSystem - 环境事件触发
 from __future__ import annotations
 
 import random
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .ecology import EcologySystem
@@ -65,17 +65,17 @@ class EnvironmentalEventSystem:
         volcano_cooldown: 火山冷却 tick(触发后 N tick 内不再触发)
     """
 
-    def __init__(self, seed: Optional[int] = None) -> None:
+    def __init__(self, seed: int | None = None) -> None:
         self.volcano_cooldown: int = 0
         self._rng = random.Random(seed)
 
     def process(
         self,
-        world: "WorldState",
-        ecology: "EcologySystem",
-        weather: "WeatherSystem",
+        world: WorldState,
+        ecology: EcologySystem,
+        weather: WeatherSystem,
         tick_count: int,
-        rng: Optional[random.Random] = None,
+        rng: random.Random | None = None,
     ) -> list[dict[str, Any]]:
         """每 tick 检测环境事件条件,返回触发的事件列表。
 
@@ -116,10 +116,10 @@ class EnvironmentalEventSystem:
 
     def _trigger_storm(
         self,
-        world: "WorldState",
-        ecology: "EcologySystem",
+        world: WorldState,
+        ecology: EcologySystem,
         tick_count: int,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """暴风雨: 启程海滩被淹没,数码兽躲进山洞。"""
         # 找到启程海滩子区域内的数码兽
         affected: list[str] = []
@@ -160,10 +160,10 @@ class EnvironmentalEventSystem:
 
     def _check_drought_migration(
         self,
-        world: "WorldState",
-        ecology: "EcologySystem",
+        world: WorldState,
+        ecology: EcologySystem,
         tick_count: int,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """长期干旱: food_level < 10 持续 50 tick → 数码兽迁移。"""
         migrants: list[str] = []
 
@@ -203,9 +203,9 @@ class EnvironmentalEventSystem:
 
     def _find_richer_region(
         self,
-        ecology: "EcologySystem",
+        ecology: EcologySystem,
         current_region: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """找到食物更丰富的迁移目标区域。"""
         best = None
         best_food = ecology.food_level(current_region)
@@ -220,10 +220,10 @@ class EnvironmentalEventSystem:
 
     def _trigger_volcano(
         self,
-        world: "WorldState",
-        ecology: "EcologySystem",
+        world: WorldState,
+        ecology: EcologySystem,
         tick_count: int,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """火山喷发: 无限山周边数码兽 HP -20%,进化概率翻倍。"""
         affected: list[str] = []
 
@@ -256,7 +256,7 @@ class EnvironmentalEventSystem:
 
 
 # ---- 进程级单例 ----
-_env_events_system: Optional[EnvironmentalEventSystem] = None
+_env_events_system: EnvironmentalEventSystem | None = None
 
 
 def get_env_events_system() -> EnvironmentalEventSystem:

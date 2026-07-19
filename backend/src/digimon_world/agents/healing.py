@@ -28,11 +28,11 @@ HealingSystem - 数码兽治疗 / 自然恢复
 from __future__ import annotations
 
 from math import hypot
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .digimon_agent import DigimonAgent
     from ..world.world_state import WorldState
+    from .digimon_agent import DigimonAgent
 
 
 # ---- 恢复参数 ----
@@ -66,7 +66,7 @@ class HealingSystem:
         self._shrine = _shrine()
 
     # ---- 邻近检测 ----
-    def _near_shrine(self, agent: "DigimonAgent") -> bool:
+    def _near_shrine(self, agent: DigimonAgent) -> bool:
         """数码兽是否在进化神殿的触发半径内(同 region + 距离 < 半径)。"""
         from ..world.landmarks import TRIGGER_RADIUS
 
@@ -76,7 +76,7 @@ class HealingSystem:
         return hypot(self._shrine.x - x, self._shrine.y - y) < TRIGGER_RADIUS
 
     # ---- 单只数码兽的自然恢复 ----
-    def regenerate(self, agent: "DigimonAgent") -> Optional[dict[str, Any]]:
+    def regenerate(self, agent: DigimonAgent) -> dict[str, Any] | None:
         """对单只受伤数码兽施加一次自然回血(神殿附近 +5,否则 +1)。
 
         Returns:
@@ -103,7 +103,7 @@ class HealingSystem:
 
     # ---- 治疗道具: 立即回满 ----
     def heal_with_item(
-        self, agent: "DigimonAgent", item_name: str = "治疗道具"
+        self, agent: DigimonAgent, item_name: str = "治疗道具"
     ) -> dict[str, Any]:
         """使用治疗道具,立即把 HP 回满。
 
@@ -126,7 +126,7 @@ class HealingSystem:
         }
 
     # ---- 批量处理(scheduler 每 tick 调用) ----
-    def process(self, world: "WorldState") -> list[dict[str, Any]]:
+    def process(self, world: WorldState) -> list[dict[str, Any]]:
         """一次 tick 的治疗处理: 所有受伤数码兽自然回血(神殿附近加成)。
 
         Returns:
@@ -141,7 +141,7 @@ class HealingSystem:
 
 
 # ---- 进程级单例 ----
-_healing_system: Optional[HealingSystem] = None
+_healing_system: HealingSystem | None = None
 
 
 def get_healing_system() -> HealingSystem:

@@ -46,9 +46,9 @@ def fake_client():
 
 async def test_clock_advances(fake_client):
     """校验 1: 时钟正确推进。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
 
     reset_world()
     world = get_world()
@@ -65,9 +65,9 @@ async def test_clock_advances(fake_client):
 
 async def test_agent_count_stable(fake_client):
     """校验 2: Agent 数量稳定,无丢失。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
 
     reset_world()
     world = get_world()
@@ -89,10 +89,10 @@ async def test_agent_count_stable(fake_client):
 
 async def test_all_agents_in_bounds(fake_client):
     """校验 3: 所有 agent 位置在世界边界内 (Phase 17: 4000x3000)。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
-    from digimon_world.world.world_state import WORLD_WIDTH, WORLD_HEIGHT
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
+    from digimon_world.world.world_state import WORLD_HEIGHT, WORLD_WIDTH
 
     reset_world()
     world = get_world()
@@ -111,9 +111,9 @@ async def test_all_agents_in_bounds(fake_client):
 
 async def test_all_agents_have_region(fake_client):
     """校验 4: 所有 agent 有有效 region_id。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
 
     reset_world()
     world = get_world()
@@ -131,9 +131,9 @@ async def test_all_agents_have_region(fake_client):
 
 async def test_memory_growth(fake_client):
     """校验 5: 记忆增长合理,在 120 tick 内不爆炸。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
 
     reset_world()
     world = get_world()
@@ -161,9 +161,9 @@ async def test_memory_growth(fake_client):
 
 async def test_events_produced(fake_client):
     """校验 6: 世界事件正常产出。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
 
     reset_world()
     world = get_world()
@@ -182,9 +182,9 @@ async def test_events_produced(fake_client):
 
 async def test_attribute_diversity(fake_client):
     """校验 7: 四属性分布完整。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
 
     reset_world()
     world = get_world()
@@ -206,9 +206,9 @@ async def test_attribute_diversity(fake_client):
 
 async def test_scheduler_tick_consistency(fake_client):
     """校验 8: Scheduler tick_count 准确。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
 
     reset_world()
     world = get_world()
@@ -225,9 +225,9 @@ async def test_scheduler_tick_consistency(fake_client):
 
 async def test_no_memory_leak_on_many_ticks(fake_client):
     """校验 9: 150 tick 内记忆增长收敛,无线性泄漏。"""
-    from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
     from digimon_world.agents.dialogue import Dialogue
     from digimon_world.llm.client import get_client
+    from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
 
     reset_world()
     world = get_world()

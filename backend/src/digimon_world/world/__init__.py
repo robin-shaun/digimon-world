@@ -11,11 +11,21 @@
 
 详细设计: docs/DESIGN.md 第 2 节
 """
+from ..economy import get_energy_economy, reset_energy_economy
 from . import persistence
-from .clock import WorldClock
 from .affect_propagation import (
     CPM_CHANGE_THRESHOLD,
     AffectPropagationEngine,
+)
+from .clock import WorldClock
+from .context_quality import (
+    ContextHealthMonitor,
+    ContextIssue,
+    ContextOptimizer,
+    ContextQualitySnapshot,
+    get_health_monitor,
+    get_optimizer,
+    reset_context_quality,
 )
 from .dark_gears import (
     DarkGear,
@@ -34,16 +44,15 @@ from .ecology import (
     get_ecology_system,
     reset_ecology_system,
 )
+from .economy import (
+    EconomySystem,
+    get_economy_system,
+)
 from .environmental_events import (
     EnvironmentalEventSystem,
     get_env_events_system,
     reset_env_events_system,
 )
-from .economy import (
-    EconomySystem,
-    get_economy_system,
-)
-from ..economy import get_energy_economy, reset_energy_economy
 from .events import StoryDirector, StoryEvent, get_director, reset_director
 from .factions import Faction, FactionRegistry, get_registry, reset_registry
 from .festivals import (
@@ -72,11 +81,6 @@ from .narrator import (
     get_narrator,
     reset_narrator,
 )
-from .relational_circle import (
-    AffectVector,
-    RelationalCircle,
-    RelationalDistance,
-)
 from .personality_engine import (
     MBTI_COMPATIBILITY,
     MbtiDimension,
@@ -84,6 +88,11 @@ from .personality_engine import (
     PersonalityProfile,
     get_personality_engine,
     reset_personality_engine,
+)
+from .relational_circle import (
+    AffectVector,
+    RelationalCircle,
+    RelationalDistance,
 )
 from .relationships import RelationshipTracker, get_tracker, reset_tracker
 from .scheduler import DEFAULT_TICK_SECONDS, WorldScheduler
@@ -94,15 +103,6 @@ from .seasons import (
     get_season_system,
     reset_season_system,
 )
-from .context_quality import (
-    ContextHealthMonitor,
-    ContextIssue,
-    ContextOptimizer,
-    ContextQualitySnapshot,
-    get_health_monitor,
-    get_optimizer,
-    reset_context_quality,
-)
 from .shared_conventions import (
     Convention,
     ConventionDetector,
@@ -111,6 +111,12 @@ from .shared_conventions import (
     get_convention_pool,
     get_convention_propagation,
     reset_convention_pool,
+)
+from .snapshots import (
+    SnapshotManager,
+    SnapshotMeta,
+    get_snapshot_manager,
+    reset_snapshot_manager,
 )
 from .thinking_cost import (
     BASE_DRAIN_PER_TICK,
@@ -123,14 +129,8 @@ from .thinking_cost import (
     RECOVER_SOCIAL,
     THINK_THRESHOLD,
     CognitiveEnergyPool,
-    EnergyLedger,  # noqa: F401 — re-exported via __all__
+    EnergyLedger,  # — re-exported via __all__
     get_energy_ledger,
-)
-from .snapshots import (
-    SnapshotManager,
-    SnapshotMeta,
-    get_snapshot_manager,
-    reset_snapshot_manager,
 )
 from .timeline import (
     TimelineSystem,
@@ -149,52 +149,64 @@ from .world_state import (
     ENDLESS_OCEAN,
     FILE_ISLAND,
     INFINITY_MOUNTAIN,
-    Region,
     SERVER_CONTINENT,
     SPIRAL_MOUNTAIN,
-    SubRegion,
     VILLAGE_OF_BEGINNINGS,
     WORLD_HEIGHT,
     WORLD_WIDTH,
+    Region,
+    SubRegion,
     WorldState,
     get_world,
     reset_world,
 )
 
 __all__ = [
-    "AffectPropagationEngine",
     "BASE_DRAIN_PER_TICK",
-    "CognitiveEnergyPool",
-    "Convention",
-    "ConventionDetector",
-    "ConventionPool",
-    "ConventionPropagation",
     "CPM_CHANGE_THRESHOLD",
+    "DAYS_PER_FESTIVAL",
+    "DAYS_PER_SEASON",
+    "DEFAULT_LANDMARKS",
+    "DEFAULT_REGIONS",
+    "DEFAULT_TICK_SECONDS",
+    "DORMANCY_THRESHOLD",
+    "ENDLESS_OCEAN",
+    "ENERGY_MAX",
+    "ENERGY_MIN",
+    "FILE_ISLAND",
+    "INFINITY_MOUNTAIN",
+    "LLM_COST_DIVISOR",
+    "MBTI_COMPATIBILITY",
+    "PRIME_WORLD_ID",
+    "PRIME_WORLD_ID",
+    "RECOVER_EAT",
+    "RECOVER_REST",
+    "RECOVER_SOCIAL",
+    "SERVER_CONTINENT",
+    "SPIRAL_MOUNTAIN",
+    "THINK_THRESHOLD",
+    "VILLAGE_OF_BEGINNINGS",
+    "WORLD_HEIGHT",
+    "WORLD_WIDTH",
+    "AffectPropagationEngine",
+    "AffectVector",
+    "CognitiveEnergyPool",
     "ContextHealthMonitor",
     "ContextIssue",
     "ContextOptimizer",
     "ContextQualitySnapshot",
-    "DAYS_PER_FESTIVAL",
-    "DAYS_PER_SEASON",
-    "DEFAULT_REGIONS",
-    "DEFAULT_TICK_SECONDS",
-    "DEFAULT_LANDMARKS",
-    "DORMANCY_THRESHOLD",
-    "ENERGY_MAX",
-    "ENERGY_MIN",
-    "EnergyLedger",
-    "AffectVector",
+    "Convention",
+    "ConventionDetector",
+    "ConventionPool",
+    "ConventionPropagation",
     "DarkGear",
     "DarkGearSystem",
-    "DayPeriod",
     "DayNightSystem",
+    "DayPeriod",
     "EcologySystem",
     "EconomySystem",
+    "EnergyLedger",
     "EnvironmentalEventSystem",
-    "FILE_ISLAND",
-    "ENDLESS_OCEAN",
-    "INFINITY_MOUNTAIN",
-    "PRIME_WORLD_ID",
     "Faction",
     "FactionRegistry",
     "Festival",
@@ -202,24 +214,12 @@ __all__ = [
     "Landmark",
     "LandmarkEffect",
     "LandmarkSystem",
-    "LLM_COST_DIVISOR",
     "MbtiDimension",
-    "MBTI_COMPATIBILITY",
     "MultiverseManager",
     "NarratorSystem",
     "PersonalityEvolutionEngine",
     "PersonalityProfile",
-    "PRIME_WORLD_ID",
     "Region",
-    "RECOVER_EAT",
-    "RECOVER_REST",
-    "RECOVER_SOCIAL",
-    "SubRegion",
-    "SERVER_CONTINENT",
-    "SPIRAL_MOUNTAIN",
-    "VILLAGE_OF_BEGINNINGS",
-    "WORLD_HEIGHT",
-    "WORLD_WIDTH",
     "RelationalCircle",
     "RelationalDistance",
     "RelationshipTracker",
@@ -229,7 +229,7 @@ __all__ = [
     "SnapshotMeta",
     "StoryDirector",
     "StoryEvent",
-    "THINK_THRESHOLD",
+    "SubRegion",
     "TimelineSystem",
     "VitalitySnapshot",
     "Weather",
@@ -238,7 +238,6 @@ __all__ = [
     "WorldScheduler",
     "WorldState",
     "compute_vitality",
-    "persistence",
     "get_convention_pool",
     "get_convention_propagation",
     "get_dark_gear_system",
@@ -251,20 +250,21 @@ __all__ = [
     "get_env_events_system",
     "get_festival_system",
     "get_health_monitor",
-    "get_optimizer",
     "get_landmark_system",
     "get_multiverse",
     "get_narrator",
+    "get_optimizer",
     "get_personality_engine",
     "get_registry",
-    "get_snapshot_manager",
     "get_season_system",
+    "get_snapshot_manager",
     "get_timeline_system",
     "get_tracker",
     "get_weather_system",
     "get_world",
-    "reset_convention_pool",
+    "persistence",
     "reset_context_quality",
+    "reset_convention_pool",
     "reset_dark_gear_system",
     "reset_daynight_system",
     "reset_director",

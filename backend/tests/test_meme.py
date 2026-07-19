@@ -9,7 +9,6 @@ from digimon_world.agents.meme import (
     MemePool,
 )
 
-
 # ---------------------------------------------------------------------------
 # Meme 创建
 # ---------------------------------------------------------------------------
@@ -190,11 +189,10 @@ class TestSpreadMutation:
         )
         # mutation_rate=1.0 保证变异，但不能保证传播（类别概率）
         # RUMOR 传播率 0.55，大概率会过
-        if result is not None:
-            if result != mid:
-                mutated = pool.registry[result]
-                assert "(传闻变异)" in mutated.content
-                assert mutated.generation > 0
+        if result is not None and result != mid:
+            mutated = pool.registry[result]
+            assert "(传闻变异)" in mutated.content
+            assert mutated.generation > 0
 
 
 # ---------------------------------------------------------------------------

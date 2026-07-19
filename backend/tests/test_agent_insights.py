@@ -21,7 +21,6 @@ from digimon_world.agents.agent_insights import (
     reset_insight_engine,
 )
 
-
 # ──────────────────────────────────────────────
 # 全局单例
 # ──────────────────────────────────────────────
@@ -210,7 +209,7 @@ class TestAssess:
         assert report["agent_name"] == "亚古兽"
         assert "timestamp" in report
         assert "overall_score" in report
-        assert isinstance(report["overall_score"], (int, float))
+        assert isinstance(report["overall_score"], int | float)
 
         dims = report["dimensions"]
         assert "memory_health" in dims

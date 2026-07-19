@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from digimon_world.agents.chosen_child import ChosenChildAgent, Crest
-from digimon_world.api.app import app, _chosen_children
+from digimon_world.api.app import _chosen_children, app
 
 
 @pytest.fixture(autouse=True)

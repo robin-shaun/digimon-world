@@ -26,7 +26,6 @@ from digimon_world.agents.evolution import (
     next_stage,
 )
 
-
 # ----------------------------------------------------------------------------
 # Fixtures
 # ----------------------------------------------------------------------------
@@ -97,21 +96,21 @@ def test_compute_bond_sums_importance(agumon, evo_system):
 
 def test_can_evolve_not_ready_too_few_victories_and_bond(agumon, evo_system):
     """刚开局什么都不够,不能进化。"""
-    can, reason, crest = evo_system.can_evolve(agumon, battle_victories=0, bond=0)
+    can, reason, _crest = evo_system.can_evolve(agumon, battle_victories=0, bond=0)
     assert can is False
     assert reason == EvolutionReason.NOT_READY
 
 
 def test_can_evolve_ready_when_both_met(agumon, evo_system):
     """ROOKIE → CHAMPION 需要 8 胜利 + 40 bond。"""
-    can, reason, crest = evo_system.can_evolve(agumon, battle_victories=8, bond=40)
+    can, reason, _crest = evo_system.can_evolve(agumon, battle_victories=8, bond=40)
     assert can is True
     assert reason == EvolutionReason.BATTLE_VICTORIES
 
 
 def test_can_evolve_bond_overflow_pure_bond_route(agumon, evo_system):
     """胜利不够,但羁绊值溢出 2 倍,纯羁绊路线。"""
-    can, reason, crest = evo_system.can_evolve(agumon, battle_victories=0, bond=80)
+    can, reason, _crest = evo_system.can_evolve(agumon, battle_victories=0, bond=80)
     assert can is True
     assert reason == EvolutionReason.BOND
 
@@ -122,7 +121,7 @@ def test_can_evolve_mega_cannot_go_further(evo_system):
         species="WarGreymon",
         stage=EvolutionStage.MEGA,
     )
-    can, reason, crest = evo_system.can_evolve(mega, battle_victories=999, bond=999)
+    can, reason, _crest = evo_system.can_evolve(mega, battle_victories=999, bond=999)
     assert can is False
     assert reason == EvolutionReason.ALREADY_MEGA
 

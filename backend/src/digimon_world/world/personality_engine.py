@@ -31,7 +31,7 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +198,7 @@ class PersonalityEvolutionEngine:
     """
 
     # 各事件类型的维度影响向量 (delta)
-    EVENT_IMPACTS: dict[str, dict[str, float]] = {
+    EVENT_IMPACTS: dict[str, dict[str, float]] = {  # noqa: RUF012
         "battle_win":         {"ei": +0.03, "sn": +0.01, "tf": +0.04, "jp": +0.02},
         "battle_loss":        {"ei": -0.02, "sn": +0.01, "tf": +0.02, "jp": -0.01},
         "battle_draw":        {"ei": +0.01, "sn": +0.00, "tf": +0.01, "jp": +0.00},
@@ -231,7 +231,7 @@ class PersonalityEvolutionEngine:
 
     # ---- CRUD ----
 
-    def get(self, agent_name: str) -> Optional[PersonalityProfile]:
+    def get(self, agent_name: str) -> PersonalityProfile | None:
         return self._profiles.get(agent_name)
 
     def get_or_create(self, agent_name: str) -> PersonalityProfile:
@@ -359,7 +359,7 @@ class PersonalityEvolutionEngine:
 
 # ---- 全局单例 ----
 
-_engine: Optional[PersonalityEvolutionEngine] = None
+_engine: PersonalityEvolutionEngine | None = None
 
 
 def get_personality_engine() -> PersonalityEvolutionEngine:

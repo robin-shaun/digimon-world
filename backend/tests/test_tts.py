@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from digimon_world.api.app import app
 from digimon_world import tts as tts_module
+from digimon_world.api.app import app
 
 
 class TestVoiceProfiles:

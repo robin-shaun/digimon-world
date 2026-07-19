@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+
 from ..llm.client import ChatMessage, ChatRequest, LlmClient, LlmModel
 
 if TYPE_CHECKING:
@@ -43,7 +44,7 @@ class Planner:
         self._llm = llm_client
 
     async def plan(
-        self, agent: "DigimonAgent", world_state_snapshot: dict
+        self, agent: DigimonAgent, world_state_snapshot: dict
     ) -> str:
         """根据 agent 记忆、反思和世界状态,生成下一段计划(1-2 句)。
 
@@ -80,7 +81,7 @@ class Planner:
             personality_line = personality_summary + "\n"
         # 获取 MBTI 人格类型,注入规划 prompt
         try:
-            from ..world.personality_engine import get_personality_engine  # noqa: PLC0415
+            from ..world.personality_engine import get_personality_engine
             engine = get_personality_engine()
             profile = engine.get(agent.name)
             if profile and profile.type_code:

@@ -21,7 +21,6 @@ from digimon_world.world.clock import WorldClock
 from digimon_world.world.scheduler import WorldScheduler
 from digimon_world.world.world_state import WorldState, reset_world
 
-
 # ---- WorldClock ----
 
 
@@ -238,7 +237,7 @@ async def test_scheduler_real_planner_fallback_path() -> None:
     assert agent.current_plan == "去沙滩寻找食物"
     # 记忆里也有刚发生的事件
     assert any("moved" in m.description or "200" in m.description for m in agent.memory.entries) or \
-           any("moved" == (m.description.split()[-1] if m.description else "") for m in agent.memory.entries) or \
+           any((m.description.split()[-1] if m.description else "") == "moved" for m in agent.memory.entries) or \
            len(agent.memory.entries) >= 1
 
 

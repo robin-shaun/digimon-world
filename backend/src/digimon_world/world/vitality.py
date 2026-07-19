@@ -81,7 +81,7 @@ def compute_vitality(world: WorldState, recent_ticks: int = 50) -> VitalitySnaps
 
     # ---- 2. 社交密度 (social_density) ----
     # 每个 agent 附近 100px 内有至少一个同伴的比例
-    SOCIAL_RADIUS = 100.0
+    SOCIAL_RADIUS = 100.0  # noqa: N806
     in_proximity = 0
     for agent in agents:
         ax, ay = agent.location

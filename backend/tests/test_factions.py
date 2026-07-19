@@ -17,10 +17,9 @@ from digimon_world.world import get_world, reset_world
 from digimon_world.world.factions import (
     EMERGENCE_THRESHOLD,
     FactionRegistry,
+    reset_registry,
 )
-from digimon_world.world.factions import reset_registry
 from digimon_world.world.relationships import RelationshipTracker, reset_tracker
-
 
 # ---- 1. 自动派系形成 ----
 

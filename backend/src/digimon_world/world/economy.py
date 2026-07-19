@@ -37,9 +37,9 @@ from __future__ import annotations
 
 import random
 from math import hypot
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
-from .items import CATALOG, get_item_system, ItemSystem
+from .items import CATALOG, ItemSystem, get_item_system
 from .landmarks import DEFAULT_LANDMARKS, TRIGGER_RADIUS
 
 if TYPE_CHECKING:
@@ -85,7 +85,7 @@ class EconomySystem:
         items: 道具系统(购物时把买到的道具塞进背包);默认用进程级单例
     """
 
-    def __init__(self, items: Optional[ItemSystem] = None) -> None:
+    def __init__(self, items: ItemSystem | None = None) -> None:
         self.wallets: dict[str, int] = {}
         self._items = items if items is not None else get_item_system()
         self._rng = random.Random()
@@ -123,7 +123,7 @@ class EconomySystem:
 
     # ---- 赚钱: 探索地标 ----
     def process_exploration(
-        self, world: "WorldState", rng: Optional[random.Random] = None
+        self, world: WorldState, rng: random.Random | None = None
     ) -> list[dict[str, Any]]:
         """遍历世界: 靠近任意地标的数码兽每 tick 有概率捡到 bit。
 
@@ -150,7 +150,7 @@ class EconomySystem:
         return events
 
     @staticmethod
-    def _nearby_landmark(agent: "DigimonAgent"):
+    def _nearby_landmark(agent: DigimonAgent):
         """返回数码兽当前所在触发半径内的第一个地标(没有则 None)。"""
         for lm in DEFAULT_LANDMARKS:
             if agent.region_id != lm.region_id:
@@ -162,7 +162,7 @@ class EconomySystem:
 
     # ---- 花钱: 奥加兽商店 ----
     def buy(
-        self, agent_name: str, item_id: str, world: "WorldState"
+        self, agent_name: str, item_id: str, world: WorldState
     ) -> dict[str, Any]:
         """在奥加兽商店买一件道具。
 
@@ -211,7 +211,7 @@ class EconomySystem:
         }
 
     @staticmethod
-    def _near_shop(agent: "DigimonAgent") -> bool:
+    def _near_shop(agent: DigimonAgent) -> bool:
         """数码兽是否在奥加兽商店的触发半径内(同 region + 距离 < 半径)。"""
         if agent.region_id != _OGREMON_SHOP.region_id:
             return False
@@ -220,7 +220,7 @@ class EconomySystem:
 
     # ---- 批量处理(scheduler 每 tick 调用) ----
     def process(
-        self, world: "WorldState", rng: Optional[random.Random] = None
+        self, world: WorldState, rng: random.Random | None = None
     ) -> list[dict[str, Any]]:
         """一次 tick 的经济处理: 探索赚 bit。
 
@@ -240,7 +240,7 @@ class EconomySystem:
             shelf.append(entry)
         return shelf
 
-    def to_dict(self, world: Optional["WorldState"] = None) -> dict[str, Any]:
+    def to_dict(self, world: WorldState | None = None) -> dict[str, Any]:
         """经济系统整体状态(GET /api/economy 用)。
 
         Args:
@@ -272,7 +272,7 @@ class EconomySystem:
 
 
 # ---- 进程级单例 ----
-_economy_system: Optional[EconomySystem] = None
+_economy_system: EconomySystem | None = None
 
 
 def get_economy_system() -> EconomySystem:
@@ -295,9 +295,9 @@ __all__ = [
     "CURRENCY_NAME",
     "EXPLORE_REWARD",
     "EXPLORE_REWARD_CHANCE",
-    "EconomySystem",
     "SHOP_PRICES",
     "STARTING_BALANCE",
+    "EconomySystem",
     "get_economy_system",
     "reset_economy_system",
 ]

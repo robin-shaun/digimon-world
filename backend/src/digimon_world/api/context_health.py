@@ -211,4 +211,4 @@ def optimize_context(body: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-__all__ = ["router", "digimon_context_health_router"]
+__all__ = ["digimon_context_health_router", "router"]

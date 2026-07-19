@@ -27,7 +27,6 @@ from digimon_world.world.shared_conventions import (
     reset_convention_pool,
 )
 
-
 # ──────────────────────────────────────────────
 # Fixtures
 # ──────────────────────────────────────────────
@@ -245,7 +244,7 @@ class TestConventionDetector:
         detector = ConventionDetector()
         terms = [f"特殊技能{i:03d}" for i in range(20)]
         agents = [
-            _make_mock_agent(f"Agent_{i}", [t for t in terms[i::3]])
+            _make_mock_agent(f"Agent_{i}", list(terms[i::3]))
             for i in range(6)  # 6 agents, each gets ~7 terms
         ]
         result = detector.detect(agents)
@@ -523,6 +522,7 @@ class TestConventionAPI:
     def client(self):
         """创建 FastAPI TestClient。"""
         from fastapi.testclient import TestClient
+
         from digimon_world.api.app import app
 
         # 用 lifespan 覆盖启动逻辑，避免真实调度器启动

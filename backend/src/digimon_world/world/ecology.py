@@ -28,7 +28,7 @@ EcologySystem - 数码世界生态环境
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..agents.digimon_agent import DigimonAgent
@@ -137,7 +137,7 @@ class EcologySystem:
         """获取区域当前食物量。"""
         return self._ensure_region(region_id).food_level
 
-    def is_hungry(self, agent: "DigimonAgent") -> bool:
+    def is_hungry(self, agent: DigimonAgent) -> bool:
         """判断数码兽是否处于饥饿区域。"""
         eco = self._ensure_region(agent.region_id)
         return eco.food_level < HUNGER_THRESHOLD
@@ -173,7 +173,7 @@ class EcologySystem:
     # ---- 每 tick 处理 ----
     def process(
         self,
-        world: "WorldState",
+        world: WorldState,
         tick_count: int,
         season: str = "spring",
         weather_value: str = "sunny",
@@ -318,7 +318,7 @@ def _weather_vegetation_mult(weather_value: str) -> float:
 
 
 # ---- 进程级单例 ----
-_ecology_system: Optional[EcologySystem] = None
+_ecology_system: EcologySystem | None = None
 
 
 def get_ecology_system() -> EcologySystem:

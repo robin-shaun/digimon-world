@@ -5,9 +5,11 @@
 
 详细设计: docs/DESIGN.md 第 3 节
 """
-from .digimon_agent import DigimonAgent
+from .agent_insights import AgentInsightEngine, get_insight_engine, reset_insight_engine
+from .badges import Badge, BadgeSystem
 from .chosen_child import ChosenChildAgent, Crest
 from .dialogue import Dialogue
+from .digimon_agent import DigimonAgent
 from .evolution import (
     EVOLUTION_CHAIN,
     EvolutionReason,
@@ -17,47 +19,45 @@ from .evolution import (
     is_final_stage,
     next_stage,
 )
-from .badges import Badge, BadgeSystem
 from .healing import (
     HealingSystem,
     get_healing_system,
     reset_healing_system,
 )
 from .meme import (
+    CATEGORY_SPREAD_RATE,
     Meme,
     MemeCategory,
     MemePool,
-    CATEGORY_SPREAD_RATE,
 )
 from .planner import Planner
 from .reflector import Reflection, Reflector
-from .agent_insights import AgentInsightEngine, get_insight_engine, reset_insight_engine
 
 __all__ = [
+    "CATEGORY_SPREAD_RATE",
+    "EVOLUTION_CHAIN",
     "AgentInsightEngine",
     "Badge",
     "BadgeSystem",
-    "CATEGORY_SPREAD_RATE",
     "ChosenChildAgent",
     "Crest",
-    "DigimonAgent",
     "Dialogue",
+    "DigimonAgent",
+    "EvolutionReason",
+    "EvolutionRequirement",
+    "EvolutionResult",
+    "EvolutionSystem",
+    "HealingSystem",
     "Meme",
     "MemeCategory",
     "MemePool",
     "Planner",
     "Reflection",
     "Reflector",
-    "EvolutionSystem",
-    "EvolutionResult",
-    "EvolutionReason",
-    "EvolutionRequirement",
-    "EVOLUTION_CHAIN",
+    "get_healing_system",
+    "get_insight_engine",
     "is_final_stage",
     "next_stage",
-    "HealingSystem",
-    "get_healing_system",
     "reset_healing_system",
-    "get_insight_engine",
     "reset_insight_engine",
 ]

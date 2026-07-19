@@ -58,7 +58,7 @@ class Reflector:
     def __init__(self, llm_client: LlmClient) -> None:
         self._llm = llm_client
 
-    async def reflect(self, agent: "DigimonAgent") -> list[Reflection] | None:
+    async def reflect(self, agent: DigimonAgent) -> list[Reflection] | None:
         """从 agent 最近记忆生成 1-3 条高级抽象反思。
 
         Returns:

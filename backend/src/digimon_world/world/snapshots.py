@@ -21,7 +21,7 @@ import logging
 import os
 import shutil
 from datetime import datetime
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 import aiosqlite
 
@@ -83,7 +83,7 @@ class SnapshotManager:
         digimon_count: int = 0,
         note: str = "",
         schema_version: str = "1",
-    ) -> Optional[str]:
+    ) -> str | None:
         """从 world_db_path 创建快照,返回 snapshot_id (失败返回 None)。
 
         流程:
@@ -130,7 +130,7 @@ class SnapshotManager:
             )
 
             # 异步清理旧快照 (不影响主流程)
-            asyncio.create_task(self._prune())
+            asyncio.create_task(self._auto_save_loop())  # noqa: RUF006
 
             return snapshot_id
 
@@ -257,7 +257,7 @@ class SnapshotManager:
 
 
 # 进程级单例
-_snapshot_mgr: Optional[SnapshotManager] = None
+_snapshot_mgr: SnapshotManager | None = None
 
 
 def get_snapshot_manager() -> SnapshotManager:

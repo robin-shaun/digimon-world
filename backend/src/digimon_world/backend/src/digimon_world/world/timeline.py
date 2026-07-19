@@ -25,7 +25,8 @@ Timeline - 世界大事记时间线
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .world_state import WorldState
@@ -143,7 +144,7 @@ class TimelineSystem:
     """
 
     def build(
-        self, world: "WorldState", limit: int = DEFAULT_LIMIT
+        self, world: WorldState, limit: int = DEFAULT_LIMIT
     ) -> list[dict[str, Any]]:
         """构造时间线条目列表(最新在前)。
 
@@ -181,7 +182,7 @@ class TimelineSystem:
         return entries[:n]
 
     def to_dict(
-        self, world: "WorldState", limit: int = DEFAULT_LIMIT
+        self, world: WorldState, limit: int = DEFAULT_LIMIT
     ) -> dict[str, Any]:
         """时间线整体状态(GET /api/timeline 用)。
 
@@ -199,7 +200,7 @@ class TimelineSystem:
 
 
 # ---- 进程级单例 ----
-_timeline_system: Optional[TimelineSystem] = None
+_timeline_system: TimelineSystem | None = None
 
 
 def get_timeline_system() -> TimelineSystem:

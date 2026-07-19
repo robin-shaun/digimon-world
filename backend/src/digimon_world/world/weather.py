@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import random
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 # 每多少 tick 尝试切换一次天气 (Phase 10: 30 tick 比原来的每天更频繁)
 WEATHER_CHANGE_INTERVAL_TICKS: int = 30
@@ -110,14 +110,14 @@ class WeatherSystem:
         self,
         start_weather: Weather = Weather.SUNNY,
         start_tick: int = 0,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> None:
         self.last_change_tick: int = max(0, start_tick)
         self.current: Weather = start_weather
         self._rng = random.Random(seed)
 
     # ---- 推进 ----
-    def update(self, tick_count: int, rng: Optional[random.Random] = None) -> bool:
+    def update(self, tick_count: int, rng: random.Random | None = None) -> bool:
         """推进到指定 tick,可能切换天气。返回是否切换了天气。
 
         scheduler 每 tick 调一次。只在 tick_count 跨过
@@ -171,13 +171,11 @@ class WeatherSystem:
         """
         species_lower = species.lower()
 
-        if key == "mood" and self.current is Weather.STORMY:
-            if species_lower in WATER_SPECIES:
-                return 1.20  # 水系数码兽在暴雨中更开心
+        if key == "mood" and self.current is Weather.STORMY and species_lower in WATER_SPECIES:
+            return 1.20  # 水系数码兽在暴雨中更开心
 
-        if key == "battle" and self.current is Weather.SUNNY:
-            if species_lower in FIRE_SPECIES:
-                return 1.10  # 火系数码兽晴天攻击加成
+        if key == "battle" and self.current is Weather.SUNNY and species_lower in FIRE_SPECIES:
+            return 1.10  # 火系数码兽晴天攻击加成
 
         # 默认走通用系数
         return self.modifier(key)
@@ -207,7 +205,7 @@ class WeatherSystem:
 
 
 # ---- 进程级单例 ----
-_weather_system: Optional[WeatherSystem] = None
+_weather_system: WeatherSystem | None = None
 
 
 def get_weather_system() -> WeatherSystem:

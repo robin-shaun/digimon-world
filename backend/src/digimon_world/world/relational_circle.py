@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from digimon_world.world.relationships import RelationshipTracker, RelationshipVector
@@ -63,7 +63,7 @@ class RelationalCircle(Enum):
         return _distances[self]
 
     @classmethod
-    def from_composite(cls, composite: float) -> "RelationalCircle":
+    def from_composite(cls, composite: float) -> RelationalCircle:
         """根据综合关系得分判定圈层。
 
         阈值规则:
@@ -100,7 +100,7 @@ class AffectVector:
     而 RelationshipVector 是原始累积值。AffectVector 从后者派生而来。
     """
 
-    __slots__ = ("trust", "affection", "respect", "fear")
+    __slots__ = ("affection", "fear", "respect", "trust")
 
     def __init__(
         self,
@@ -114,7 +114,7 @@ class AffectVector:
         self.respect = max(0.0, min(1.0, respect))
         self.fear = max(0.0, min(1.0, fear))
 
-    def propagate(self, rel_distance: float) -> "AffectVector":
+    def propagate(self, rel_distance: float) -> AffectVector:
         """情感随关系距离衰减传播。
 
         距离越远,情感传递越弱。衰减因子 = 1 - rel_distance。
@@ -149,7 +149,7 @@ class AffectVector:
         }
 
     @classmethod
-    def from_relationship_vector(cls, rv: "RelationshipVector") -> "AffectVector":
+    def from_relationship_vector(cls, rv: RelationshipVector) -> AffectVector:
         """从 RelationshipVector 派生出归一化的 AffectVector。
 
         映射规则:
@@ -170,7 +170,7 @@ class AffectVector:
         )
 
     @classmethod
-    def neutral(cls) -> "AffectVector":
+    def neutral(cls) -> AffectVector:
         """返回完全中立的默认情感向量。"""
         return cls(trust=0.5, affection=0.5, respect=0.5, fear=0.0)
 
@@ -205,9 +205,9 @@ class RelationalDistance:
         coop = rd.compute_cooperation_threshold("Gabumon", task_risk=0.3)  # → ~0.75
     """
 
-    __slots__ = ("_agent_id", "_tracker", "_cache")
+    __slots__ = ("_agent_id", "_cache", "_tracker")
 
-    def __init__(self, agent_id: str, tracker: "RelationshipTracker") -> None:
+    def __init__(self, agent_id: str, tracker: RelationshipTracker) -> None:
         self._agent_id = agent_id
         self._tracker = tracker
         # agent_id → (RelationalCircle, distance_value)
@@ -262,7 +262,7 @@ class RelationalDistance:
         return distance
 
     def classify(
-        self, target_id: str, relationship_vector: Optional["RelationshipVector"] = None
+        self, target_id: str, relationship_vector: RelationshipVector | None = None
     ) -> RelationalCircle:
         """判定 target_id 属于哪个圈层。
 
@@ -329,7 +329,7 @@ class RelationalDistance:
         rv = self._tracker.get_vector(self._agent_id, target_id)
         return AffectVector.from_relationship_vector(rv)
 
-    def invalidate_cache(self, target_id: Optional[str] = None) -> None:
+    def invalidate_cache(self, target_id: str | None = None) -> None:
         """清除缓存。
 
         Args:

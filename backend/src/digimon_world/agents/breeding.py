@@ -25,14 +25,14 @@
 from __future__ import annotations
 
 import random
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
+from ..world.relationships import RelationshipTracker
 from .digimon_agent import (
     DigimonAgent,
     DigimonStats,
     EvolutionStage,
 )
-from ..world.relationships import RelationshipTracker
 
 # ----------------------------------------------------------------------------
 # 常量
@@ -86,7 +86,7 @@ def eligible_pairs(
 def inherit_stats(
     parent_a: DigimonStats,
     parent_b: DigimonStats,
-    rng: Optional[random.Random] = None,
+    rng: random.Random | None = None,
 ) -> DigimonStats:
     """由父母 stats 生成后代 stats: 逐字段取平均,再叠加 ±STAT_VARIANCE 浮动。
 
@@ -125,8 +125,8 @@ def inherit_stats(
 def breed_egg(
     parent_a: DigimonAgent,
     parent_b: DigimonAgent,
-    rng: Optional[random.Random] = None,
-    name: Optional[str] = None,
+    rng: random.Random | None = None,
+    name: str | None = None,
 ) -> DigimonAgent:
     """由一对父母孕育一颗数码蛋 (baby_i 阶段的新 DigimonAgent)。
 
@@ -177,7 +177,7 @@ def maybe_breed(
     tick: int,
     tracker: RelationshipTracker,
     agents: Iterable[DigimonAgent],
-    rng: Optional[random.Random] = None,
+    rng: random.Random | None = None,
 ) -> list[DigimonAgent]:
     """世界推进到某 tick 时尝试繁衍,返回本次新产下的数码蛋列表。
 
@@ -205,13 +205,13 @@ def maybe_breed(
 
 
 __all__ = [
-    "BREEDING_THRESHOLD",
-    "BREEDING_INTERVAL_TICKS",
     "BREEDING_CHANCE",
+    "BREEDING_INTERVAL_TICKS",
+    "BREEDING_THRESHOLD",
     "STAT_VARIANCE",
+    "breed_egg",
     "eligible_pairs",
     "inherit_stats",
-    "breed_egg",
     "is_breeding_tick",
     "maybe_breed",
 ]

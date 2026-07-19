@@ -19,7 +19,7 @@ RelationshipTracker - 数码兽社交关系 (Phase 6: 向量化)
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 # 关系值边界
 MIN_SCORE: float = -100.0
@@ -56,7 +56,7 @@ def _key(a: str, b: str) -> tuple[str, str]:
 class RelationshipVector:
     """四维关系向量: affinity, rivalry, respect, fear。"""
 
-    __slots__ = ("affinity", "rivalry", "respect", "fear")
+    __slots__ = ("affinity", "fear", "respect", "rivalry")
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class RelationshipVector:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, float]) -> "RelationshipVector":
+    def from_dict(cls, d: dict[str, float]) -> RelationshipVector:
         return cls(
             affinity=d.get("affinity", 0.0),
             rivalry=d.get("rivalry", 0.0),
@@ -88,7 +88,7 @@ class RelationshipVector:
         )
 
     @classmethod
-    def neutral(cls) -> "RelationshipVector":
+    def neutral(cls) -> RelationshipVector:
         """返回全零的中立向量。"""
         return cls(0.0, 0.0, 0.0, 0.0)
 
@@ -214,16 +214,16 @@ class RelationshipTracker:
         self._vectors[key] = v
         return new_val
 
-    def get_faction(self, a: str) -> dict[str, Optional[str]]:
+    def get_faction(self, a: str) -> dict[str, str | None]:
         """返回 a 最友好 (ally) 和最敌对 (rival) 的对象。
 
         - ally: 亲和度最高且 > 0 的那只;没有正亲和度 → None
         - rival: 竞争度最高且 > 0 的那只;没有正竞争度 → None
         并列时取名字字典序较小者(确定性)。
         """
-        best_ally: Optional[str] = None
+        best_ally: str | None = None
         best_ally_score = 0.0
-        worst_rival: Optional[str] = None
+        worst_rival: str | None = None
         worst_rival_score = 0.0
 
         for (x, y), v in self._vectors.items():
@@ -231,18 +231,16 @@ class RelationshipTracker:
                 continue
             other = y if x == a else x
             # ally: 最高亲和度
-            if v.affinity > best_ally_score or (
+            if (v.affinity > best_ally_score or (
                 v.affinity == best_ally_score and best_ally is not None and other < best_ally
-            ):
-                if v.affinity > 0:
-                    best_ally, best_ally_score = other, v.affinity
+            )) and v.affinity > 0:
+                best_ally, best_ally_score = other, v.affinity
             # rival: 最高竞争度 · 或高度负亲和 (update() 负 delta 走 affinity 通道)
             rival_strength = max(v.rivalry, -v.affinity if v.affinity < -20 else 0.0)
-            if rival_strength > worst_rival_score or (
+            if (rival_strength > worst_rival_score or (
                 rival_strength == worst_rival_score and worst_rival is not None and other < worst_rival
-            ):
-                if rival_strength > 0:
-                    worst_rival, worst_rival_score = other, rival_strength
+            )) and rival_strength > 0:
+                worst_rival, worst_rival_score = other, rival_strength
 
         return {"ally": best_ally, "rival": worst_rival}
 
@@ -259,7 +257,7 @@ class RelationshipTracker:
         self._update_vector_dim(a, b, "affinity", PROXIMITY_DELTA, MIN_AFFINITY, MAX_AFFINITY)
         return self.get_vector(a, b).affinity
 
-    def record_battle(self, winner: Optional[str], loser: Optional[str]) -> None:
+    def record_battle(self, winner: str | None, loser: str | None) -> None:
         """一场战斗后调用: rivalry↑(双方), respect↑(赢对输), fear↑(输对赢)。
 
         winner / loser 任一为 None(平局或缺失)时,只施加 rivalry。
@@ -462,7 +460,7 @@ class _ScoreProxy(dict):
 
 
 # ---- 进程级单例 ----
-_tracker: Optional[RelationshipTracker] = None
+_tracker: RelationshipTracker | None = None
 
 
 def get_tracker() -> RelationshipTracker:

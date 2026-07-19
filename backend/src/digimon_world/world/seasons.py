@@ -31,7 +31,7 @@ DAYS_PER_SEASON 个世界天自动切换到下一个季节,四季循环往复
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 # 每个季节持续多少"世界天"
 DAYS_PER_SEASON: int = 90
@@ -148,7 +148,7 @@ class SeasonSystem:
 
 
 # ---- 进程级单例 ----
-_season_system: Optional[SeasonSystem] = None
+_season_system: SeasonSystem | None = None
 
 
 def get_season_system() -> SeasonSystem:

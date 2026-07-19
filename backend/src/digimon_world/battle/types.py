@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class ActionType(str, Enum):
@@ -30,7 +29,7 @@ class BattleAction:
 
     actor_name: str                       # 行动者名字
     action_type: ActionType               # 行动类型
-    skill_name: Optional[str] = None      # 若为技能,技能名;否则 None
+    skill_name: str | None = None      # 若为技能,技能名;否则 None
 
 
 @dataclass
@@ -49,6 +48,6 @@ class BattleState:
 class BattleResult:
     """战斗结束后的结果。"""
 
-    winner_name: Optional[str]            # 胜者名字;平局 / 超时则为 None
+    winner_name: str | None            # 胜者名字;平局 / 超时则为 None
     rounds: int                           # 总回合数
     final_hp: dict[str, int]              # 各方最终 HP: {name: hp}

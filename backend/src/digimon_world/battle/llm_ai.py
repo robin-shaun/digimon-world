@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from ..agents.digimon_agent import DigimonAgent
 from ..llm.client import ChatMessage, ChatRequest, LlmClient, LlmModel
@@ -72,7 +71,7 @@ async def decide_action(
     # 获取 MBTI 战斗策略提示
     mbti_hint = ""
     try:
-        from ..world.personality_engine import get_personality_engine  # noqa: PLC0415
+        from ..world.personality_engine import get_personality_engine
         engine = get_personality_engine()
         profile = engine.get(actor.name)
         if profile and profile.type_code:
@@ -106,7 +105,7 @@ async def decide_action(
     return FALLBACK_ACTION
 
 
-def _normalize(raw: str) -> Optional[str]:
+def _normalize(raw: str) -> str | None:
     """把 LLM 的自由文本回复归一到合法动作;无法匹配返回 None。"""
     text = raw.strip().lower()
     # 先精确命中

@@ -128,7 +128,7 @@ class EnergyTransfer:
         transfer_type: str,
         reason: str,
         tick: int,
-    ) -> "EnergyTransfer":
+    ) -> EnergyTransfer:
         """工厂方法：创建一条带自动生成 ID 和时间戳的转移记录。"""
         return cls(
             transfer_id=str(uuid.uuid4()),
@@ -218,7 +218,7 @@ class ReciprocalAltruism:
             利他评分 (0.0 ~ 1.0)。
         """
         total_credit = 0.0
-        for (debtor, creditor), debt in self._debts.items():
+        for (_debtor, creditor), debt in self._debts.items():
             if creditor == agent_name:
                 total_credit += debt
 
@@ -355,7 +355,7 @@ class EnergyEconomy:
 
     def __init__(
         self,
-        world_state: "WorldState",
+        world_state: WorldState,
         altruism: ReciprocalAltruism | None = None,
         transfer_history: list[EnergyTransfer] | None = None,
     ) -> None:
@@ -713,16 +713,16 @@ class EnergyEconomy:
 # ---------------------------------------------------------------------------
 
 __all__ = [
-    "MIN_SURVIVAL_ENERGY",
     "AWAKEN_HELPER_COST",
     "AWAKEN_RESTORE_AMOUNT",
-    "DEBT_DECAY_INTERVAL",
     "DEBT_DECAY_FACTOR",
+    "DEBT_DECAY_INTERVAL",
+    "DESPERATION_ENERGY_THRESHOLD",
     "MAX_DEBT",
+    "MIN_SURVIVAL_ENERGY",
     "RECIPROCITY_DEBT_THRESHOLD",
     "RECIPROCITY_ENERGY_THRESHOLD",
-    "DESPERATION_ENERGY_THRESHOLD",
+    "EnergyEconomy",
     "EnergyTransfer",
     "ReciprocalAltruism",
-    "EnergyEconomy",
 ]

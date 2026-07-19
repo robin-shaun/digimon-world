@@ -68,7 +68,7 @@ class AffectPropagationEngine:
         # 记录每个 agent 上一 tick 的 mood_state, 用于检测剧变
         self._prev_moods: dict[str, dict[str, float]] = {}
 
-    def snapshot_moods(self, world: "WorldState") -> None:
+    def snapshot_moods(self, world: WorldState) -> None:
         """在每个 tick 开始前, 快照所有 agent 的当前 mood_state。
 
         应放在 _step_agent 之前调用, 以便后续 detect_changes() 能对比。
@@ -76,7 +76,7 @@ class AffectPropagationEngine:
         for agent in world.all():
             self._prev_moods[agent.name] = dict(agent.mood_state)
 
-    def detect_changes(self, world: "WorldState") -> list[tuple[str, dict[str, float]]]:
+    def detect_changes(self, world: WorldState) -> list[tuple[str, dict[str, float]]]:
         """检测本 tick 中有哪些 agent 的情绪发生了剧变。
 
         Returns:
@@ -156,7 +156,7 @@ class AffectPropagationEngine:
         self,
         source_name: str,
         affect: AffectVector,
-        world: "WorldState",
+        world: WorldState,
         tracker=None,
     ) -> list[dict]:
         """传播情感到圈内其他数码兽。

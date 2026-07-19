@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar
 
 
 class Crest(str, Enum):
@@ -32,7 +32,7 @@ class Crest(str, Enum):
     KINDNESS = "kindness"      # 善良
 
     @classmethod
-    def label(cls, crest: "Crest") -> str:
+    def label(cls, crest: Crest) -> str:
         """返回徽章的中文名。"""
         return {
             cls.COURAGE: "勇气",
@@ -61,7 +61,7 @@ class ChosenChildAgent:
     """
 
     name: str
-    partner_name: Optional[str] = None
+    partner_name: str | None = None
     crest: Crest = Crest.COURAGE
     region_id: str = "file_island"
     location: tuple[int, int] = (500, 400)
@@ -113,7 +113,7 @@ class ChosenChildAgent:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ChosenChildAgent":
+    def from_dict(cls, data: dict[str, Any]) -> ChosenChildAgent:
         """从字典反序列化。"""
         return cls(
             name=data["name"],

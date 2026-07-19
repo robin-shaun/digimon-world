@@ -9,7 +9,7 @@ import pytest
 
 def test_narrator_singleton():
     """验证 NarratorSystem 单例模式。"""
-    from digimon_world.world.narrator import get_narrator, NarratorSystem, reset_narrator
+    from digimon_world.world.narrator import NarratorSystem, get_narrator, reset_narrator
 
     reset_narrator()
     n1 = get_narrator()
@@ -24,8 +24,8 @@ def test_narrator_singleton():
 
 def test_narrator_tick_skips_when_not_interval():
     """验证 tick 在未到间隔时不采集事件。"""
-    from digimon_world.world.narrator import get_narrator
     from digimon_world.world import reset_narrator
+    from digimon_world.world.narrator import get_narrator
 
     reset_narrator()
     n = get_narrator()
@@ -185,8 +185,8 @@ async def test_compose_async_with_fake_llm():
     from digimon_world.llm.client import (
         FakeLlmClient,
         LlmModel,
-        set_client,
         get_client,
+        set_client,
     )
     from digimon_world.world.narrator import NarratorSystem, reset_narrator
 
@@ -313,7 +313,7 @@ async def test_scheduler_integration_no_crash():
     """验证 Scheduler tick_once 在加入 _process_narrative 后不崩溃。"""
     from digimon_world.llm.client import FakeLlmClient, set_client
     from digimon_world.world.clock import WorldClock
-    from digimon_world.world.narrator import reset_narrator, NarratorSystem
+    from digimon_world.world.narrator import NarratorSystem, reset_narrator
     from digimon_world.world.scheduler import WorldScheduler
     from digimon_world.world.world_state import get_world, reset_world
 
@@ -336,8 +336,8 @@ async def test_scheduler_integration_no_crash():
     NarratorSystem(interval=1)  # 切换单例
     reset_narrator()
     # 重新设置小间隔
-    from digimon_world.world.narrator import NarratorSystem as NS
     import digimon_world.world.narrator as narratormod
+    from digimon_world.world.narrator import NarratorSystem as NS  # noqa: N817
     narratormod._narrator = NS(interval=1)
 
     scheduler = WorldScheduler(world=world, clock=clock)
@@ -354,6 +354,7 @@ async def test_scheduler_integration_no_crash():
 def test_get_narratives_empty():
     """测试 /api/narratives 在无叙事时返回空列表。"""
     from fastapi.testclient import TestClient
+
     from digimon_world.api.app import app
     from digimon_world.world.narrator import reset_narrator
 
@@ -369,6 +370,7 @@ def test_get_narratives_empty():
 def test_get_narratives_latest_404():
     """测试 /api/narratives/latest 在无叙事时返回 404。"""
     from fastapi.testclient import TestClient
+
     from digimon_world.api.app import app
     from digimon_world.world.narrator import reset_narrator
 
@@ -383,8 +385,9 @@ def test_get_narratives_latest_404():
 def test_get_narratives_with_data():
     """测试 /api/narratives 和 /latest 在有叙事时返回数据。"""
     from fastapi.testclient import TestClient
+
     from digimon_world.api.app import app
-    from digimon_world.world.narrator import reset_narrator, get_narrator
+    from digimon_world.world.narrator import get_narrator, reset_narrator
 
     reset_narrator()
     n = get_narrator()

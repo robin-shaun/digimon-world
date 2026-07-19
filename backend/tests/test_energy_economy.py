@@ -23,7 +23,6 @@ from digimon_world.economy.energy_economy import (
     ReciprocalAltruism,
 )
 
-
 # ──────────────────────────────────────────────
 # Mock Helpers
 # ──────────────────────────────────────────────
@@ -122,7 +121,7 @@ class TestEnergyTransfer:
         """EnergyTransfer is frozen — modifying fields raises FrozenInstanceError."""
         transfer = EnergyTransfer.create("agumon", "gabumon", 5.0, "donation", "test", 1)
 
-        with pytest.raises(Exception):  # dataclasses.FrozenInstanceError or similar
+        with pytest.raises(Exception):  # noqa: B017  # dataclasses.FrozenInstanceError or similar
             transfer.amount = 999.0
 
     def test_edge_cases_zero_amount_and_empty_reason(self):

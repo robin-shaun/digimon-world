@@ -1,13 +1,14 @@
 """EcologySystem 单元测试。"""
 
 import pytest
+
+from digimon_world.agents.digimon_agent import DigimonAgent
 from digimon_world.world.ecology import (
-    EcologySystem,
     HUNGER_THRESHOLD,
+    EcologySystem,
     reset_ecology_system,
 )
 from digimon_world.world.world_state import get_world, reset_world
-from digimon_world.agents.digimon_agent import DigimonAgent
 
 
 @pytest.fixture

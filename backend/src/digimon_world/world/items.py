@@ -37,7 +37,7 @@ import random
 from dataclasses import dataclass
 from enum import Enum
 from math import hypot
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from .landmarks import DEFAULT_LANDMARKS, TRIGGER_RADIUS
 
@@ -145,8 +145,8 @@ class ItemSystem:
 
     # ---- 战斗掉落 ----
     def roll_battle_drop(
-        self, winner_name: str, rng: Optional[random.Random] = None
-    ) -> Optional[Item]:
+        self, winner_name: str, rng: random.Random | None = None
+    ) -> Item | None:
         """战斗胜利后掷一次掉落: DROP_CHANCE 概率掉一件 heal/buff。
 
         Args:
@@ -165,7 +165,7 @@ class ItemSystem:
 
     # ---- 商店进化石掉落 ----
     def process_shop_drops(
-        self, world: "WorldState", rng: Optional[random.Random] = None
+        self, world: WorldState, rng: random.Random | None = None
     ) -> list[dict[str, Any]]:
         """遍历世界: 靠近奥加兽商店的数码兽有概率捡到进化石。
 
@@ -191,7 +191,7 @@ class ItemSystem:
         return events
 
     @staticmethod
-    def _near_shop(agent: "DigimonAgent") -> bool:
+    def _near_shop(agent: DigimonAgent) -> bool:
         """数码兽是否在奥加兽商店的触发半径内(同 region + 距离 < 半径)。"""
         if agent.region_id != _OGREMON_SHOP.region_id:
             return False
@@ -199,7 +199,7 @@ class ItemSystem:
         return hypot(_OGREMON_SHOP.x - x, _OGREMON_SHOP.y - y) < TRIGGER_RADIUS
 
     # ---- 自动使用 heal ----
-    def auto_use_heal(self, agent: "DigimonAgent") -> Optional[dict[str, Any]]:
+    def auto_use_heal(self, agent: DigimonAgent) -> dict[str, Any] | None:
         """数码兽 HP < HEAL_THRESHOLD 且背包有 heal 道具时,自动嗑一个回血。
 
         每次调用最多用一个 heal 道具(回血后即使仍低于阈值,也等下一 tick)。
@@ -232,7 +232,7 @@ class ItemSystem:
 
     # ---- 批量处理(scheduler 每 tick 调用) ----
     def process(
-        self, world: "WorldState", rng: Optional[random.Random] = None
+        self, world: WorldState, rng: random.Random | None = None
     ) -> list[dict[str, Any]]:
         """一次 tick 的道具处理: 商店进化石掉落 + 所有数码兽自动回血。
 
@@ -258,7 +258,7 @@ class ItemSystem:
 
 
 # ---- 进程级单例 ----
-_item_system: Optional[ItemSystem] = None
+_item_system: ItemSystem | None = None
 
 
 def get_item_system() -> ItemSystem:

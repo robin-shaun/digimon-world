@@ -10,8 +10,9 @@ import pytest
 @pytest.mark.asyncio(loop_scope="function")
 async def test_health_perf_endpoint() -> None:
     """验证 /api/health/perf 返回正确的结构和数据。"""
-    from digimon_world.api.app import app
     from fastapi.testclient import TestClient
+
+    from digimon_world.api.app import app
 
     client = TestClient(app)
     resp = client.get("/api/health/perf")
@@ -24,7 +25,7 @@ async def test_health_perf_endpoint() -> None:
     assert isinstance(data["pid"], int)
     assert "python_version" in data
     assert "uptime_seconds" in data
-    assert isinstance(data["uptime_seconds"], (int, float))
+    assert isinstance(data["uptime_seconds"], int | float)
 
     # 内存指标
     assert "memory" in data
@@ -53,8 +54,10 @@ async def test_health_perf_endpoint() -> None:
 async def test_health_perf_returns_different_uptime() -> None:
     """验证 uptime 向前推进。"""
     import time
-    from digimon_world.api.app import app
+
     from fastapi.testclient import TestClient
+
+    from digimon_world.api.app import app
 
     client = TestClient(app)
 
@@ -73,6 +76,7 @@ async def test_persistence_indexes_applied() -> None:
     import tempfile
 
     import aiosqlite
+
     from digimon_world.world.persistence import _INDEXES, _ensure_schema
 
     # 临时数据库

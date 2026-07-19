@@ -80,7 +80,7 @@ class NarratorSystem:
 
         统计各类型事件数量，按重要性排序。
         """
-        events = [e for e in timeline_entries]
+        events = list(timeline_entries)
         evolution_count = sum(1 for e in events if e["type"] == "evolution")
         battle_count = sum(1 for e in events if e["type"] == "battle")
         story_events = [e for e in events if e["type"] == "story_event"]

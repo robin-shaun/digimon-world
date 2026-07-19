@@ -32,7 +32,7 @@ import random
 from dataclasses import dataclass
 from enum import Enum
 from math import hypot
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..agents.digimon_agent import DigimonAgent
@@ -151,13 +151,13 @@ class LandmarkSystem:
         granted_items: {agent_name: [道具...]} —— 商店累计发放的道具
     """
 
-    def __init__(self, landmarks: Optional[list[Landmark]] = None) -> None:
+    def __init__(self, landmarks: list[Landmark] | None = None) -> None:
         self.landmarks: list[Landmark] = list(landmarks) if landmarks is not None else list(DEFAULT_LANDMARKS)
         self.granted_items: dict[str, list[str]] = {}
         self._rng = random.Random()
 
     # ---- 邻近检测 ----
-    def nearby(self, agent: "DigimonAgent") -> list[Landmark]:
+    def nearby(self, agent: DigimonAgent) -> list[Landmark]:
         """返回该数码兽当前所在 region 内、距离 < TRIGGER_RADIUS 的地标。"""
         x, y = agent.location
         return [
@@ -167,7 +167,7 @@ class LandmarkSystem:
 
     # ---- 施加效果 ----
     def apply_effects(
-        self, agent: "DigimonAgent", rng: Optional[random.Random] = None
+        self, agent: DigimonAgent, rng: random.Random | None = None
     ) -> list[dict[str, Any]]:
         """对单只数码兽应用它附近所有地标的效果,返回触发的效果事件列表。
 
@@ -188,8 +188,8 @@ class LandmarkSystem:
         return effects
 
     def _apply_one(
-        self, agent: "DigimonAgent", lm: Landmark, r: random.Random
-    ) -> Optional[dict[str, Any]]:
+        self, agent: DigimonAgent, lm: Landmark, r: random.Random
+    ) -> dict[str, Any] | None:
         """应用单个地标效果,返回效果事件(无实际变化时返回 None)。"""
         base = {
             "type": "landmark_effect",
@@ -238,7 +238,7 @@ class LandmarkSystem:
 
     # ---- 批量处理(scheduler 每 tick 调用) ----
     def process(
-        self, world: "WorldState", rng: Optional[random.Random] = None
+        self, world: WorldState, rng: random.Random | None = None
     ) -> list[dict[str, Any]]:
         """遍历世界里所有数码兽,应用地标效果,返回所有触发的效果事件。"""
         effects: list[dict[str, Any]] = []
@@ -247,7 +247,7 @@ class LandmarkSystem:
         return effects
 
     # ---- 序列化 / 状态查询 ----
-    def status(self, world: Optional["WorldState"] = None) -> dict[str, Any]:
+    def status(self, world: WorldState | None = None) -> dict[str, Any]:
         """各地标状态。传入 world 时附带每个地标当前附近的数码兽名字。"""
         landmark_views: list[dict[str, Any]] = []
         for lm in self.landmarks:
@@ -269,7 +269,7 @@ class LandmarkSystem:
 
 
 # ---- 进程级单例 ----
-_landmark_system: Optional[LandmarkSystem] = None
+_landmark_system: LandmarkSystem | None = None
 
 
 def get_landmark_system() -> LandmarkSystem:

@@ -1,7 +1,12 @@
-from .energy_economy import EnergyEconomy, ReciprocalAltruism, EnergyTransfer
+from .energy_economy import EnergyEconomy, EnergyTransfer, ReciprocalAltruism
 
-__all__ = ["EnergyEconomy", "ReciprocalAltruism", "EnergyTransfer",
-           "get_energy_economy", "reset_energy_economy"]
+__all__ = [
+    "EnergyEconomy",
+    "EnergyTransfer",
+    "ReciprocalAltruism",
+    "get_energy_economy",
+    "reset_energy_economy",
+]
 
 # ---- 进程级单例 ----
 _economy_instance: EnergyEconomy | None = None

@@ -147,4 +147,4 @@ def get_digimon_conventions(name: str) -> dict[str, Any]:
     }
 
 
-__all__ = ["router", "digimon_conventions_router"]
+__all__ = ["digimon_conventions_router", "router"]

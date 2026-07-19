@@ -25,7 +25,6 @@ from digimon_world.world.relationships import (
     reset_tracker,
 )
 
-
 # ---- 1. 初始化关系为 0 ----
 
 
@@ -139,11 +138,11 @@ async def test_dialogue_auto_adjusts_relationship() -> None:
     首次 tick: 相遇 → PROXIMITY_DELTA + 节日 RELATIONSHIP_BOOST。
     LLM 对话需 significance >= 6,普通相遇仅 5,被拦截。
     """
+    from digimon_world.agents.dialogue import Dialogue
     from digimon_world.agents.digimon_agent import DigimonAgent
     from digimon_world.llm.client import FakeLlmClient, LlmModel
-    from digimon_world.agents.dialogue import Dialogue
     from digimon_world.world.clock import WorldClock
-    from digimon_world.world.festivals import FestivalSystem, RELATIONSHIP_BOOST
+    from digimon_world.world.festivals import RELATIONSHIP_BOOST, FestivalSystem
     from digimon_world.world.scheduler import WorldScheduler
     from digimon_world.world.world_state import WorldState
 
@@ -242,28 +241,28 @@ def test_mbti_compatibility_bonus_empty() -> None:
 
 def test_mbti_compatibility_bonus_max() -> None:
     """最佳配对 INTJ + ENFP → 兼容度 1.0 → bonus = MBTI_BONUS_FACTOR。"""
-    from digimon_world.world.relationships import MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    from digimon_world.world.relationships import MBTI_BONUS_CAP, MBTI_BONUS_FACTOR
     expected = min(MBTI_BONUS_FACTOR * 1.0, MBTI_BONUS_CAP)
     assert RelationshipTracker.mbti_compatibility_bonus("INTJ", "ENFP") == expected
 
 
 def test_mbti_compatibility_bonus_moderate() -> None:
     """中等兼容 INTJ + INTP (0.8) → bonus = MBTI_BONUS_FACTOR * 0.8。"""
-    from digimon_world.world.relationships import MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    from digimon_world.world.relationships import MBTI_BONUS_CAP, MBTI_BONUS_FACTOR
     expected = min(MBTI_BONUS_FACTOR * 0.8, MBTI_BONUS_CAP)
     assert RelationshipTracker.mbti_compatibility_bonus("INTJ", "INTP") == expected
 
 
 def test_mbti_compatibility_bonus_low() -> None:
     """低兼容 INTJ + ESFJ (0.2) → bonus = MBTI_BONUS_FACTOR * 0.2。"""
-    from digimon_world.world.relationships import MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    from digimon_world.world.relationships import MBTI_BONUS_CAP, MBTI_BONUS_FACTOR
     expected = min(MBTI_BONUS_FACTOR * 0.2, MBTI_BONUS_CAP)
     assert RelationshipTracker.mbti_compatibility_bonus("INTJ", "ESFJ") == expected
 
 
 def test_record_dialogue_with_personality_full_bonus() -> None:
     """欲望完全匹配 + MBTI 最佳配对 → 最大加成。"""
-    from digimon_world.world.relationships import DESIRE_BONUS_FACTOR, MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    from digimon_world.world.relationships import DESIRE_BONUS_FACTOR, MBTI_BONUS_CAP, MBTI_BONUS_FACTOR
     rt = RelationshipTracker()
     # desire: 1.0 → DESIRE_BONUS_FACTOR*1.0=4.0, capped at DESIRE_BONUS_CAP=6.0 → 4.0
     # mbti: INTJ+ENFP=1.0 → MBTI_BONUS_FACTOR*1.0=3.0, capped at MBTI_BONUS_CAP=4.0 → 3.0
@@ -291,7 +290,12 @@ def test_record_dialogue_with_personality_no_mbti() -> None:
 
 def test_record_proximity_with_personality() -> None:
     """相遇含欲望+MBTI 加成（打折）。"""
-    from digimon_world.world.relationships import PROXIMITY_DELTA, DESIRE_BONUS_FACTOR, MBTI_BONUS_FACTOR, MBTI_BONUS_CAP
+    from digimon_world.world.relationships import (
+        DESIRE_BONUS_FACTOR,
+        MBTI_BONUS_CAP,
+        MBTI_BONUS_FACTOR,
+        PROXIMITY_DELTA,
+    )
     rt = RelationshipTracker()
     # desire: 1.0 → 4.0*0.5=2.0
     # mbti: 1.0 → 3.0*0.5=1.5

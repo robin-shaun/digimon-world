@@ -38,7 +38,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # MemeCategory — 模因类别
 # ---------------------------------------------------------------------------

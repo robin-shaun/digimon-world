@@ -20,7 +20,7 @@ import math
 import random
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..memory.memory_stream import MemoryNode
 

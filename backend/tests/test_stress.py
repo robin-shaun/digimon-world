@@ -18,11 +18,11 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 
-from digimon_world.agents.digimon_agent import DigimonAgent, DigimonAttribute  # noqa: E402
 from digimon_world.agents.dialogue import Dialogue  # noqa: E402
+from digimon_world.agents.digimon_agent import DigimonAgent, DigimonAttribute  # noqa: E402
 from digimon_world.llm.client import FakeLlmClient, LlmModel, set_client  # noqa: E402
 from digimon_world.world import WorldClock, WorldScheduler  # noqa: E402
-from digimon_world.world.world_state import WorldState, WORLD_WIDTH, WORLD_HEIGHT  # noqa: E402
+from digimon_world.world.world_state import WORLD_HEIGHT, WORLD_WIDTH, WorldState  # noqa: E402
 
 # ── helpers ────────────────────────────────────────────────────────
 

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from ..agents.digimon_agent import DigimonAgent
 
 
-def distance(a: "DigimonAgent", b: "DigimonAgent") -> float:
+def distance(a: DigimonAgent, b: DigimonAgent) -> float:
     """两只数码兽之间的欧氏距离(像素)。"""
     ax, ay = a.location
     bx, by = b.location
@@ -31,9 +31,9 @@ def distance(a: "DigimonAgent", b: "DigimonAgent") -> float:
 
 
 def detect_proximity(
-    agents: list["DigimonAgent"],
+    agents: list[DigimonAgent],
     radius: int = 100,
-) -> list[tuple["DigimonAgent", "DigimonAgent"]]:
+) -> list[tuple[DigimonAgent, DigimonAgent]]:
     """两两比较,返回距离 < radius 的数码兽配对。
 
     Args:
@@ -44,7 +44,7 @@ def detect_proximity(
         配对列表,每个元素是 (agent_a, agent_b) 元组。
         同一对只返回一次(i < j),不含自我配对。
     """
-    pairs: list[tuple["DigimonAgent", "DigimonAgent"]] = []
+    pairs: list[tuple[DigimonAgent, DigimonAgent]] = []
     for i in range(len(agents)):
         for j in range(i + 1, len(agents)):
             a, b = agents[i], agents[j]

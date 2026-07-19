@@ -13,8 +13,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..agents.digimon_agent import DigimonAgent
 from ..llm.client import LlmClient
 from . import llm_ai
@@ -39,7 +37,7 @@ class BattleEngine:
         self,
         agent_a: DigimonAgent,
         agent_b: DigimonAgent,
-        llm_client: Optional[LlmClient] = None,
+        llm_client: LlmClient | None = None,
     ) -> BattleResult:
         """跑一场 A vs B 的战斗。
 
@@ -62,7 +60,7 @@ class BattleEngine:
         max_b = agent_b.stats.max_hp or agent_b.stats.hp
 
         rounds = 0
-        winner: Optional[str] = None
+        winner: str | None = None
 
         while rounds < MAX_ROUNDS:
             rounds += 1

@@ -33,7 +33,6 @@ from digimon_world.memory.world_model import (
     state_similarity,
 )
 
-
 # ──────────────────────────────────────────────
 # 状态相似度
 # ──────────────────────────────────────────────
@@ -616,7 +615,7 @@ class TestWorldModelAgentIntegration:
         assert restored.episodic.count() == wm.episodic.count()
         assert restored.semantic.count() == wm.semantic.count()
         # 验证情节内容一致
-        for orig, rest in zip(wm.episodic.episodes, restored.episodic.episodes):
+        for orig, rest in zip(wm.episodic.episodes, restored.episodic.episodes, strict=False):
             assert orig.tick_index == rest.tick_index
             assert orig.action == rest.action
 
@@ -647,6 +646,7 @@ class TestWorldModelAPI:
     def test_endpoint_returns_world_model_snapshot(self):
         """API 返回包含 stats + recent_episodes + rules 的 JSON。"""
         from fastapi.testclient import TestClient
+
         from digimon_world.api.app import app
 
         client = TestClient(app)

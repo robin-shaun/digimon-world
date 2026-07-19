@@ -23,35 +23,36 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from typing import Any, Awaitable, Callable, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 
-from ..agents.digimon_agent import DigimonAgent
 from ..agents.dialogue import Dialogue
+from ..agents.digimon_agent import DigimonAgent
+from ..economy import get_energy_economy
+from .affect_propagation import AffectPropagationEngine
 from .clock import WorldClock
+from .cooperation_thresholds import get_circle_between, get_interaction_modifier
 from .dark_gears import DarkGearSystem, get_dark_gear_system
 from .daynight import DayNightSystem, get_daynight_system
 from .ecology import EcologySystem, get_ecology_system
 from .environmental_events import EnvironmentalEventSystem, get_env_events_system
 from .events import CHECK_INTERVAL_TICKS, StoryDirector
-from .narrator import get_narrator
 from .factions import FactionRegistry
 from .festivals import FestivalSystem, get_festival_system
 from .interactions import detect_proximity
 from .landmarks import LandmarkSystem, get_landmark_system
-from .affect_propagation import AffectPropagationEngine
-from .cooperation_thresholds import get_circle_between, get_interaction_modifier
-from .personality_engine import get_personality_engine
+from .narrator import get_narrator
 from .personality_dynamics import (
+    _SHIFT_DRIFT_THRESHOLD,  # noqa: F401
     get_personality_dynamics_engine,
     reset_personality_dynamics_engine,  # noqa: F401
-    _SHIFT_DRIFT_THRESHOLD,  # noqa: F401
 )
+from .personality_engine import get_personality_engine
 from .relational_circle import RelationalCircle
 from .relationships import RelationshipTracker, get_tracker
 from .seasons import SeasonSystem, get_season_system
 from .shared_conventions import get_convention_pool
 from .thinking_cost import RECOVER_SOCIAL
-from ..economy import get_energy_economy
 from .weather import WeatherSystem, get_weather_system
 from .world_state import WorldState
 
@@ -96,21 +97,21 @@ class WorldScheduler:
         self,
         world: WorldState,
         clock: WorldClock,
-        on_event: Optional[EventCallback] = None,
-        dialogue: Optional[Dialogue] = None,
-        relationships: Optional[RelationshipTracker] = None,
-        factions: Optional[FactionRegistry] = None,
-        story_director: Optional[StoryDirector] = None,
-        landmarks: Optional[LandmarkSystem] = None,
-        festivals: Optional[FestivalSystem] = None,
-        dark_gears: Optional[DarkGearSystem] = None,
-        daynight: Optional[DayNightSystem] = None,
-        weather: Optional[WeatherSystem] = None,
-        ecology: Optional[EcologySystem] = None,
-        env_events: Optional[EnvironmentalEventSystem] = None,
-        season: Optional[SeasonSystem] = None,
+        on_event: EventCallback | None = None,
+        dialogue: Dialogue | None = None,
+        relationships: RelationshipTracker | None = None,
+        factions: FactionRegistry | None = None,
+        story_director: StoryDirector | None = None,
+        landmarks: LandmarkSystem | None = None,
+        festivals: FestivalSystem | None = None,
+        dark_gears: DarkGearSystem | None = None,
+        daynight: DayNightSystem | None = None,
+        weather: WeatherSystem | None = None,
+        ecology: EcologySystem | None = None,
+        env_events: EnvironmentalEventSystem | None = None,
+        season: SeasonSystem | None = None,
         auto_save: bool = False,
-        save_db_path: Optional[str] = None,
+        save_db_path: str | None = None,
         dialogue_prob: float = DIALOGUE_TRIGGER_PROB,
     ) -> None:
         self._world = world
@@ -153,7 +154,7 @@ class WorldScheduler:
         # Phase 17: 人格引擎 — 每 tick 根据事件类型演化数码兽人格
         self._personality = get_personality_engine()
         # 日记系统: 记录上一次 tick 的世界日期,用于检测跨天
-        self._last_world_day: Optional[int] = None
+        self._last_world_day: int | None = None
         # Phase 6: 监控指标 — 跳过 LLM 的事件计数
         self.skipped_llm_events: int = 0
         # Phase 11: LLM 批量化 — 计划缓存 + 思考轮次
@@ -657,7 +658,7 @@ class WorldScheduler:
         在每个 tick 的互动阶段之后, 亲密圈层的 agent 会被轻微吸引向彼此,
         模拟协同行动倾向。步长为此处定义的 COOP_NUDGE_STEP。
         """
-        COOP_NUDGE_STEP = 3  # 合作吸引步长(像素), 远小于普通移动步长
+        COOP_NUDGE_STEP = 3  # noqa: N806 合作吸引步长(像素), 远小于普通移动步长
         pairs = detect_proximity(agents, radius=DIALOGUE_RADIUS)
         for a, b in pairs:
             if a.region_id != b.region_id:
@@ -987,7 +988,7 @@ class WorldScheduler:
     async def run_forever(
         self,
         tick_seconds: float = DEFAULT_TICK_SECONDS,
-        stop_on: Optional[Callable[[], bool]] = None,
+        stop_on: Callable[[], bool] | None = None,
     ) -> None:
         """无限循环跑 tick,直到 stop_on() 返回 True 或被外部 cancel。
 

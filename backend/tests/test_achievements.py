@@ -20,17 +20,16 @@ from __future__ import annotations
 import pytest
 
 from digimon_world.agents.achievements import (
-    AchievementSystem,
     EXPLORER_CORE_LANDMARKS,
-    FIVE_HUNDRED_TICKS_MEMORY_COUNT,
     FIFTY_BATTLES_VICTORIES,
     FIRST_BATTLE_VICTORIES,
+    FIVE_HUNDRED_TICKS_MEMORY_COUNT,
     HUNDRED_TICKS_MEMORY_COUNT,
     TEN_BATTLES_VICTORIES,
+    AchievementSystem,
     Milestone,
 )
 from digimon_world.agents.digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
-
 
 # ----------------------------------------------------------------------------
 # Fixtures
@@ -375,7 +374,7 @@ def test_explorer_earned_all_landmarks(system: AchievementSystem, rookie_agent: 
 
 def test_explorer_earned_with_extra_regions(system: AchievementSystem, rookie_agent: DigimonAgent):
     """访问所有核心地标 + 额外区域也达成 EXPLORER。"""
-    for region in list(EXPLORER_CORE_LANDMARKS) + ["玩具城"]:
+    for region in [*list(EXPLORER_CORE_LANDMARKS), "玩具城"]:
         rookie_agent.memory.add(
             event={"description": f"到达{region}", "type": "movement", "region_id": region},
             importance=4,

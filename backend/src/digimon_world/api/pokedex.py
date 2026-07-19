@@ -274,4 +274,4 @@ def get_pokedex_entry(species: str) -> dict[str, Any]:
     return entry.to_dict()
 
 
-__all__ = ["router", "DigimonEntry", "EvolutionForm"]
+__all__ = ["DigimonEntry", "EvolutionForm", "router"]

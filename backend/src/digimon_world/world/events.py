@@ -28,7 +28,9 @@ StoryDirector - 全局剧情事件
 from __future__ import annotations
 
 import ast
-from typing import Any, Callable, Optional
+import contextlib
+from collections.abc import Callable
+from typing import Any
 
 # scheduler 每隔多少 tick 扫描一次剧情触发条件
 CHECK_INTERVAL_TICKS: int = 30
@@ -208,8 +210,8 @@ class StoryDirector:
 
     def __init__(
         self,
-        events: Optional[list[StoryEvent]] = None,
-        inject_fn: Optional[Callable[[dict[str, Any]], Any]] = None,
+        events: list[StoryEvent] | None = None,
+        inject_fn: Callable[[dict[str, Any]], Any] | None = None,
     ) -> None:
         # 剧情事件表(默认内置两个)
         self._events: list[StoryEvent] = events if events is not None else _default_events()
@@ -262,10 +264,8 @@ class StoryDirector:
             world_state.events.append(payload)
             # 走 inject 路径
             if self._inject_fn is not None:
-                try:
+                with contextlib.suppress(Exception):
                     self._inject_fn(payload)
-                except Exception:
-                    pass
             newly_fired.append(event)
 
             # Phase 8: 跟踪黑暗天王事件
@@ -282,7 +282,7 @@ _MOVE_TRIGGERS = {"走", "移动", "去", "飞", "爬", "跑", "逛", "前往", 
 _REST_TRIGGERS = {"休息", "睡觉", "睡", "等待", "发呆", "停"}
 
 
-def _parse_event(description: str) -> Optional[dict[str, Any]]:
+def _parse_event(description: str) -> dict[str, Any] | None:
     """把一条记忆描述还原成事件 dict。
 
     DigimonAgent.observe → MemoryStream.add 对没有 "description" 键的事件
@@ -318,7 +318,7 @@ class NarrativeMonitor:
 
     def __init__(
         self,
-        inject_fn: Optional[Callable[[dict[str, Any]], Any]] = None,
+        inject_fn: Callable[[dict[str, Any]], Any] | None = None,
     ) -> None:
         self._inject_fn = inject_fn
         # agent_name -> {对方名: 上次看到的关系分数},用于算单 tick 变化量
@@ -327,7 +327,7 @@ class NarrativeMonitor:
     def track_coherence(
         self,
         agent: Any,
-        regions: Optional[dict[str, Any]] = None,
+        regions: dict[str, Any] | None = None,
         tracker: Any = None,
         world_state: Any = None,
     ) -> float:
@@ -368,7 +368,7 @@ class NarrativeMonitor:
             # --- 位置越界 ---
             if bounds is not None:
                 to = event.get("to")
-                if isinstance(to, (list, tuple)) and len(to) == 2:
+                if isinstance(to, list | tuple) and len(to) == 2:
                     min_x, min_y, max_x, max_y = bounds
                     x, y = to
                     if not (min_x <= x <= max_x and min_y <= y <= max_y):
@@ -473,10 +473,8 @@ class NarrativeMonitor:
         }
         world_state.events.append(payload)
         if self._inject_fn is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._inject_fn(payload)
-            except Exception:
-                pass
 
     def scan(
         self,
@@ -500,8 +498,8 @@ class NarrativeMonitor:
 
 
 # ---- 进程级单例 ----
-_director: Optional[StoryDirector] = None
-_monitor: Optional[NarrativeMonitor] = None
+_director: StoryDirector | None = None
+_monitor: NarrativeMonitor | None = None
 
 
 def get_monitor() -> NarrativeMonitor:

@@ -11,8 +11,8 @@ import pytest
 
 from digimon_world.agents.dialogue import Dialogue
 from digimon_world.llm.client import FakeLlmClient, LlmModel, set_client
-from digimon_world.world import WorldClock, WorldScheduler, reset_world, get_world
-from digimon_world.world.world_state import WORLD_WIDTH, WORLD_HEIGHT
+from digimon_world.world import WorldClock, WorldScheduler, get_world, reset_world
+from digimon_world.world.world_state import WORLD_HEIGHT, WORLD_WIDTH
 
 
 def _build_ci_fake_client() -> FakeLlmClient:

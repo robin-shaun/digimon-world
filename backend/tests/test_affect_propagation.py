@@ -15,10 +15,10 @@ import pytest
 
 from digimon_world.agents.digimon_agent import DigimonAgent
 from digimon_world.world.affect_propagation import (
-    CPM_CHANGE_THRESHOLD,
-    AffectPropagationEngine,
     _CIRCLE_PROPAGATION_FACTOR,
     _DISTANCE_LABELS,
+    CPM_CHANGE_THRESHOLD,
+    AffectPropagationEngine,
 )
 from digimon_world.world.clock import WorldClock
 from digimon_world.world.relational_circle import (

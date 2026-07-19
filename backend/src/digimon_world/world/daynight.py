@@ -28,7 +28,7 @@ DayNightSystem - 数码世界昼夜循环
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 # 世界一天 = 1440 分钟
 MINUTES_PER_DAY: int = 24 * 60
@@ -142,7 +142,7 @@ class DayNightSystem:
 
     def modifiers(self) -> dict[str, float]:
         """当前时段的完整通用系数表。"""
-        base = {k: 1.0 for k in BEHAVIOR_KEYS}
+        base = dict.fromkeys(BEHAVIOR_KEYS, 1.0)
         if self.period is DayPeriod.NIGHT:
             base["movement"] = 0.70
             base["social"] = 0.80
@@ -155,12 +155,10 @@ class DayNightSystem:
         夜间活跃物种(patamon/tailmon): 夜间移动 1.10(不减反增)
         火系物种(agumon): 白天攻击 1.10
         """
-        if key == "movement" and self.period is DayPeriod.NIGHT:
-            if species.lower() in NIGHT_ACTIVE_SPECIES:
-                return 1.10  # 夜间活跃,不减反增
-        if key == "battle" and self.period is DayPeriod.DAY:
-            if species.lower() in FIRE_SPECIES:
-                return 1.10  # 白天火系攻击力加成
+        if key == "movement" and self.period is DayPeriod.NIGHT and species.lower() in NIGHT_ACTIVE_SPECIES:
+            return 1.10  # 夜间活跃,不减反增
+        if key == "battle" and self.period is DayPeriod.DAY and species.lower() in FIRE_SPECIES:
+            return 1.10  # 白天火系攻击力加成
         # 默认走通用系数
         return self.modifier(key)
 
@@ -179,7 +177,7 @@ class DayNightSystem:
 
 
 # ---- 进程级单例 ----
-_daynight_system: Optional[DayNightSystem] = None
+_daynight_system: DayNightSystem | None = None
 
 
 def get_daynight_system() -> DayNightSystem:

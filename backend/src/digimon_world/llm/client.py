@@ -89,7 +89,7 @@ class FakeLlmClient:
     def __init__(self, default_reply: str = "OK") -> None:
         self._default = default_reply
         # list of (model, predicate, reply)
-        self._rules: list[tuple[LlmModel, "Any", str]] = []
+        self._rules: list[tuple[LlmModel, Any, str]] = []
         self.calls: list[ChatRequest] = []  # 记录每次调用,断言用
 
     def set_reply(

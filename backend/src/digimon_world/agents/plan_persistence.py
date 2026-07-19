@@ -19,9 +19,8 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum, auto
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +67,11 @@ class PlanCheckpoint:
     importance: int  # 1-10
     created_at: datetime
     updated_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
     tick_created: int
     tick_expires: int  # 过期 tick, 0=永不过期
     sub_plans: list[str] = field(default_factory=list)
-    parent_plan_id: Optional[str] = None
+    parent_plan_id: str | None = None
     progress_note: str = ""
     context_snapshot: str = ""
 
@@ -85,10 +84,10 @@ class PlanCheckpoint:
         tick: int,
         context_snapshot: str = "",
         plan_ttl_ticks: int = DEFAULT_PLAN_TTL_TICKS,
-        parent_plan_id: Optional[str] = None,
-    ) -> "PlanCheckpoint":
+        parent_plan_id: str | None = None,
+    ) -> PlanCheckpoint:
         """工厂方法: 创建新的计划检查点。"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return cls(
             plan_id=str(uuid.uuid4()),
             agent_name=agent_name,
@@ -110,7 +109,7 @@ class PlanCheckpoint:
 
     def time_since_created(self) -> str:
         """返回计划创建了多久（人类可读）。"""
-        delta = datetime.now(timezone.utc) - self.created_at
+        delta = datetime.now(UTC) - self.created_at
         hours = delta.total_seconds() / 3600
         if hours < 1:
             return f"{int(delta.total_seconds() / 60)}分钟"
@@ -136,7 +135,7 @@ class PlanCheckpoint:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PlanCheckpoint":
+    def from_dict(cls, data: dict) -> PlanCheckpoint:
         """从 dict 反序列化。"""
         return cls(
             plan_id=data["plan_id"],
@@ -184,7 +183,7 @@ class PlanPersistenceEngine:
 
     # ── 查询 ──────────────────────────────────
 
-    def get_active(self, agent_name: str) -> Optional[PlanCheckpoint]:
+    def get_active(self, agent_name: str) -> PlanCheckpoint | None:
         """返回当前 ACTIVE 计划（最近创建者）。"""
         plans = self._plans.get(agent_name, [])
         for plan in reversed(plans):
@@ -199,7 +198,7 @@ class PlanPersistenceEngine:
         plans = self._plans.get(agent_name, [])
         return sorted(plans, key=lambda p: p.updated_at, reverse=True)[:limit]
 
-    def get_by_id(self, plan_id: str) -> Optional[PlanCheckpoint]:
+    def get_by_id(self, plan_id: str) -> PlanCheckpoint | None:
         """按 plan_id 查找计划（跨所有 agent）。"""
         return self._find_plan(plan_id)
 
@@ -257,11 +256,11 @@ class PlanPersistenceEngine:
             similarity = self.check_similarity(old_active.plan_text, plan_text)
             if similarity > SUPERSEDE_SIMILARITY_THRESHOLD:
                 old_active.status = PlanStatus.SUPERSEDED
-                old_active.completed_at = datetime.now(timezone.utc)
+                old_active.completed_at = datetime.now(UTC)
                 logger.debug("计划 %s 被取代 (相似度=%.2f)", old_active.plan_id, similarity)
             else:
                 old_active.status = PlanStatus.COMPLETED
-                old_active.completed_at = datetime.now(timezone.utc)
+                old_active.completed_at = datetime.now(UTC)
                 logger.debug("计划 %s 自动完成 (相似度=%.2f)", old_active.plan_id, similarity)
 
         # 创建新计划（importance 使用 boosted 值）
@@ -286,7 +285,7 @@ class PlanPersistenceEngine:
 
     # ── 恢复 ──────────────────────────────────
 
-    def resume(self, agent_name: str, current_tick: int = 0) -> Optional[PlanCheckpoint]:
+    def resume(self, agent_name: str, current_tick: int = 0) -> PlanCheckpoint | None:
         """恢复最近的 ACTIVE 计划。
 
         若 current_tick > 0 且计划已过期，标记 ABANDONED 返回 None。
@@ -296,7 +295,7 @@ class PlanPersistenceEngine:
             return None
         if current_tick > 0 and plan.is_expired(current_tick):
             plan.status = PlanStatus.ABANDONED
-            plan.completed_at = datetime.now(timezone.utc)
+            plan.completed_at = datetime.now(UTC)
             plan.progress_note = f"{plan.progress_note} [过期放弃: tick {current_tick}]".strip()
             logger.info(
                 "计划 %s 过期放弃 (expired=%d, now=%d)",
@@ -314,7 +313,7 @@ class PlanPersistenceEngine:
             logger.warning("update_progress: 找不到计划 %s", plan_id)
             return False
         plan.progress_note = f"{plan.progress_note}; {note}" if plan.progress_note else note
-        plan.updated_at = datetime.now(timezone.utc)
+        plan.updated_at = datetime.now(UTC)
         plan.tick_expires = tick + self.plan_ttl_ticks
         return True
 
@@ -325,8 +324,8 @@ class PlanPersistenceEngine:
             logger.warning("complete: 找不到计划 %s", plan_id)
             return False
         plan.status = PlanStatus.COMPLETED
-        plan.completed_at = datetime.now(timezone.utc)
-        plan.updated_at = datetime.now(timezone.utc)
+        plan.completed_at = datetime.now(UTC)
+        plan.updated_at = datetime.now(UTC)
         logger.info("计划 %s 已完成", plan_id)
         return True
 
@@ -337,8 +336,8 @@ class PlanPersistenceEngine:
             logger.warning("abandon: 找不到计划 %s", plan_id)
             return False
         plan.status = PlanStatus.ABANDONED
-        plan.completed_at = datetime.now(timezone.utc)
-        plan.updated_at = datetime.now(timezone.utc)
+        plan.completed_at = datetime.now(UTC)
+        plan.updated_at = datetime.now(UTC)
         if reason:
             plan.progress_note = f"{plan.progress_note} [放弃: {reason}]".strip()
         logger.info("计划 %s 已放弃: %s", plan_id, reason or "(无原因)")
@@ -350,7 +349,7 @@ class PlanPersistenceEngine:
         if plan is None:
             return False
         plan.status = PlanStatus.PAUSED
-        plan.updated_at = datetime.now(timezone.utc)
+        plan.updated_at = datetime.now(UTC)
         return True
 
     # ── 相似度 ────────────────────────────────
@@ -384,7 +383,7 @@ class PlanPersistenceEngine:
         data: dict,
         max_plans: int = DEFAULT_MAX_PLANS,
         plan_ttl_ticks: int = DEFAULT_PLAN_TTL_TICKS,
-    ) -> "PlanPersistenceEngine":
+    ) -> PlanPersistenceEngine:
         """从 dict 反序列化恢复引擎。"""
         engine = cls(max_plans=max_plans, plan_ttl_ticks=plan_ttl_ticks)
         for agent, plan_dicts in data.items():
@@ -393,7 +392,7 @@ class PlanPersistenceEngine:
 
     # ── 内部 ──────────────────────────────────
 
-    def _find_plan(self, plan_id: str) -> Optional[PlanCheckpoint]:
+    def _find_plan(self, plan_id: str) -> PlanCheckpoint | None:
         """按 plan_id 查找计划（跨所有 agent）。"""
         for plans in self._plans.values():
             for plan in plans:
@@ -406,7 +405,7 @@ class PlanPersistenceEngine:
 # 全局单例
 # ──────────────────────────────────────────────
 
-_plan_engine: Optional[PlanPersistenceEngine] = None
+_plan_engine: PlanPersistenceEngine | None = None
 
 
 def get_plan_engine() -> PlanPersistenceEngine:

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
+
 from ..llm.client import ChatMessage, ChatRequest, LlmClient, LlmModel
 
 if TYPE_CHECKING:
@@ -83,7 +84,7 @@ class Dialogue:
         self._llm = llm_client
 
     @staticmethod
-    def _recent_memory_text(agent: "DigimonAgent") -> str:
+    def _recent_memory_text(agent: DigimonAgent) -> str:
         """取 agent 最近几条记忆,拼成一行文本。无记忆返回 '无'。"""
         recent = agent.memory.entries[-RECENT_MEMORY_COUNT:]
         if not recent:
@@ -92,8 +93,8 @@ class Dialogue:
 
     async def generate_dialogue(
         self,
-        agent_a: "DigimonAgent",
-        agent_b: "DigimonAgent",
+        agent_a: DigimonAgent,
+        agent_b: DigimonAgent,
         context_events: list[dict[str, Any]] | None = None,
     ) -> str:
         """为相遇的 agent_a / agent_b 生成一句对话(由 agent_a 开口)。
@@ -111,7 +112,7 @@ class Dialogue:
         # 获取说话者的 MBTI 人格,注入对话语气提示
         mbti_tone_line = ""
         try:
-            from ..world.personality_engine import get_personality_engine  # noqa: PLC0415
+            from ..world.personality_engine import get_personality_engine
             engine = get_personality_engine()
             profile = engine.get(agent_a.name)
             if profile and profile.type_code:

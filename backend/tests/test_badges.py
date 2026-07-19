@@ -17,11 +17,10 @@ from __future__ import annotations
 
 import pytest
 
-from digimon_world.agents.badges import Badge, BadgeSystem, COURAGE_VICTORIES_THRESHOLD, FRIENDSHIP_SCORE_THRESHOLD
+from digimon_world.agents.badges import COURAGE_VICTORIES_THRESHOLD, FRIENDSHIP_SCORE_THRESHOLD, Badge, BadgeSystem
 from digimon_world.agents.digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
-from digimon_world.world.world_state import WorldState
 from digimon_world.world.relationships import RelationshipTracker
-
+from digimon_world.world.world_state import WorldState
 
 # ----------------------------------------------------------------------------
 # Fixtures

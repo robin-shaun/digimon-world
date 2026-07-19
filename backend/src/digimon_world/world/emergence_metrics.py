@@ -115,7 +115,7 @@ def _is_emergent_event(event: dict[str, Any]) -> bool:
     return event.get("type", "") in _EMERGENT_EVENT_TYPES
 
 
-def compute_emergence_metrics(world: "WorldState") -> EmergenceSnapshot:
+def compute_emergence_metrics(world: WorldState) -> EmergenceSnapshot:
     """计算当前世界的所有涌现指标。
 
     无外部依赖,只在 WorldState 上做纯计算,适合高频轮询。
@@ -150,7 +150,7 @@ def compute_emergence_metrics(world: "WorldState") -> EmergenceSnapshot:
 
     # 聚类系数 (每个节点的三元组比例)
     cluster_coeffs: list[float] = []
-    for name, neighbors in adjacency.items():
+    for name, neighbors in adjacency.items():  # noqa: B007
         deg = len(neighbors)
         if deg < 2:
             continue
@@ -263,7 +263,7 @@ def compute_emergence_metrics(world: "WorldState") -> EmergenceSnapshot:
                 continue
             v1 = [a1.mood_state.get(dim, 0.0) for dim in ("joy", "fear", "anger", "sadness")]
             v2 = [a2.mood_state.get(dim, 0.0) for dim in ("joy", "fear", "anger", "sadness")]
-            dot = sum(a * b for a, b in zip(v1, v2))
+            dot = sum(a * b for a, b in zip(v1, v2, strict=False))
             mag1 = math.sqrt(sum(a * a for a in v1))
             mag2 = math.sqrt(sum(b * b for b in v2))
             if mag1 > 0 and mag2 > 0:

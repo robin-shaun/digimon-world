@@ -32,7 +32,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-
 # ----------------------------------------------------------------------------
 # 常量 (Recovery & Cost Constants)
 # ----------------------------------------------------------------------------
@@ -288,16 +287,16 @@ def get_energy_ledger() -> EnergyLedger:
 # ----------------------------------------------------------------------------
 
 __all__ = [
+    "BASE_DRAIN_PER_TICK",
+    "DORMANCY_THRESHOLD",
     "ENERGY_MAX",
     "ENERGY_MIN",
-    "BASE_DRAIN_PER_TICK",
     "LLM_COST_DIVISOR",
+    "MAX_ENERGY_HISTORY",
+    "RECOVER_EAT",
     "RECOVER_REST",
     "RECOVER_SOCIAL",
-    "RECOVER_EAT",
-    "DORMANCY_THRESHOLD",
     "THINK_THRESHOLD",
-    "MAX_ENERGY_HISTORY",
     "CognitiveEnergyPool",
     "EnergyLedger",
     "get_energy_ledger",

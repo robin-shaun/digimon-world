@@ -121,12 +121,11 @@ def test_world_snapshot(client: TestClient) -> None:
 
 def test_websocket_snapshot() -> None:
     """WS 端点应推送初始快照。"""
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/world") as ws:
-            msg = ws.receive_json()
-            assert msg["type"] == "snapshot"
-            assert "world" in msg
-            assert msg["world"]["agents"], "快照里应该有数码兽"
+    with TestClient(app) as client, client.websocket_connect("/ws/world") as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "snapshot"
+        assert "world" in msg
+        assert msg["world"]["agents"], "快照里应该有数码兽"
 
 
 # ---- Phase 2: scheduler 接入 ----

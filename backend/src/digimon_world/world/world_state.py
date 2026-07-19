@@ -19,7 +19,7 @@ import random as _random
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from ..agents.digimon_agent import DigimonAgent, DigimonAttribute, DigimonStats, EvolutionStage
 
@@ -414,7 +414,7 @@ class WorldState:
 
     def __init__(
         self,
-        regions: Optional[dict[str, Region]] = None,
+        regions: dict[str, Region] | None = None,
         seasons_enabled: bool = True,
         world_id: str | None = None,
     ) -> None:
@@ -522,7 +522,7 @@ class WorldState:
         with self._lock:
             self.agents[agent.name] = agent
 
-    def get(self, name: str) -> Optional[DigimonAgent]:
+    def get(self, name: str) -> DigimonAgent | None:
         with self._lock:
             return self.agents.get(name)
 
@@ -535,7 +535,7 @@ class WorldState:
             return len(self.agents)
 
     # ---- 移动 ----
-    def move(self, name: str, dx: int, dy: int) -> Optional[tuple[int, int]]:
+    def move(self, name: str, dx: int, dy: int) -> tuple[int, int] | None:
         """移动一只数码兽(dx, dy 像素),返回新坐标。如果超出地区边界则夹紧。"""
         with self._lock:
             agent = self.agents.get(name)
@@ -708,7 +708,7 @@ class WorldState:
 
 
 # ---- 进程级单例 ----
-_state: Optional[WorldState] = None
+_state: WorldState | None = None
 
 # Phase 11: 数码兽种群数据 (共 100 只)
 # Phase 17 更新: 分散到服务器大陆、螺旋山、文件岛、无限山

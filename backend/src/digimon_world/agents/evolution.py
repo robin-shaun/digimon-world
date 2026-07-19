@@ -28,10 +28,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from .digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
-
 
 # ============================================================================
 # 徽章系统 (Crests)
@@ -57,7 +55,7 @@ class Crest(str, Enum):
 class SpeciesEvolution:
     """某个物种在当前阶段的进化信息。"""
     next_species: str       # 进化后物种名
-    crest: Optional[Crest] = None  # 进化所需徽章
+    crest: Crest | None = None  # 进化所需徽章
 
 
 # 物种 → 每阶段进化信息 (按物种的 species_id)
@@ -199,7 +197,7 @@ SPECIES_EVOLUTION_TREE: dict[str, dict[EvolutionStage, SpeciesEvolution]] = {
 }
 
 
-def get_species_evolution(species: str, stage: EvolutionStage) -> Optional[SpeciesEvolution]:
+def get_species_evolution(species: str, stage: EvolutionStage) -> SpeciesEvolution | None:
     """获取某物种在某阶段的进化信息 (大小写不敏感)。"""
     tree = SPECIES_EVOLUTION_TREE.get(species.lower(), {})
     return tree.get(stage)
@@ -216,7 +214,7 @@ class EvolutionRequirement:
     min_victories: int       # 战斗胜利次数门槛
     min_bond: int            # 羁绊值门槛
     next_species: str        # 退化后备的 species
-    crest: Optional[Crest] = None        # 所需徽章 (完全体+究极体)
+    crest: Crest | None = None        # 所需徽章 (完全体+究极体)
     require_story_event: bool = False    # 是否需要特殊剧情事件
 
 
@@ -257,7 +255,7 @@ def is_final_stage(stage: EvolutionStage) -> bool:
     return stage == EvolutionStage.MEGA
 
 
-def next_stage(stage: EvolutionStage) -> Optional[EvolutionStage]:
+def next_stage(stage: EvolutionStage) -> EvolutionStage | None:
     """返回下一阶段,若已是 MEGA 则返回 None。"""
     order = [
         EvolutionStage.BABY_I,
@@ -300,8 +298,8 @@ class EvolutionResult:
     old_stage: EvolutionStage
     new_stage: EvolutionStage
     reason: EvolutionReason
-    next_species: Optional[str] = None
-    crest_required: Optional[Crest] = None
+    next_species: str | None = None
+    crest_required: Crest | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -341,7 +339,7 @@ class EvolutionSystem:
 
     def _get_next_species(
         self, agent: DigimonAgent, stage: EvolutionStage
-    ) -> tuple[str, Optional[Crest], bool]:
+    ) -> tuple[str, Crest | None, bool]:
         """获取物种特定的下一形态和所需徽章。
 
         Returns:
@@ -361,8 +359,8 @@ class EvolutionSystem:
         self,
         agent: DigimonAgent,
         battle_victories: int,
-        bond: Optional[int] = None,
-    ) -> tuple[bool, EvolutionReason, Optional[Crest]]:
+        bond: int | None = None,
+    ) -> tuple[bool, EvolutionReason, Crest | None]:
         """判断当前能否进化,返回 (can, reason, missing_crest)。"""
         if is_final_stage(agent.stage):
             return False, EvolutionReason.ALREADY_MEGA, None
@@ -388,9 +386,8 @@ class EvolutionSystem:
         )
 
         # ULTIMATE → MEGA: 需要特殊事件
-        if story_required and agent.stage == EvolutionStage.ULTIMATE:
-            if not self.story_events_triggered:
-                return False, EvolutionReason.WAITING_EVENT, required_crest
+        if story_required and agent.stage == EvolutionStage.ULTIMATE and not self.story_events_triggered:
+            return False, EvolutionReason.WAITING_EVENT, required_crest
 
         # CHAMPION → ULTIMATE 或 ULTIMATE → MEGA: 需要徽章
         if required_crest is not None and required_crest not in self.unlocked_crests:
@@ -414,7 +411,7 @@ class EvolutionSystem:
                 reason=EvolutionReason.ALREADY_MEGA,
             )
 
-        next_species, crest, _ = self._get_next_species(agent, old_stage)
+        next_species, _crest, _ = self._get_next_species(agent, old_stage)
 
         # ---- 升级数值 (每升一级 * 1.5 系数) ----
         scale = 1.5
@@ -457,7 +454,7 @@ class EvolutionSystem:
         self,
         agent: DigimonAgent,
         battle_victories: int,
-        bond: Optional[int] = None,
+        bond: int | None = None,
     ) -> EvolutionResult:
         """一站式: 判定 + 执行。"""
         can, reason, crest = self.can_evolve(
@@ -475,13 +472,13 @@ class EvolutionSystem:
 
 
 __all__ = [
-    "Crest",
-    "EvolutionSystem",
-    "EvolutionResult",
-    "EvolutionReason",
-    "EvolutionRequirement",
     "EVOLUTION_CHAIN",
     "SPECIES_EVOLUTION_TREE",
+    "Crest",
+    "EvolutionReason",
+    "EvolutionRequirement",
+    "EvolutionResult",
+    "EvolutionSystem",
     "SpeciesEvolution",
     "get_species_evolution",
     "is_final_stage",

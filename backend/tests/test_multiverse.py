@@ -280,8 +280,9 @@ class TestMultiverseCreateSeasons:
 
     def test_create_api_seasons_disabled(self):
         """POST /api/multiverse/create 支持 seasons 参数。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.post(
             "/api/multiverse/create",
@@ -300,8 +301,9 @@ class TestMultiverseCreateSeasons:
 class TestGetWorldDetail:
     def test_get_prime_world(self):
         """GET /api/multiverse/prime 返回主世界详情。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/prime")
         assert resp.status_code == 200
@@ -314,8 +316,9 @@ class TestGetWorldDetail:
 
     def test_get_nonexistent_world(self):
         """GET /api/multiverse/{id} 对不存在的世界返回 404。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/ghost_world")
         assert resp.status_code == 404
@@ -325,8 +328,9 @@ class TestGetWorldDetail:
         """GET /api/multiverse/{id} 可以查询新创建的世界。"""
         mv = get_multiverse()
         mv.create_world(world_id="target", seasons_enabled=False)
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/target")
         assert resp.status_code == 200
@@ -394,8 +398,9 @@ class TestSeedAgents:
 
     def test_seed_agents_api(self):
         """POST /api/multiverse/create 支持 seed_digimon 参数。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.post(
             "/api/multiverse/create",
@@ -418,8 +423,9 @@ class TestSeedAgents:
 class TestDeleteWorldAPI:
     def test_delete_world(self):
         """DELETE /api/multiverse/{id} 删除一个非主世界。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         # 先创建一个世界
         client.post("/api/multiverse/create", json={"world_id": "to_delete"})
@@ -435,16 +441,18 @@ class TestDeleteWorldAPI:
 
     def test_delete_nonexistent_world(self):
         """DELETE 不存在的世界返回 404。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.delete("/api/multiverse/ghost")
         assert resp.status_code == 404
 
     def test_cannot_delete_prime(self):
         """DELETE prime 世界返回 400。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.delete("/api/multiverse/prime")
         assert resp.status_code == 400
@@ -454,8 +462,9 @@ class TestDeleteWorldAPI:
 
     def test_delete_world_removes_agents(self):
         """删除世界后其数码兽不复存在。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={
             "world_id": "populated", "seed_digimon": True,
@@ -468,8 +477,9 @@ class TestDeleteWorldAPI:
 
     def test_delete_then_recreate(self):
         """删除世界后可重新创建同名世界。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={"world_id": "recycled"})
         client.delete("/api/multiverse/recycled")
@@ -482,8 +492,9 @@ class TestDeleteWorldAPI:
 class TestWorldEventsAPI:
     def test_get_prime_events(self):
         """GET /api/multiverse/prime/events 返回主世界事件。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/prime/events")
         assert resp.status_code == 200
@@ -496,8 +507,9 @@ class TestWorldEventsAPI:
 
     def test_get_world_events_empty(self):
         """新创建的空世界事件列表为空。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={"world_id": "empty_events"})
         resp = client.get("/api/multiverse/empty_events/events")
@@ -508,16 +520,18 @@ class TestWorldEventsAPI:
 
     def test_get_world_events_not_found(self):
         """GET 不存在世界的事件返回 404。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/ghost/events")
         assert resp.status_code == 404
 
     def test_get_world_events_reversed_order(self):
         """事件按时间倒序(最新在前)。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={"world_id": "ordered"})
         # 手动注入事件到世界
@@ -539,8 +553,9 @@ class TestWorldEventsAPI:
 
     def test_get_world_events_pagination(self):
         """事件分页: limit + offset 正确工作。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={"world_id": "paged"})
         w = get_multiverse().get_world("paged")
@@ -570,8 +585,9 @@ class TestWorldEventsAPI:
 class TestSeedWorldAPI:
     def test_seed_empty_world(self):
         """POST /api/multiverse/{id}/seed 注入 10 只默认数码兽到空世界。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={"world_id": "empty"})
         w = get_multiverse().get_world("empty")
@@ -590,9 +606,10 @@ class TestSeedWorldAPI:
         """seed 对已有同名数码兽的世界会覆盖(spawn 是 upsert),不加新。
 
         要测试追加,先注入非默认名的数码兽,seed 不会覆盖它们。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
         from digimon_world.agents.digimon_agent import DigimonAgent, DigimonStats
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={
             "world_id": "has_custom", "seed_digimon": True,
@@ -620,8 +637,9 @@ class TestSeedWorldAPI:
 
     def test_seed_nonexistent_world(self):
         """seed 不存在的世界返回 404。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.post("/api/multiverse/ghost/seed")
         assert resp.status_code == 404
@@ -629,8 +647,9 @@ class TestSeedWorldAPI:
 
     def test_seed_prime_world(self):
         """seed 主宇宙也允许,但 spawn 是 upsert(同名覆盖,净增可能为 0)。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         w = get_multiverse().get_world("prime")
         assert w is not None
@@ -651,8 +670,9 @@ class TestSeedWorldAPI:
 class TestMultiverseStats:
     def test_stats_single_world(self):
         """只有一个 prime 世界时的统计。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/stats")
         assert resp.status_code == 200
@@ -667,8 +687,9 @@ class TestMultiverseStats:
 
     def test_stats_multiple_worlds(self):
         """多个世界时聚合统计正确。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
 
         # 创建两个世界: 一个空,一个有种子
@@ -700,8 +721,9 @@ class TestMultiverseStats:
 
     def test_stats_after_delete(self):
         """删除世界后聚合统计更新。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={"world_id": "temp"})
 
@@ -715,8 +737,9 @@ class TestMultiverseStats:
 
     def test_stats_after_gate(self):
         """跨世界迁移后聚合统计更新(total_agents 不变)。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={"world_id": "dest"})
 
@@ -755,8 +778,9 @@ class TestMultiverseStats:
 
     def test_stats_includes_region_count(self):
         """stats 响应中每个世界包含 region_count。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/stats")
         assert resp.status_code == 200
@@ -772,8 +796,9 @@ class TestMultiverseStats:
 class TestListWorldDigimon:
     def test_list_prime_digimon(self):
         """GET /api/multiverse/prime/digimon 返回主世界所有数码兽。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/prime/digimon")
         assert resp.status_code == 200
@@ -794,8 +819,9 @@ class TestListWorldDigimon:
 
     def test_list_digimon_in_seeded_world(self):
         """GET /api/multiverse/{id}/digimon 返回种子世界数码兽列表。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post(
             "/api/multiverse/create",
@@ -812,8 +838,9 @@ class TestListWorldDigimon:
 
     def test_list_digimon_empty_world(self):
         """GET /api/multiverse/{id}/digimon 对空世界返回 count=0。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         client.post("/api/multiverse/create", json={"world_id": "empty_w"})
         resp = client.get("/api/multiverse/empty_w/digimon")
@@ -824,8 +851,9 @@ class TestListWorldDigimon:
 
     def test_list_digimon_nonexistent_world(self):
         """GET /api/multiverse/{id}/digimon 对不存在的世界返回 404。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
+        from digimon_world.api.app import app
         client = TestClient(app)
         resp = client.get("/api/multiverse/ghost/digimon")
         assert resp.status_code == 404
@@ -833,9 +861,10 @@ class TestListWorldDigimon:
 
     def test_list_digimon_after_gate(self):
         """数码之门迁移后,源世界和目标世界的数码兽列表正确更新。"""
-        from digimon_world.api.app import app
         from fastapi.testclient import TestClient
+
         from digimon_world.agents.digimon_agent import DigimonAgent, DigimonStats
+        from digimon_world.api.app import app
         client = TestClient(app)
         # 目标世界(空)
         client.post("/api/multiverse/create", json={
@@ -1070,7 +1099,7 @@ class TestBatchMigrateAPI:
         real = [a.name for a in src.all()][:2]
 
         resp = self.client.post("/api/multiverse/migrate", json={
-            "agent_names": real + ["幽灵兽"],
+            "agent_names": [*real, "幽灵兽"],
             "from_world": "bapi_p_src",
             "to_world": "bapi_p_dst",
         })

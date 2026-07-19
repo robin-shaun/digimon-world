@@ -1,5 +1,6 @@
 """人格引擎测试 — 基于荣格心理学 MBTI 的动态人格系统。"""
 import pytest
+
 from digimon_world.world.personality_engine import (
     MbtiDimension,
     PersonalityEvolutionEngine,
@@ -215,7 +216,7 @@ class TestEvolutionEngine:
     def test_history_capped_at_100(self, engine):
         """历史记录最多保留 100 条。"""
         engine.get_or_create("Agumon")
-        for i in range(150):
+        for i in range(150):  # noqa: B007
             engine.apply_event("Agumon", "battle_win")
 
         p = engine.get("Agumon")

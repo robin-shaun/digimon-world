@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class DimensionResult:
 
     score: float
     details: dict[str, Any] = field(default_factory=dict)
-    top_weak: Optional[list[dict[str, Any]]] = None
+    top_weak: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -41,7 +41,7 @@ class InsightReport:
     agent_name: str
     timestamp: str
     overall_score: float
-    dimensions: dict[str, Optional[dict[str, Any]]]
+    dimensions: dict[str, dict[str, Any] | None]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -86,7 +86,7 @@ class AgentInsightEngine:
         Returns:
             内省报告 dict (见模块 docstring)
         """
-        dimensions: dict[str, Optional[dict[str, Any]]] = {}
+        dimensions: dict[str, dict[str, Any] | None] = {}
         scores: list[float] = []
 
         # ── 维度 1: 记忆健康 ──
@@ -182,7 +182,7 @@ class AgentInsightEngine:
 
         return {
             "agent_name": self.agent_name,
-            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "overall_score": overall_score,
             "dimensions": dimensions,
         }
@@ -286,7 +286,7 @@ class AgentInsightEngine:
 # 全局单例
 # ──────────────────────────────────────────────
 
-_insight_engine: Optional[AgentInsightEngine] = None
+_insight_engine: AgentInsightEngine | None = None
 
 
 def get_insight_engine(agent_name: str = "default") -> AgentInsightEngine:
@@ -303,9 +303,7 @@ def get_insight_engine(agent_name: str = "default") -> AgentInsightEngine:
         AgentInsightEngine 实例
     """
     global _insight_engine
-    if _insight_engine is None:
-        _insight_engine = AgentInsightEngine(agent_name=agent_name)
-    elif _insight_engine.agent_name != agent_name:
+    if _insight_engine is None or _insight_engine.agent_name != agent_name:
         _insight_engine = AgentInsightEngine(agent_name=agent_name)
     return _insight_engine
 
