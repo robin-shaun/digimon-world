@@ -80,10 +80,10 @@ async def test_persistence_indexes_applied() -> None:
     from digimon_world.world.persistence import _INDEXES, _ensure_schema
 
     # 临时数据库
-    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    tmp.close()
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
     try:
-        async with aiosqlite.connect(tmp.name) as db:
+        async with aiosqlite.connect(db_path) as db:
             await _ensure_schema(db)
 
             # 检查索引是否创建

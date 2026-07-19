@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from math import hypot
 from typing import TYPE_CHECKING, Any
 
@@ -65,7 +65,7 @@ SHOP_ITEMS: tuple[str, ...] = (
 )
 
 
-class LandmarkEffect(str, Enum):
+class LandmarkEffect(StrEnum):
     """地标效果类型。value 用于序列化 / 前端显示。"""
 
     BOND_BOOST = "bond_boost"            # 羁绊提升

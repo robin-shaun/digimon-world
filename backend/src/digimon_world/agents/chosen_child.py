@@ -15,11 +15,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, ClassVar
 
 
-class Crest(str, Enum):
+class Crest(StrEnum):
     """徽章(神圣计划发光标识)。"""
 
     COURAGE = "courage"        # 勇气

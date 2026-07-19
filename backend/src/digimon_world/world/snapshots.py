@@ -130,7 +130,7 @@ class SnapshotManager:
             )
 
             # 异步清理旧快照 (不影响主流程)
-            asyncio.create_task(self._auto_save_loop())  # noqa: RUF006
+            asyncio.create_task(self._prune())  # noqa: RUF006
 
             return snapshot_id
 

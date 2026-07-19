@@ -35,14 +35,14 @@ import hashlib
 import random
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 # ---------------------------------------------------------------------------
 # MemeCategory — 模因类别
 # ---------------------------------------------------------------------------
 
-class MemeCategory(str, Enum):
+class MemeCategory(StrEnum):
     """模因类别，影响传播速度和受体权重。"""
 
     SKILL = "skill"        # 技能/战斗经验 — 高传播,战斗后转移

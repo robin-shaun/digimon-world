@@ -935,7 +935,7 @@ class TestBatchMigrate:
         src = mv.get_world("partial_src")
         real_names = [a.name for a in src.all()]
         # 混入不存在的 agent
-        names_with_fake = real_names[:3] + ["不存在的数码兽"]
+        names_with_fake = [*real_names[:3], "不存在的数码兽"]
 
         result = mv.migrate_batch(
             agent_names=names_with_fake,

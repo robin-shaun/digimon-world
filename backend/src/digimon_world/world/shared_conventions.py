@@ -26,7 +26,7 @@ import string
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import jieba
 
@@ -129,7 +129,7 @@ class ConventionDetector:
     """
 
     # 中文停用词（高频但无意义）
-    CHINESE_STOP_WORDS: set[str] = {
+    CHINESE_STOP_WORDS: ClassVar[set[str]] = {
         "一个", "一起", "一些", "什么", "没有", "可以", "已经", "不是",
         "这个", "那个", "这里", "那里", "怎么", "因为", "所以", "但是",
         "如果", "虽然", "然后", "并且", "或者", "不过", "还是", "只是",
@@ -141,7 +141,7 @@ class ConventionDetector:
     }
 
     # 英文停用词
-    ENGLISH_STOP_WORDS: set[str] = {
+    ENGLISH_STOP_WORDS: ClassVar[set[str]] = {
         "the", "and", "for", "that", "have", "with", "this", "from",
         "they", "will", "would", "there", "their", "what", "about",
         "which", "when", "make", "like", "just", "been", "into", "has",
@@ -203,7 +203,7 @@ class ConventionDetector:
         # 5. 取 top N 返回
         candidates.sort(key=lambda x: x[2], reverse=True)
         new_conventions = []
-        for term, agent_count, total_count in candidates[:MAX_NEW_CONVENTIONS_PER_TICK]:
+        for term, _agent_count, total_count in candidates[:MAX_NEW_CONVENTIONS_PER_TICK]:
             # 找到使用该术语的 source agents
             sources = [
                 name for name, wc in agent_words.items()

@@ -23,7 +23,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 # ----------------------------------------------------------------------------
 # 常量
@@ -40,7 +40,7 @@ FORAGE_RESTORE: int = 30           # 觅食成功恢复的饥饿值
 # 食物类型 & 地区食物来源
 # ----------------------------------------------------------------------------
 
-class FoodType(str, Enum):
+class FoodType(StrEnum):
     """食物类型 (数码世界的食物链底层)。"""
 
     BERRIES = "berries"   # 浆果 (植物系随处可采)

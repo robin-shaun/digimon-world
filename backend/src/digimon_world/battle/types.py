@@ -10,10 +10,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
-class ActionType(str, Enum):
+class ActionType(StrEnum):
     """一回合可选的行动类型。"""
 
     ATTACK = "attack"    # 普通攻击

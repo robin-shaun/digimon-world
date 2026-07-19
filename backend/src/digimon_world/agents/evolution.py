@@ -27,7 +27,7 @@ Phase 8: 物种特定进化树 + 8 枚徽章 + 经典动画路线
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from .digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
 
@@ -35,7 +35,7 @@ from .digimon_agent import DigimonAgent, DigimonStats, EvolutionStage
 # 徽章系统 (Crests)
 # ============================================================================
 
-class Crest(str, Enum):
+class Crest(StrEnum):
     """8 枚被选召孩子的徽章。"""
     COURAGE = "courage"         # 勇气 - 亚古兽
     FRIENDSHIP = "friendship"   # 友情 - 加布兽
@@ -278,7 +278,7 @@ def next_stage(stage: EvolutionStage) -> EvolutionStage | None:
 # 进化结果 / 触发原因
 # ============================================================================
 
-class EvolutionReason(str, Enum):
+class EvolutionReason(StrEnum):
     """进化触发原因。"""
 
     BATTLE_VICTORIES = "battle_victories"

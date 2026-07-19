@@ -93,11 +93,14 @@ class EnvironmentalEventSystem:
         events: list[dict[str, Any]] = []
 
         # ---- 暴风雨 ----
-        if weather.current.value == "stormy" and tick_count % STORM_CHECK_INTERVAL == 0:
-            if r.random() < STORM_CHANCE:
-                ev = self._trigger_storm(world, ecology, tick_count)
-                if ev:
-                    events.append(ev)
+        if (
+            weather.current.value == "stormy"
+            and tick_count % STORM_CHECK_INTERVAL == 0
+            and r.random() < STORM_CHANCE
+        ):
+            ev = self._trigger_storm(world, ecology, tick_count)
+            if ev:
+                events.append(ev)
 
         # ---- 干旱迁移 ----
         drought_ev = self._check_drought_migration(world, ecology, tick_count)
@@ -105,12 +108,15 @@ class EnvironmentalEventSystem:
             events.append(drought_ev)
 
         # ---- 火山喷发 ----
-        if tick_count % VOLCANO_CHECK_INTERVAL == 0 and tick_count > self.volcano_cooldown:
-            if r.random() < VOLCANO_CHANCE:
-                ev = self._trigger_volcano(world, ecology, tick_count)
-                if ev:
-                    events.append(ev)
-                    self.volcano_cooldown = tick_count + VOLCANO_CHECK_INTERVAL
+        if (
+            tick_count % VOLCANO_CHECK_INTERVAL == 0
+            and tick_count > self.volcano_cooldown
+            and r.random() < VOLCANO_CHANCE
+        ):
+            ev = self._trigger_volcano(world, ecology, tick_count)
+            if ev:
+                events.append(ev)
+                self.volcano_cooldown = tick_count + VOLCANO_CHECK_INTERVAL
 
         return events
 

@@ -19,7 +19,7 @@ RelationshipTracker - 数码兽社交关系 (Phase 6: 向量化)
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 # 关系值边界
 MIN_SCORE: float = -100.0
@@ -295,7 +295,7 @@ class RelationshipTracker:
     # ---- 隐性欲望(latent desire)驱动的社交倾向 ----
 
     # 欲望关键词匹配映射: 相同类别欲望 → 高兼容度
-    _DESIRE_CATEGORIES: dict[str, set[str]] = {
+    _DESIRE_CATEGORIES: ClassVar[dict[str, set[str]]] = {
         "strength": {"想变强", "渴望力量", "变强", "想成为最强", "力量"},
         "social": {"想交朋友", "想交到朋友", "交朋友", "想要朋友", "想有同伴"},
         "explore": {"想探索远方", "想冒险", "探索", "想出去看看", "想去远方"},

@@ -21,14 +21,14 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .digimon_agent import DigimonAgent
 
 
-class Milestone(str, Enum):
+class Milestone(StrEnum):
     """数码兽可达成的里程碑。
 
     按类别组织:

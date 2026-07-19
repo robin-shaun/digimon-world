@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from .digimon_agent import DigimonAgent
 
 
-class Badge(str, Enum):
+class Badge(StrEnum):
     """数码兽可获得的七大徽章。"""
 
     COURAGE = "courage"          # 勇气

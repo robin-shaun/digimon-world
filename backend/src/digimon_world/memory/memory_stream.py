@@ -185,15 +185,15 @@ class MemoryStream:
         dedup_window = self.moved_dedup_tick_window
         seen_groups: dict[tuple, list[int]] = {}  # (memory_type, desc_hash) -> [indices]
 
-        for key, node in enumerate(self._nodes):
+        for i, node in enumerate(self.entries):
             if node.memory_type in ("observation",) and node.importance < 5:
                 # 提取类型关键词(如 moved、rested 等)
-                key = (node.memory_type, self._event_type_key(node))
-                seen_groups.setdefault(key, []).append(i)
+                group_key = (node.memory_type, self._event_type_key(node))
+                seen_groups.setdefault(group_key, []).append(i)
 
         # 合并组内邻近的记忆
         to_remove: set[int] = set()
-        for key, indices in seen_groups.items():
+        for _key, indices in seen_groups.items():
             if len(indices) < 2:
                 continue
             # 按 tick_index 排序

@@ -24,7 +24,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from .digimon_agent import EvolutionStage
 
@@ -32,7 +32,7 @@ from .digimon_agent import EvolutionStage
 # 技能类型
 # ----------------------------------------------------------------------------
 
-class SkillType(str, Enum):
+class SkillType(StrEnum):
     """技能类型 (与 DigimonAttribute 的克制关系解耦,独立分类)。"""
 
     PHYSICAL = "physical"    # 物理近战

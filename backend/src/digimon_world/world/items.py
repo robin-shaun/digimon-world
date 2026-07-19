@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from math import hypot
 from typing import TYPE_CHECKING, Any
 
@@ -60,7 +60,7 @@ HEAL_THRESHOLD: int = 50
 _OGREMON_SHOP = next(lm for lm in DEFAULT_LANDMARKS if lm.landmark_id == "ogremon_shop")
 
 
-class ItemType(str, Enum):
+class ItemType(StrEnum):
     """道具类型。value 用于序列化 / 前端显示。"""
 
     HEAL = "heal"                        # 恢复类(自动使用)

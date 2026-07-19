@@ -104,7 +104,7 @@ class TestRelationsApi:
         assert len(relations) >= 3
 
         # 检查单个 relation 条目
-        for other_name, score in scores.items():  # noqa: B007
+        for _other_name, rel in relations.items():
             assert "circle" in rel
             assert rel["circle"] in ("INTIMATE", "FRIENDLY", "ACQUAINTANCE", "NEUTRAL", "HOSTILE")
             assert "circle_label" in rel

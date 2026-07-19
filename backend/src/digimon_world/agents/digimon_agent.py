@@ -20,7 +20,7 @@ import random
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..memory.memory_autonomy import MemoryAutonomy
@@ -41,7 +41,7 @@ def _lazy_energy_pool():
     return CognitiveEnergyPool()
 
 
-class EvolutionStage(str, Enum):
+class EvolutionStage(StrEnum):
     """数码兽的进化阶段。
 
     标准 6 阶段进化链 (数码宝贝动画世界观):
@@ -57,7 +57,7 @@ class EvolutionStage(str, Enum):
     MEGA = "mega"              # 究极体
 
 
-class PersonalityTrait(str, Enum):
+class PersonalityTrait(StrEnum):
     """数码兽的个性特征。"""
 
     BRAVE = "brave"            # 勇敢 - 倾向战斗/冒险
@@ -92,7 +92,7 @@ def _generate_personality_traits() -> dict[str, int]:
     return traits
 
 
-class DigimonAttribute(str, Enum):
+class DigimonAttribute(StrEnum):
     """数码兽的属性(克制关系)。"""
 
     VACCINE = "vaccine"        # 疫苗种 - 克制 virus

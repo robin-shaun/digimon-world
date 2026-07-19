@@ -13,11 +13,11 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 
-class LlmModel(str, Enum):
+class LlmModel(StrEnum):
     """模型分层。"""
 
     # Anthropic (中转)

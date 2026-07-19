@@ -414,9 +414,7 @@ class NarrativeMonitor:
         wants_rest = any(k in plan for k in _REST_TRIGGERS)
         if wants_move and etype == "rested":
             return True
-        if wants_rest and etype == "moved" and event.get("from") != event.get("to"):
-            return True
-        return False
+        return bool(wants_rest and etype == "moved" and event.get("from") != event.get("to"))
 
     def _detect_relation_spikes(self, agent: Any, tracker: Any) -> list[str]:
         """检测与该 agent 相关的关系分数,自上次检查以来是否单次剧变。
