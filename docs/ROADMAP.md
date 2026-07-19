@@ -467,3 +467,25 @@
 - [x] Task 6 — 端到端验证: verify_phase25.py（44/44 PASS，验证快照/诊断/建议/API 端点完整生命周期）✅
 
 **完成标志**: 每个 agent 拥有上下文健康评分，世界级仪表板可监控所有 agent 的上下文质量——从「盲目信任」升级为「可观测可靠」。
+
+---
+
+## Phase 26: 社会互动驱动的人格动态演化 🔄 (进行中)
+
+**目标**: Phase 17 赋予每只数码兽静态 MBTI 类型，但现实中人格在社会互动中持续演化。受今日调研启发——Stable-Alignment (⭐356) 用 DPO 训练社会对齐、Digital Pantheon (arXiv:2607.15095) 追踪 coalition 形成时的人格一致性——Phase 26 让数码兽的人格在社会互动中**动态演化**。每次对话、战斗、帮助、交易都会产生微小的「人格漂移」。Agent 不再是固定的 INFP/ESTJ，而是在社会关系中**成为自己**。
+
+**论文依据**: 
+- agi-templar/Stable-Alignment (⭐356) — Multi-agent Social Simulation + DPO-based social alignment training
+- arXiv:2607.15095 "Digital Pantheon" — Coalition formation with personality consistency
+- arXiv:2607.12122 "Agentic AI Scientific Community" — Influence economy between agents
+
+**基础设施**: Phase 17 (MBTI 静态人格) + Phase 22 (共享记忆惯例) + Phase 24 (互惠利他/债务追踪) + Phase 25 (上下文健康监控)
+
+- [ ] Task 1 — `personality_dynamics.py` 核心模块: PersonalityVector（四维连续人格向量 E/I, S/N, T/F, J/P）+ SocialInfluence（对话/战斗/帮助/交易四种互动对不同维度的漂移量）+ PersonalityEvolution（追踪人格轨迹 + 检测显著 shift 事件 + 人格稳定性评分）
+- [ ] Task 2 — Scheduler 集成 + DigimonAgent 集成: 每次 social 互动后记录人格漂移；每 N tick 计算累积漂移并更新 agent 人格向量；显著性 shift 触发世界事件广播
+- [ ] Task 3 — API 端点: `GET /api/digimon/{name}/personality`（人格向量历史轨迹 + 当前 MBTI + 距离原始类型的偏移量）、`GET /api/personality/network`（agent 间社会影响力网络图）、`GET /api/personality/shifts`（最近的显著人格 shift 事件列表）
+- [ ] Task 4 — 前端人格演化面板: 数码兽详情新增「🧬 人格演化」tab，显示四维雷达图（原始 vs 当前）+ 人格轨迹时间线 + "重大性格转变"事件列表
+- [ ] Task 5 — 集成测试 (≥30): PersonalityVector 计算 + SocialInfluence 漂移累积 + PersonalityEvolution 检测 + API 端点
+- [ ] Task 6 — 端到端验证: verify_phase26.py（验证人格初始化/互动漂移/shift 检测/API 端点完整生命周期）
+
+**完成标志**: 数码兽在社会互动中动态演化人格——一只天生内向的数码兽在频繁社交后变得更外向，频繁战斗的数码兽变得更果断。世界中有「性格转变」作为可观测事件。
