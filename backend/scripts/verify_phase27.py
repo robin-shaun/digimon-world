@@ -26,7 +26,6 @@ from digimon_world.economy.knowledge_economy import (  # noqa: E402
     HOT_CITATION_THRESHOLD,
     InventedSkill,
     KnowledgeItem,
-    KnowledgePool,
     KnowledgePropagation,
     TechNode,
     TechTree,
@@ -277,6 +276,7 @@ header("Part F: API 端点")
 
 try:
     from fastapi.testclient import TestClient
+
     from digimon_world.api.app import app
 
     client = TestClient(app)

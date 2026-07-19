@@ -515,7 +515,7 @@
 
 ---
 
-## Phase 27: 知识经济与科技树 🔄 (进行中)
+## Phase 27: 知识经济与科技树 ✅ 100%
 
 **目标**: 数码兽从单纯的行为 agent 升级为「知识创造者」——发明技能/战术、互相引用知识、知识沿差序格局社交网络传播、世界级科技树按引用量逐步解锁。受 arXiv:2607.12122 "Agentic AI Scientific Community" 启发——agent 社区中形成基于引用的影响力经济，高引用知识孵化新发明。
 
@@ -529,10 +529,10 @@
 - [x] Task 1 — `knowledge_economy.py` 核心模块: KnowledgeItem (工厂方法/hash ID/引用追踪/is_hot) + InventedSkill (继承 Phase 5 Skill) + KnowledgePropagation (沿六圈差序格局传播/概率公式) + TechTree (5 领域科技树按引用解锁) + KnowledgePool (单例 CRUD) ✅ (1108行, 58 tests)
 - [x] Task 2 — Scheduler 集成: tick_once() 中调 propagate() + check_inventions()，每 tick 传播一轮、检查 agent 是否有资格发明新技能 ✅
 - [x] Task 3 — API 端点: `GET /api/knowledge` (知识图谱总览+科技树)、`GET /api/knowledge/hot` (热门高引用)、`GET /api/digimon/{name}/inventions` (agent 发明历史) ✅
-- [ ] Task 4 — 前端知识面板: 导演面板新增「🧠 知识经济」tab，展示热门知识列表 + 科技树解锁进度 + 各领域发明数统计
+- [x] Task 4 — 前端知识面板: 导演面板新增「🧠 知识经济」tab，展示热门知识列表 + 科技树解锁进度 + 各领域发明数统计 ✅ (313行 `knowledge.js` + `index.html` 15行集成)
 - [x] Task 5 — 端到端验证: verify_phase27.py（验证知识创建/引用/传播/热门检测/科技树解锁/API 端点完整生命周期）✅ (64/64 PASS)
-- [ ] Task 6 — ROADMAP + README 更新: 测试数、Phase 状态、进度条
+- [x] Task 6 — ROADMAP + README 更新: 测试数、Phase 状态、进度条 ✅
 
-**进度**: Task 1-3 + 5 完成 (58+64=122 checks)，Task 4 (前端面板) + Task 6 (文档) 待办。
+**进度**: Task 1-6 全部完成 (1222 tests, 64/64 verify_phase27 PASS)，Phase 27 ✅ 100%。
 
 **完成标志**: 数码兽可以发明技能和知识、知识沿社交网络传播、世界级科技树随知识积累逐步解锁——数字世界有了知识经济。
