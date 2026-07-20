@@ -44,7 +44,7 @@ digimon-world/
 │   │   ├── world/           # 世界状态 + 关系 + 经济 + 灾难 + 节日 + 活力
 │   │   ├── llm/             # LLM 客户端
 │   │   └── api/             # FastAPI 接口
-|   └── tests/               # 1222 测试
+|   └── tests/               # 1376 测试
 └── src/index.js             # Cloudflare Worker (API反代)
 ```
 
@@ -79,6 +79,7 @@ digimon-world/
 | **25** | 🔍 上下文质量与可靠性工程 — 六维健康雷达 + 自动优化 | ✅ 完成 |
 | **26** | 🧬 社会互动驱动的人格动态演化 — 社会影响力 + 人格转变 | ✅ 完成 |
 | **27** | 🧠 知识经济与科技树 — 知识发明/引用/传播/科技树解锁 | ✅ 完成 |
+| **28** | 🪞 Agent 自我认知与叙事一致性引擎 — SelfModel + ToM + 叙事一致性 | ✅ 完成 |
 
 详细见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
@@ -106,7 +107,7 @@ cd backend && source .venv/bin/activate && python -m pytest tests/ -q
 ## 📊 当前状态
 
 - **数码兽**: 100 只（亚古兽/加布兽/比丘兽/甲虫兽/巴鲁兽/哥玛兽/巴达兽/迪路兽/小狗兽/艾力兽 + 病毒种/数据种/自由种）
-- **测试**: 1222 passed
+- **测试**: 1376 passed
 - **部署**: Cloudflare Workers + Tunnel
 - **每日调研**: 08:30 自动跑 arXiv + GitHub + 数码宝贝原作
 
