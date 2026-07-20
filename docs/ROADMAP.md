@@ -536,3 +536,27 @@
 **进度**: Task 1-6 全部完成 (1222 tests, 64/64 verify_phase27 PASS)，Phase 27 ✅ 100%。
 
 **完成标志**: 数码兽可以发明技能和知识、知识沿社交网络传播、世界级科技树随知识积累逐步解锁——数字世界有了知识经济。
+
+---
+
+## Phase 28: Agent 自我认知与叙事一致性引擎 🚧 (进行中)
+
+**目标**: 数码兽从"会行动的 agent"升级为"有自我认知的数字生命"。每只数码兽维护一个**自我模型**（我是谁、我擅长什么、我在世界中的位置），并能**推理其他数码兽的认知状态**（它知道什么、它想要什么）。同时引入叙事一致性引擎确保长时距模拟中不出现关系/空间/剧情的自相矛盾。
+
+**论文依据**:
+- EvoSpark (arXiv:2604.12776) — Social Memory Stacking + Narrative-Spatial Dissonance 检测
+- SARSI (arXiv:2607.12254) — 持久自我模型驱动的递归自我改进
+- MetaMind (arXiv:2603.00808) — Meta-Theory of Mind: agent 建模其他 agent 的认知状态
+
+**基础设施**: Phase 17 (MBTI 人格) + Phase 18 (记忆自主权) + Phase 20 (世界模型) + Phase 26 (人格动态演化) + Phase 27 (知识经济)
+
+- [ ] Task 1 — `self_model.py` 核心模块: SelfModel 数据类 + SelfEvaluator (计算/调整/目标) + SelfModelRegistry ✅ (68 tests)
+- [ ] Task 2 — `theory_of_mind.py` 核心模块: MentalStateModel (建模其他 agent 信念/欲望/意图) + BeliefUpdate + StrategicReasoning + TheoryOfMindRegistry
+- [ ] Task 3 — `narrative_coherence.py` 核心模块: RelationConflictDetector + SpatialNarrativeBinder + CoherenceReport
+- [ ] Task 4 — Scheduler 集成 + API 端点
+- [ ] Task 5 — 前端「自我认知」面板 (雷达图 + ToM视图 + 叙事健康)
+- [ ] Task 6 — 端到端验证 + ROADMAP/README 更新
+
+**进度**: Task 1 ✅ (68 tests, `__init__.py` 导出). Task 2-3 进行中.
+
+**完成标志**: 数码兽拥有自我认知、能揣测他人的意图、世界叙事保持内在一致性——从复杂 automaton 到数字生命的关键一跃。
