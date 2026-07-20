@@ -1435,8 +1435,9 @@
         let contextHealthData = null;
         let selfModelData = null;
         let tomData = null;
+        let lineageData = null;
         try {
-            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp, enResp, chResp, smResp, tomResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp, enResp, chResp, smResp, tomResp, lnResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
@@ -1450,6 +1451,7 @@
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/context-health', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/self', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/tom', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/lineage/' + encodeURIComponent(name), { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
@@ -1464,6 +1466,7 @@
             if (chResp.ok) contextHealthData = await chResp.json();
             if (smResp.ok) selfModelData = await smResp.json();
             if (tomResp.ok) tomData = await tomResp.json();
+            if (lnResp.ok) lineageData = await lnResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -1705,6 +1708,13 @@
         }
         if (tomData && tomData.mental_models && tomData.mental_models.length > 0) {
             renderTheoryOfMind(sb, tomData);
+        }
+
+        // ══════════════════════════════════════════════
+        //  Phase 30: 家族树面板
+        // ══════════════════════════════════════════════
+        if (lineageData && lineageData.generation != null) {
+            renderFamilyTree(sb, lineageData);
         }
     }
 
@@ -4376,12 +4386,107 @@
             '</div>');
     }
 
+    // ══════════════════════════════════════════════
+    //  Phase 30: 家族树面板 — renderFamilyTree
+    // ══════════════════════════════════════════════
+
+    /**
+     * 渲染数码兽家族树面板。
+     * 显示: 世代标签 + 父母 + 子女 + 兄弟姐妹 + 孵化中的蛋。
+     */
+    function renderFamilyTree(sb, data) {
+        var generation = data.generation || 0;
+        var parents = data.parents || [];
+        var children = data.children || [];
+        var siblings = data.siblings || [];
+        var eggs = data.eggs_as_parent || [];
+        var hatched = data.hatched_eggs || [];
+        var genLabel = generation === 0 ? '始祖 👑' : '第' + generation + '代';
+
+        // 父母行
+        var parentsHtml = '';
+        if (Array.isArray(parents) && parents.length > 0) {
+            parentsHtml = '<div class=\"phase30-fam-row\">' +
+                '<span class=\"phase30-fam-label\">👆 父母</span>' +
+                '<span class=\"phase30-fam-names\">' + parents.map(escapeHtml).join(', ') + '</span>' +
+                '</div>';
+        } else if (generation > 0) {
+            parentsHtml = '<div class=\"phase30-fam-row\">' +
+                '<span class=\"phase30-fam-label\">👆 父母</span>' +
+                '<span class=\"phase30-fam-names\" style=\"opacity:0.5\">未知（野生数码兽）</span>' +
+                '</div>';
+        }
+
+        // 子女行
+        var childrenHtml = '';
+        if (Array.isArray(children) && children.length > 0) {
+            childrenHtml = '<div class=\"phase30-fam-row\">' +
+                '<span class=\"phase30-fam-label\">👇 子女</span>' +
+                '<span class=\"phase30-fam-names\">' + children.map(escapeHtml).join(', ') + '</span>' +
+                '</div>';
+        }
+
+        // 兄弟姐妹行
+        var siblingsHtml = '';
+        if (Array.isArray(siblings) && siblings.length > 0) {
+            siblingsHtml = '<div class=\"phase30-fam-row\">' +
+                '<span class=\"phase30-fam-label\">↔️ 兄弟姐妹</span>' +
+                '<span class=\"phase30-fam-names\">' + siblings.map(escapeHtml).join(', ') + '</span>' +
+                '</div>';
+        }
+
+        // 蛋行
+        var eggsHtml = '';
+        if (Array.isArray(eggs) && eggs.length > 0) {
+            var eggItems = eggs.map(function(e) {
+                var pct = Math.round((e.hatch_progress || 0) * 100);
+                var emoji = pct >= 90 ? '🥚' : '🥚';
+                return '<span class=\"phase30-egg-item\">' + emoji +
+                    '<span class=\"phase30-egg-progress\" style=\"width:' + pct + '%\"></span>' +
+                    pct + '%</span>';
+            }).join(' ');
+            eggsHtml = '<div class=\"phase30-fam-row\">' +
+                '<span class=\"phase30-fam-label\">🥚 孵化中</span>' +
+                '<span class=\"phase30-fam-names\">' + eggItems + '</span>' +
+                '</div>';
+        }
+
+        // 已孵化后代
+        var hatchedHtml = '';
+        if (Array.isArray(hatched) && hatched.length > 0) {
+            var hatchedItems = hatched.map(function(h) {
+                var childName = h.child || '??';
+                return '<span class=\"phase30-hatched-item\">🐣' + escapeHtml(childName) + '</span>';
+            }).join(', ');
+            hatchedHtml = '<div class=\"phase30-fam-row\">' +
+                '<span class=\"phase30-fam-label\">🐣 已孵化</span>' +
+                '<span class=\"phase30-fam-names\">' + hatchedItems + '</span>' +
+                '</div>';
+        }
+
+        var noData = !parentsHtml && !childrenHtml && !siblingsHtml && !eggsHtml && !hatchedHtml;
+
+        sb.insertAdjacentHTML('beforeend',
+            '<div class=\"detail-block\">' +
+            '<h4>🌳 家族树 <span class=\"phase30-gen-badge\">' + genLabel + '</span></h4>' +
+            (noData
+                ? '<p class=\"dir-hint\">始祖数码兽 — 暂无家族成员。等待繁衍系统产生后代…</p>'
+                : '<div class=\"phase30-family-tree\">' +
+                  parentsHtml +
+                  childrenHtml +
+                  siblingsHtml +
+                  eggsHtml +
+                  hatchedHtml +
+                  '</div>') +
+            '</div>');
+    }
+
     start();
 
     // 暴露调试接口
     window.DigimonWorld = {
         version: '2.0.0',
-        phase: 28,
+        phase: 30,
         getState: () => state,
         refresh: async () => { await fetchDigimon(); render(); },
         getCamera: () => ({ cameraX, cameraY, zoom }),

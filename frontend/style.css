@@ -934,3 +934,79 @@ html, body {
     display: block;
     margin: 0 auto;
 }
+
+/* ===== Phase 30: 家族树面板 ===== */
+
+.phase30-gen-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffd700;
+    background: rgba(255, 215, 0, 0.12);
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.phase30-family-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+}
+
+.phase30-fam-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 3px 4px;
+    background: rgba(128, 128, 128, 0.06);
+    border-radius: 3px;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.phase30-fam-label {
+    flex-shrink: 0;
+    width: 70px;
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.phase30-fam-names {
+    flex: 1;
+    min-width: 0;
+    word-break: break-all;
+    color: var(--text-primary);
+}
+
+.phase30-egg-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(255, 215, 0, 0.08);
+    font-size: 10px;
+    font-weight: 600;
+    margin-right: 4px;
+    margin-bottom: 2px;
+}
+
+.phase30-egg-progress {
+    display: inline-block;
+    height: 4px;
+    background: #ffd700;
+    border-radius: 2px;
+    min-width: 2px;
+    vertical-align: middle;
+}
+
+.phase30-hatched-item {
+    display: inline-block;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(0, 212, 170, 0.08);
+    font-size: 10px;
+    margin-right: 3px;
+}
