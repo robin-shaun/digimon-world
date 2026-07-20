@@ -554,9 +554,9 @@
 - [x] Task 2 — `theory_of_mind.py` 核心模块: MentalStateModel (建模其他 agent 信念/欲望/意图) + BeliefUpdate + StrategicReasoning + TheoryOfMindRegistry ✅ (55 tests)
 - [x] Task 3 — `narrative_coherence.py` 核心模块: RelationConflictDetector + SpatialNarrativeBinder + CoherenceReport ✅ (52 tests)
 - [x] Task 4 — Scheduler 集成 + API 端点 ✅ (self/tom/coherence 三个端点, 176 行集成)
-- [ ] Task 5 — 前端「自我认知」面板 (雷达图 + ToM视图 + 叙事健康)
+- [x] Task 5 — 前端「自我认知」面板 ✅ (雷达图: identity vs self_assessment 四维 + 改进目标进度条 + ToM 心智模型卡片 + 223行 CSS)
 - [ ] Task 6 — 端到端验证 + ROADMAP/README 更新
 
-**进度**: Tasks 1-4 ✅ (175 tests + 3 API endpoints). Task 5 进行中 — 前端面板.
+**进度**: Tasks 1-5 ✅ (175 backend tests + 3 API endpoints + 前端面板). Task 6 进行中 — 端到端验证.
 
 **完成标志**: 数码兽拥有自我认知、能揣测他人的意图、世界叙事保持内在一致性——从复杂 automaton 到数字生命的关键一跃。

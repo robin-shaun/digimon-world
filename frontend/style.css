@@ -803,3 +803,134 @@ html, body {
     .narrative-panel { width: 280px; top: 48px; }
     .panel-toggle-btn { width: 32px; height: 32px; font-size: 16px; }
 }
+
+/* ══════════════════════════════════════════════
+   Phase 28: 自我认知面板 (Self-Model + ToM)
+   ══════════════════════════════════════════════ */
+
+.phase28-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: normal;
+    margin-left: 6px;
+}
+
+/* 改进目标列表 */
+.phase28-goals {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0;
+}
+
+.phase28-goals li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 11px;
+}
+
+.phase28-goal-dim {
+    min-width: 5em;
+    color: var(--text-secondary);
+    font-variant: small-caps;
+    font-weight: bold;
+    font-size: 10px;
+}
+
+.phase28-goal-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--surface-light);
+    border-radius: 4px;
+    overflow: hidden;
+    display: inline-block;
+}
+
+.phase28-goal-fill {
+    display: block;
+    height: 100%;
+    background: var(--accent-cyan);
+    border-radius: 4px;
+    font-size: 7px;
+    color: white;
+    text-align: right;
+    padding-right: 3px;
+    line-height: 8px;
+    min-width: fit-content;
+}
+
+.phase28-goal-target {
+    min-width: 3em;
+    font-size: 10px;
+    color: var(--accent-gold);
+    text-align: right;
+}
+
+/* 心智理论列表 */
+.phase28-tom-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.phase28-tom-item {
+    padding: 8px 10px;
+    background: var(--surface-light);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+.phase28-tom-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.phase28-tom-name {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.phase28-tom-conf {
+    font-size: 11px;
+    font-weight: bold;
+    font-family: 'SF Mono', Consolas, monospace;
+}
+
+.phase28-tom-bar-bg {
+    height: 4px;
+    background: var(--surface-light);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.phase28-tom-bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+.phase28-tom-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.phase28-tom-meta strong {
+    color: var(--accent-cyan);
+    font-weight: bold;
+}
+
+/* 自我认知雷达图 Canvas */
+.self-model-radar-canvas {
+    display: block;
+    margin: 0 auto;
+}

@@ -1433,8 +1433,10 @@
         let insightsData = null;
         let energyData = null;
         let contextHealthData = null;
+        let selfModelData = null;
+        let tomData = null;
         try {
-            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp, enResp, chResp] = await Promise.all([
+            const [dResp, rResp, aResp, relResp, pResp, mhResp, plResp, wmResp, insResp, enResp, chResp, smResp, tomResp] = await Promise.all([
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name), { cache: 'no-store' }),
                 fetch(API_BASE + '/api/relationships', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/achievements', { cache: 'no-store' }),
@@ -1446,6 +1448,8 @@
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/insights', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/energy', { cache: 'no-store' }),
                 fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/context-health', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/self', { cache: 'no-store' }),
+                fetch(API_BASE + '/api/digimon/' + encodeURIComponent(name) + '/tom', { cache: 'no-store' }),
             ]);
             if (dResp.ok) detail = await dResp.json();
             if (rResp.ok) pairs = (await rResp.json()).pairs || [];
@@ -1458,6 +1462,8 @@
             if (insResp.ok) insightsData = await insResp.json();
             if (enResp.ok) energyData = await enResp.json();
             if (chResp.ok) contextHealthData = await chResp.json();
+            if (smResp.ok) selfModelData = await smResp.json();
+            if (tomResp.ok) tomData = await tomResp.json();
         } catch (e) {
             console.warn('[sidebar] 详情加载失败:', e.message);
         }
@@ -1689,6 +1695,16 @@
         // ══════════════════════════════════════════════
         if (contextHealthData && contextHealthData.composite_health != null) {
             renderContextHealth(sb, contextHealthData);
+        }
+
+        // ══════════════════════════════════════════════
+        //  Phase 28: 自我认知面板 (Self-Model + ToM)
+        // ══════════════════════════════════════════════
+        if (selfModelData && selfModelData.status !== 'not_initialized') {
+            renderSelfModel(sb, selfModelData);
+        }
+        if (tomData && tomData.mental_models && tomData.mental_models.length > 0) {
+            renderTheoryOfMind(sb, tomData);
         }
     }
 
@@ -4135,12 +4151,237 @@
         }
     }
 
+    // ══════════════════════════════════════════════
+    //  Phase 28: 自我认知面板 — renderSelfModel
+    // ══════════════════════════════════════════════
+
+    /**
+     * 渲染 Agent 自我模型面板。
+     * 包含: 4维能力雷达图 (identity vs self_assessment) + 改进目标列表。
+     */
+    function renderSelfModel(sb, data) {
+        var identity = data.identity || {};
+        var assessment = data.self_assessment || {};
+        var uncertainty = data.uncertainty || {};
+        var goals = data.improvement_goals || [];
+        var lastTick = data.last_introspection_tick || 0;
+
+        var dimKeys = ['combat_score', 'social_score', 'exploration_score', 'knowledge_score'];
+        var dimLabels = ['⚔️战斗', '💬社交', '🗺️探索', '📚知识'];
+        var dimColors = ['#ff6b6b', '#feca57', '#48dbfb', '#a29bfe'];
+
+        sb.insertAdjacentHTML('beforeend',
+            '<div class="detail-block">' +
+            '<h4>🧘 自我认知 <span class="phase28-meta">tick ' + lastTick + '</span></h4>' +
+            '<canvas class="self-model-radar-canvas" width="300" height="260"></canvas>' +
+            (goals.length > 0
+                ? '<h5 style="margin-top:6px;color:var(--text-secondary);font-size:11px;">🎯 改进目标</h5>' +
+                  '<ul class="phase28-goals">' + goals.map(function(g) {
+                      return '<li><span class="phase28-goal-dim">' + escapeHtml(g.dimension) + '</span>' +
+                          '<span class="phase28-goal-bar"><span class="phase28-goal-fill" style="width:' +
+                          Math.round(g.current * 100) + '%">' + Math.round(g.current * 100) + '%</span></span>' +
+                          '<span class="phase28-goal-target">→' + Math.round(g.target * 100) + '%</span></li>';
+                  }).join('') + '</ul>'
+                : '<p class="dir-hint">暂无改进目标 — 各项能力已达标 ✨</p>') +
+            '</div>');
+
+        var canvas = sb.querySelector('.self-model-radar-canvas');
+        if (canvas) drawSelfModelRadar(canvas, identity, assessment, uncertainty, dimKeys, dimLabels, dimColors);
+    }
+
+    /**
+     * 绘制 4 维自我认知雷达图。
+     * 显示 identity（实际能力，虚线）和 self_assessment（自我认知，实线填充）。
+     */
+    function drawSelfModelRadar(canvas, identity, assessment, uncertainty, dimKeys, dimLabels, colors) {
+        var c = canvas.getContext('2d');
+        var w = canvas.width;   // 300
+        var h = canvas.height;  // 260
+        var cx = w / 2;
+        var cy = h / 2 + 5;
+        var radius = Math.min(w, h) * 0.30;
+        var numAxes = dimKeys.length;
+        var angleStep = (2 * Math.PI) / numAxes;
+        var startAngle = -Math.PI / 2;
+
+        // 暗色背景
+        c.fillStyle = 'rgba(10, 14, 39, 0.6)';
+        c.fillRect(0, 0, w, h);
+
+        // ── 网格同心环 ──
+        for (var ring = 1; ring <= 4; ring++) {
+            var ringR = (radius / 4) * ring;
+            c.beginPath();
+            c.strokeStyle = '#1a1f3a';
+            c.lineWidth = ring === 4 ? 1.5 : 0.5;
+            for (var i = 0; i <= numAxes; i++) {
+                var a = startAngle + i * angleStep;
+                var x = cx + ringR * Math.cos(a);
+                var y = cy + ringR * Math.sin(a);
+                if (i === 0) c.moveTo(x, y);
+                else c.lineTo(x, y);
+            }
+            c.closePath();
+            c.stroke();
+        }
+
+        // ── 轴线 + 标签 ──
+        for (var i = 0; i < numAxes; i++) {
+            var a = startAngle + i * angleStep;
+            c.beginPath();
+            c.strokeStyle = '#2a2f4a';
+            c.lineWidth = 1;
+            c.moveTo(cx, cy);
+            c.lineTo(cx + radius * Math.cos(a), cy + radius * Math.sin(a));
+            c.stroke();
+
+            // 标签
+            var labelR = radius + 18;
+            var lx = cx + labelR * Math.cos(a);
+            var ly = cy + labelR * Math.sin(a);
+            c.fillStyle = colors[i];
+            c.font = '11px system-ui, sans-serif';
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.fillText(dimLabels[i], lx, ly);
+        }
+
+        // ── identity 多边形（虚线，半透明）──
+        c.beginPath();
+        c.strokeStyle = '#888';
+        c.lineWidth = 1.5;
+        c.setLineDash([4, 3]);
+        c.fillStyle = 'rgba(136, 136, 136, 0.08)';
+        for (var i = 0; i <= numAxes; i++) {
+            var idx = i % numAxes;
+            var v = identity[dimKeys[idx]] || 0;
+            var r = v * radius;
+            var a = startAngle + idx * angleStep;
+            var x = cx + r * Math.cos(a);
+            var y = cy + r * Math.sin(a);
+            if (i === 0) c.moveTo(x, y);
+            else c.lineTo(x, y);
+        }
+        c.closePath();
+        c.fill();
+        c.stroke();
+        c.setLineDash([]);
+
+        // ── self_assessment 多边形（实线，彩色填充）──
+        c.beginPath();
+        c.lineWidth = 2;
+        for (var i = 0; i <= numAxes; i++) {
+            var idx = i % numAxes;
+            var v = assessment[dimKeys[idx]] || 0;
+            var r = v * radius;
+            var a = startAngle + idx * angleStep;
+            var x = cx + r * Math.cos(a);
+            var y = cy + r * Math.sin(a);
+            if (i === 0) c.moveTo(x, y);
+            else c.lineTo(x, y);
+        }
+        c.closePath();
+
+        // 渐变填充
+        var grad = c.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, 'rgba(0, 212, 170, 0.25)');
+        grad.addColorStop(1, 'rgba(0, 212, 170, 0.05)');
+        c.fillStyle = grad;
+        c.fill();
+
+        c.strokeStyle = '#00d4aa';
+        c.stroke();
+
+        // ── 图例 ──
+        var legendY = h - 18;
+        c.font = '10px system-ui, sans-serif';
+
+        // identity 虚线
+        c.beginPath();
+        c.strokeStyle = '#888';
+        c.lineWidth = 1;
+        c.setLineDash([3, 2]);
+        c.moveTo(18, legendY);
+        c.lineTo(48, legendY);
+        c.stroke();
+        c.setLineDash([]);
+        c.fillStyle = '#888';
+        c.textAlign = 'left';
+        c.textBaseline = 'middle';
+        c.fillText('实际能力', 52, legendY);
+
+        // self_assessment 实线
+        c.beginPath();
+        c.strokeStyle = '#00d4aa';
+        c.lineWidth = 2;
+        c.moveTo(130, legendY);
+        c.lineTo(160, legendY);
+        c.stroke();
+        c.fillStyle = '#00d4aa';
+        c.fillText('自我认知', 164, legendY);
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 28: 心智理论面板 — renderTheoryOfMind
+    // ══════════════════════════════════════════════
+
+    /**
+     * 渲染 Agent Theory of Mind 面板。
+     * 显示该数码兽对其他数码兽的心智模型（按置信度排序，取前 5）。
+     */
+    function renderTheoryOfMind(sb, data) {
+        var models = (data.mental_models || []).slice();
+        // 按 confidence 降序
+        models.sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); });
+        var topModels = models.slice(0, 5);
+
+        var itemsHtml = topModels.map(function(m) {
+            var confPct = Math.round((m.confidence || 0) * 100);
+            var confColor = confPct >= 60 ? '#00d4aa' : confPct >= 30 ? '#feca57' : '#ff6b6b';
+            var topIntent = '';
+            var topIntentVal = 0;
+            var intentions = m.intentions || {};
+            for (var k in intentions) {
+                if (intentions[k] > topIntentVal) { topIntentVal = intentions[k]; topIntent = k; }
+            }
+            var intentLabels = { move: '移动', attack: '攻击', talk: '对话', gather: '采集', flee: '逃跑', idle: '待机', trade: '交易', heal: '治疗' };
+            var intentLabel = intentLabels[topIntent] || topIntent;
+
+            var beliefs = m.beliefs || {};
+            var beliefParts = [];
+            if (beliefs.danger_level > 0.5) beliefParts.push('⚠️危险');
+            if (beliefs.others_friendly > 0.5) beliefParts.push('🤝友好');
+            if (beliefs.resources_scarce > 0.5) beliefParts.push('📉资源紧缺');
+
+            return '<div class="phase28-tom-item">' +
+                '<div class="phase28-tom-head">' +
+                '<span class="phase28-tom-name">' + escapeHtml(m.target_name) + '</span>' +
+                '<span class="phase28-tom-conf" style="color:' + confColor + '">' + confPct + '%</span>' +
+                '</div>' +
+                '<div class="phase28-tom-bar-bg"><span class="phase28-tom-bar-fill" style="width:' + confPct + '%;background:' + confColor + '"></span></div>' +
+                '<div class="phase28-tom-meta">' +
+                '<span>预测意图: <strong>' + intentLabel + '</strong></span>' +
+                (beliefParts.length > 0 ? '<span>认为: ' + beliefParts.join(', ') + '</span>' : '') +
+                '<span>观察 ' + (m.observation_count || 0) + '次</span>' +
+                '</div>' +
+                '</div>';
+        }).join('');
+
+        sb.insertAdjacentHTML('beforeend',
+            '<div class="detail-block">' +
+            '<h4>🔮 心智理论 <span class="phase28-meta">' + (data.count || 0) + '个模型</span></h4>' +
+            (itemsHtml
+                ? '<div class="phase28-tom-list">' + itemsHtml + '</div>'
+                : '<p class="dir-hint">尚未对其他数码兽建立足够的心智模型</p>') +
+            '</div>');
+    }
+
     start();
 
     // 暴露调试接口
     window.DigimonWorld = {
         version: '2.0.0',
-        phase: 21,
+        phase: 28,
         getState: () => state,
         refresh: async () => { await fetchDigimon(); render(); },
         getCamera: () => ({ cameraX, cameraY, zoom }),
