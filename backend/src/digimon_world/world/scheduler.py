@@ -37,7 +37,7 @@ from .daynight import DayNightSystem, get_daynight_system
 from .ecology import EcologySystem, get_ecology_system
 from .environmental_events import EnvironmentalEventSystem, get_env_events_system
 from .events import CHECK_INTERVAL_TICKS, StoryDirector
-from .factions import FactionRegistry
+from .factions import FactionRegistry, get_registry
 from .festivals import FestivalSystem, get_festival_system
 from .interactions import detect_proximity
 from .landmarks import LandmarkSystem, get_landmark_system
@@ -492,6 +492,105 @@ class WorldScheduler:
                     )
         except Exception as e:
             logger.debug("Narrative coherence check failed: %s", e)
+        # 9.89 Phase 29: 世界年鉴 — epoch 边界生成章节
+        try:
+            from .world_almanac import get_almanac
+
+            almanac = get_almanac()
+            # 统计本 epoch 的有效事件数
+            epoch_events = [
+                e for e in self._world.events
+                if e.get("tick", -1) > almanac._last_archived_tick
+            ]
+            if almanac.should_generate(self._tick_count, len(epoch_events)):
+                # 构建 digimon 数据快照
+                digimon_data: list[dict[str, Any]] = []
+                for agent in agents:
+                    d: dict[str, Any] = {
+                        "name": agent.name,
+                        "energy": {
+                            "current": getattr(agent, "energy", 100),
+                        },
+                        "personality": {
+                            "mbti": getattr(agent, "mbti_type", "UNKN"),
+                        },
+                        "region_id": agent.region_id,
+                        "evolution": {
+                            "stage": agent.stage.value if hasattr(agent, "stage") else "rookie",
+                        },
+                        "battle_victories": getattr(agent, "battle_victories", 0),
+                        "memory_count": (
+                            len(getattr(agent, "memory_stream", type("M", (), {"memories": []})()).memories)
+                        ),
+                        "knowledge_invented": getattr(agent, "invention_count", 0),
+                        "energy_donated": 0.0,
+                        "evolution_score": 0,
+                        "knowledge_citations": getattr(agent, "knowledge_citations", 0),
+                    }
+                    digimon_data.append(d)
+
+                # 构建 snapshot_data
+                snapshot_data: dict[str, Any] = {
+                    "total_knowledge_items": 0,
+                    "total_conventions": 0,
+                    "faction_count": 0,
+                    "avg_coherence_score": 0.0,
+                }
+                try:
+                    from ..economy.knowledge_economy import get_knowledge_pool
+
+                    pool = get_knowledge_pool()
+                    snapshot_data["total_knowledge_items"] = len(pool.items) if hasattr(pool, "items") else 0
+                except Exception:
+                    pass
+                try:
+                    # Use top-level import to avoid shadowing
+                    cp = get_convention_pool()
+                    snapshot_data["total_conventions"] = len(cp.active) if hasattr(cp, "active") else 0
+                except Exception:
+                    pass
+                try:
+                    registry = get_registry()
+                    snapshot_data["faction_count"] = len(registry.all_factions())
+                except Exception:
+                    pass
+                try:
+                    from .narrative_coherence import get_coherence_engine
+
+                    ce = get_coherence_engine()
+                    snapshot_data["avg_coherence_score"] = (
+                        ce.last_score if hasattr(ce, "last_score") else 0.0
+                    )
+                except Exception:
+                    pass
+
+                chapter = almanac.generate_chapter(
+                    tick=self._tick_count,
+                    world_time=self._clock.now.isoformat() if self._clock.now else f"Day {self._tick_count//1440}",
+                    snapshot_data=snapshot_data,
+                    events=self._world.events,
+                    digimon_data=digimon_data,
+                )
+                almanac.archive(chapter)
+                # 广播为世界事件
+                almanac_event = {
+                    "type": "almanac_chapter",
+                    "description": f"年鉴第 {chapter.epoch} 章已归档 (tick {chapter.tick_start}-{chapter.tick_end})",
+                    "tick": self._tick_count,
+                    "at": self._clock.now.isoformat() if self._clock.now else None,
+                    "significance": 5,
+                    "epoch": chapter.epoch,
+                    "event_count": chapter.event_count,
+                }
+                self._world.events.append(almanac_event)
+                logger.info(
+                    "WorldAlmanac: Chapter %d archived (%d ticks, %d events)",
+                    chapter.epoch,
+                    chapter.tick_end - chapter.tick_start,
+                    chapter.event_count,
+                )
+        except Exception as e:
+            logger.debug("WorldAlmanac step failed: %s", e)
         # 9.9 Phase 25 上下文质量检测阶段:
         #    对每只 agent 生成 ContextQualitySnapshot，诊断问题，
         #    低健康分数的 agent 自动触发优化建议

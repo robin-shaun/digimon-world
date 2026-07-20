@@ -75,6 +75,7 @@ from ..world import (
     get_world,
     persistence,
 )
+from .almanac import router as almanac_router
 from .context_health import (
     digimon_context_health_router,
 )
@@ -237,6 +238,9 @@ app.include_router(digimon_conventions_router)
 # Phase 25: 上下文质量路由
 app.include_router(context_health_router)
 app.include_router(digimon_context_health_router)
+
+# Phase 29: 世界年鉴路由
+app.include_router(almanac_router)
 
 
 # ---- Routes ----

@@ -512,6 +512,18 @@ class WorldAlmanac:
 
 # ---- 工厂函数 ----
 
+# ── 模块级单例 ──
+_almanac: WorldAlmanac | None = None
+
+
+def get_almanac() -> WorldAlmanac:
+    """获取全局 WorldAlmanac 单例。首次调用时自动创建。"""
+    global _almanac
+    if _almanac is None:
+        _almanac = WorldAlmanac()
+    return _almanac
+
+
 def create_almanac() -> WorldAlmanac:
-    """创建默认配置的 WorldAlmanac 实例."""
+    """创建默认配置的 WorldAlmanac 实例。"""
     return WorldAlmanac()
