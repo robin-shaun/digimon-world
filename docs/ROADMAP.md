@@ -550,13 +550,13 @@
 
 **基础设施**: Phase 17 (MBTI 人格) + Phase 18 (记忆自主权) + Phase 20 (世界模型) + Phase 26 (人格动态演化) + Phase 27 (知识经济)
 
-- [ ] Task 1 — `self_model.py` 核心模块: SelfModel 数据类 + SelfEvaluator (计算/调整/目标) + SelfModelRegistry ✅ (68 tests)
-- [ ] Task 2 — `theory_of_mind.py` 核心模块: MentalStateModel (建模其他 agent 信念/欲望/意图) + BeliefUpdate + StrategicReasoning + TheoryOfMindRegistry
-- [ ] Task 3 — `narrative_coherence.py` 核心模块: RelationConflictDetector + SpatialNarrativeBinder + CoherenceReport
-- [ ] Task 4 — Scheduler 集成 + API 端点
+- [x] Task 1 — `self_model.py` 核心模块: SelfModel 数据类 + SelfEvaluator (计算/调整/目标) + SelfModelRegistry ✅ (68 tests)
+- [x] Task 2 — `theory_of_mind.py` 核心模块: MentalStateModel (建模其他 agent 信念/欲望/意图) + BeliefUpdate + StrategicReasoning + TheoryOfMindRegistry ✅ (55 tests)
+- [x] Task 3 — `narrative_coherence.py` 核心模块: RelationConflictDetector + SpatialNarrativeBinder + CoherenceReport ✅ (52 tests)
+- [x] Task 4 — Scheduler 集成 + API 端点 ✅ (self/tom/coherence 三个端点, 176 行集成)
 - [ ] Task 5 — 前端「自我认知」面板 (雷达图 + ToM视图 + 叙事健康)
 - [ ] Task 6 — 端到端验证 + ROADMAP/README 更新
 
-**进度**: Task 1 ✅ (68 tests, `__init__.py` 导出). Task 2-3 进行中.
+**进度**: Tasks 1-4 ✅ (175 tests + 3 API endpoints). Task 5 进行中 — 前端面板.
 
 **完成标志**: 数码兽拥有自我认知、能揣测他人的意图、世界叙事保持内在一致性——从复杂 automaton 到数字生命的关键一跃。
