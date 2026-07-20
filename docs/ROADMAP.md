@@ -562,3 +562,24 @@
 **进度**: Tasks 1-6 全部完成。175 backend tests + 76 verify checks + 3 API endpoints + 前端面板。
 
 **完成标志**: 数码兽拥有自我认知、能揣测他人的意图、世界叙事保持内在一致性——从复杂 automaton 到数字生命的关键一跃。 ✅
+
+---
+
+## Phase 29: 世界年鉴与历史叙事 ✅ (进行中)
+
+**目标**: 28 个 Phase 构建了丰富的世界数据（关系、能量、知识、派系、人格、叙事一致性）——但没有一个结构化的**世界历史档案馆**来纵览这一切。Phase 29 构建 `WorldAlmanac`，每隔 epoch（默认 100 tick / 关键事件触发）自动生成一个「年鉴章节」——当前世界状态快照 + 重要事件 + 趋势分析 + 数码兽名人堂。
+
+**设计原则**:
+- 纯数据聚合，无 LLM 依赖（快速、低成本、可测试）
+- 章节不可变（append-only），生成后永不被重写
+- 支持按时间索引、按类别过滤
+
+**基础设施**: Phase 14 (叙事) + Phase 20 (世界模型) + Phase 22 (共享惯例) + Phase 24 (能量经济) + Phase 27 (知识经济) + Phase 28 (叙事一致性)
+
+- [x] Task 1 — `world_almanac.py` 核心模块: AlmanacChapter (章节数据类: 世界快照 + 事件精选 + 趋势 + 名人堂) + WorldAlmanac (章节生成/索引/过滤/导出)
+- [ ] Task 2 — Scheduler 集成 + API 端点: `GET /api/almanac` (章节列表)、`GET /api/almanac/{epoch}` (单章详情)、`GET /api/almanac/current` (当前 epoch 快照)
+- [ ] Task 3 — 前端「📖 世界年鉴」面板: 章节时间线 + 趋势图 + 名人堂排行榜
+- [ ] Task 4 — 端到端验证: verify_phase29.py
+- [ ] Task 5 — ROADMAP + README 更新
+
+**完成标志**: 数码世界有了一本自动更新的历史书——可翻阅、可检索、可追溯任何时刻的世界状态。

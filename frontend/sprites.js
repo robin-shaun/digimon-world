@@ -18,7 +18,53 @@ window.SPRITE_PIXEL = (function () {
     const B  = '#000000';  // black
     const H  = '#FFF8DC';  // highlight
     const LW = 3;            // default line width
-    const SZ = 128;          // target canvas size
+    const SZ = 256;          // target canvas size
+
+    // ── Image-based sprite loader (PNG pre-renders at 512×512) ──────
+
+    const IMG_BASE = 'sprites/';          // path to PNG directory
+    const IMG_SZ  = 512;                  // native PNG resolution
+
+    const imageCache       = new Map();   // species → Image (loaded)
+    const loadingPromises  = new Map();   // species → Promise<Image>
+
+    /** Start async loading of a PNG sprite. Returns a Promise<Image>. */
+    function loadImage(species) {
+        if (imageCache.has(species)) return Promise.resolve(imageCache.get(species));
+        if (loadingPromises.has(species)) return loadingPromises.get(species);
+
+        const img = new Image();
+        const promise = new Promise((resolve, reject) => {
+            img.onload = () => {
+                imageCache.set(species, img);
+                loadingPromises.delete(species);
+                resolve(img);
+            };
+            img.onerror = () => {
+                loadingPromises.delete(species);
+                reject(new Error('Failed to load ' + species));
+            };
+            img.src = IMG_BASE + species + '.png';
+        });
+        loadingPromises.set(species, promise);
+        return promise;
+    }
+
+    /** Synchronous lookup: returns loaded Image or null. */
+    function getLoadedImage(species) {
+        const img = imageCache.get(species);
+        if (img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+            return img;
+        }
+        return null;
+    }
+
+    /** Kick off async preload for a single species. No-op if already loaded/loading. */
+    function preloadImage(species) {
+        if (!imageCache.has(species) && !loadingPromises.has(species)) {
+            loadImage(species).catch(() => {});
+        }
+    }
 
     // ── Helper drawing functions ────────────────────────────────────
 
@@ -4140,7 +4186,15 @@ window.SPRITE_PIXEL = (function () {
     const spriteCache = new Map();
 
     /**
-     * Render a species to a 128×128 offscreen canvas.
+     * Render a species to a 256×256 offscreen canvas.
+     *
+     * Strategy (in order of preference):
+     *   1. If the PNG image is already loaded → render from 512×512 image (HQ).
+     *   2. If the PNG is not loaded yet → kick off async load, fall back to
+     *      procedural DRAW_FUNCS (instant, always available).  When the PNG
+     *      arrives, the cache entry is invalidated so the next call picks it up.
+     *   3. If PNG fails to load → DRAW_FUNCS forever (graceful degradation).
+     *
      * @param {string} species - species name
      * @param {string|number|null} frame - ignored (procedural sprites are frame-agnostic)
      * @returns {HTMLCanvasElement}
@@ -4155,18 +4209,47 @@ window.SPRITE_PIXEL = (function () {
         if (!DRAW_FUNCS[key]) key = '_default';
 
         // Frame suffix (idle1, idle2, walk1, walk2) — for caching key only.
-        // Procedural sprites don't have anim frames, but we keep the API compatible.
         const frameKey = frame || 'default';
         const cacheKey = key + '::' + frameKey;
 
         if (spriteCache.has(cacheKey)) return spriteCache.get(cacheKey);
 
+        // ── Try PNG image first ──────────────────────────────────────
+        const img = getLoadedImage(key);
+        if (img) {
+            // Render the 512×512 PNG scaled down to SZ (256)
+            const offscreen = document.createElement('canvas');
+            offscreen.width = SZ;
+            offscreen.height = SZ;
+            const ctx = offscreen.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, IMG_SZ, IMG_SZ, 0, 0, SZ, SZ);
+            spriteCache.set(cacheKey, offscreen);
+            return offscreen;
+        }
+
+        // ── PNG not ready — kick off async load (fire-and-forget) ────
+        if (key !== '_default') {
+            preloadImage(key);
+            // Listen for load: when image arrives, clear cache so next
+            // getSprite call renders the HQ version.
+            if (!imageCache.has(key)) {
+                loadImage(key).then(() => {
+                    // Invalidate all frame variants for this species
+                    for (const ck of spriteCache.keys()) {
+                        if (ck.startsWith(key + '::')) spriteCache.delete(ck);
+                    }
+                }).catch(() => { /* will keep using procedural fallback */ });
+            }
+        }
+
+        // ── Fallback: procedural draw function ───────────────────────
         const offscreen = document.createElement('canvas');
         offscreen.width = SZ;
         offscreen.height = SZ;
         const ctx = offscreen.getContext('2d');
 
-        // Draw on a clean canvas
         ctx.clearRect(0, 0, SZ, SZ);
 
         // Scale: the draw functions use 128×128 coordinate system
@@ -4177,15 +4260,16 @@ window.SPRITE_PIXEL = (function () {
         return offscreen;
     }
 
-    /** Batch preload all known species */
+    /** Batch preload all known species (procedural + kick off image loads). */
     function preloadAll() {
         for (const key of Object.keys(DRAW_FUNCS)) {
             if (key === '_default') continue;
-            getSprite(key, null);
+            getSprite(key, null);              // procedural render (instant)
+            preloadImage(key);                 // kick off PNG load (async)
         }
     }
 
-    /** Clear sprite cache */
+    /** Clear sprite cache (does NOT clear image cache — PNGs are permanent). */
     function clearCache() {
         spriteCache.clear();
     }
@@ -4208,52 +4292,52 @@ window.SPRITE_DATA = (function () {
     function _act(frames, fps, loop) { return { frames, fps, loop }; }
 
     const configs = {
-        agumon:        { color: '#FF8C00', accent: '#FFD700', size: 18, actions: { idle: _act(4,3,true), walk: _act(6,8,true), attack: _act(5,12,false), evolve: _act(8,3,false) } },
-        gabumon:       { color: '#4A6FA5', accent: '#E8E8F0', size: 18, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        biyomon:       { color: '#FF69B4', accent: '#FFB6C1', size: 16, actions: { idle: _act(4,4,true), walk: _act(4,8,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
-        tentomon:      { color: '#8B3A8B', accent: '#FF0000', size: 16, actions: { idle: _act(4,3,true), walk: _act(6,6,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        palmon:        { color: '#3CB371', accent: '#FF69B4', size: 18, actions: { idle: _act(4,3,true), walk: _act(6,6,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        gomamon:       { color: '#F0F0FF', accent: '#FF6600', size: 17, actions: { idle: _act(4,3,true), walk: _act(4,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        patamon:       { color: '#FFDAB9', accent: '#FFE4B5', size: 14, actions: { idle: _act(4,4,true), walk: _act(4,7,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
-        tailmon:       { color: '#F5F5DC', accent: '#FFE4E1', size: 16, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
-        plotmon:       { color: '#FFE4C4', accent: '#FFDEAD', size: 15, actions: { idle: _act(4,4,true), walk: _act(6,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        elecmon:       { color: '#FF3333', accent: '#FFD700', size: 16, actions: { idle: _act(4,4,true), walk: _act(6,9,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
-        tsunomon:      { color: '#E6E6FA', accent: '#DDA0DD', size: 15, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,8,false), evolve: _act(8,3,false) } },
-        hagurumon:     { color: '#C0C0C0', accent: '#708090', size: 14, actions: { idle: _act(4,3,true), walk: _act(4,5,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        guardromon:    { color: '#4682B4', accent: '#B0C4DE', size: 20, actions: { idle: _act(4,2,true), walk: _act(4,5,true), attack: _act(4,8,false), evolve: _act(8,3,false) } },
-        andromon:      { color: '#4169E1', accent: '#1E90FF', size: 22, actions: { idle: _act(4,2,true), walk: _act(4,5,true), attack: _act(6,10,false), evolve: _act(8,3,false) } },
-        clockmon:      { color: '#8B7355', accent: '#DAA520', size: 18, actions: { idle: _act(4,3,true), walk: _act(4,5,true), attack: _act(4,8,false), evolve: _act(8,3,false) } },
-        tankmon:       { color: '#556B2F', accent: '#8B8B00', size: 20, actions: { idle: _act(4,2,true), walk: _act(6,6,true), attack: _act(6,10,false), evolve: _act(8,3,false) } },
-        kokuwamon:     { color: '#87CEEB', accent: '#00CED1', size: 15, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        picodevimon:   { color: '#4B0082', accent: '#8B008B', size: 13, actions: { idle: _act(4,4,true), walk: _act(4,7,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
-        blackgabumon:  { color: '#2F4F4F', accent: '#A9A9A9', size: 18, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        devimon:       { color: '#191970', accent: '#DC143C', size: 24, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
-        devidramon:    { color: '#800020', accent: '#FF4500', size: 22, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
-        vamdemon:      { color: '#2C003E', accent: '#8B0000', size: 26, actions: { idle: _act(4,3,true), walk: _act(4,5,true), attack: _act(6,12,false), evolve: _act(12,3,false) } },
-        fantomon:      { color: '#483D8B', accent: '#9370DB', size: 20, actions: { idle: _act(4,3,true), walk: _act(4,5,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        bakemon:       { color: '#A9A9A9', accent: '#D3D3D3', size: 17, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,8,false), evolve: _act(8,3,false) } },
-        renamon:       { color: '#FFD700', accent: '#FFA500', size: 18, actions: { idle: _act(4,4,true), walk: _act(6,8,true), attack: _act(6,14,false), evolve: _act(10,3,false) } },
-        impmon:        { color: '#800080', accent: '#FF6347', size: 16, actions: { idle: _act(4,4,true), walk: _act(6,8,true), attack: _act(6,12,false), evolve: _act(8,3,false) } },
-        dorumon:       { color: '#4682B4', accent: '#87CEFA', size: 17, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
-        wizarmon:      { color: '#6A0DAD', accent: '#00CED1', size: 20, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,12,false), evolve: _act(10,3,false) } },
-        leomon:        { color: '#DAA520', accent: '#FF8C00', size: 24, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
-        greymon:       { color: '#FF8C00', accent: '#1E90FF', size: 24, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
-        garurumon:     { color: '#4A6FA5', accent: '#B0D0FF', size: 24, actions: { idle: _act(4,3,true), walk: _act(6,8,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
-        kabuterimon:   { color: '#4B0082', accent: '#9370DB', size: 22, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(10,3,false) } },
-        togemon:       { color: '#32CD32', accent: '#90EE90', size: 22, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(10,3,false) } },
-        angemon:       { color: '#F5F5F5', accent: '#FFD700', size: 24, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
-        birdramon:     { color: '#FF6347', accent: '#FF4500', size: 26, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
-        garudamon:     { color: '#FFD700', accent: '#FF6347', size: 28, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(12,3,false) } },
-        metalgreymon:  { color: '#FF8C00', accent: '#B0B0B0', size: 28, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(6,10,false), evolve: _act(12,3,false) } },
-        weregarurumon: { color: '#4A6FA5', accent: '#C0C0C0', size: 26, actions: { idle: _act(4,3,true), walk: _act(6,8,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
-        atlurkabuterimon: { color: '#FF0000', accent: '#FFD700', size: 28, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(12,3,false) } },
-        seadramon:     { color: '#00CED1', accent: '#48D1CC', size: 22, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(10,3,false) } },
-        whamon:        { color: '#4A6FA5', accent: '#87CEEB', size: 30, actions: { idle: _act(4,2,true), walk: _act(4,4,true), attack: _act(4,8,false), evolve: _act(10,3,false) } },
-        ikkakumon:     { color: '#F5F5F5', accent: '#FF6600', size: 22, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(10,3,false) } },
-        ogremon:       { color: '#556B2F', accent: '#FF6600', size: 24, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        agumon:        { color: '#FF8C00', accent: '#FFD700', size: 36, actions: { idle: _act(4,3,true), walk: _act(6,8,true), attack: _act(5,12,false), evolve: _act(8,3,false) } },
+        gabumon:       { color: '#4A6FA5', accent: '#E8E8F0', size: 36, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        biyomon:       { color: '#FF69B4', accent: '#FFB6C1', size: 32, actions: { idle: _act(4,4,true), walk: _act(4,8,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
+        tentomon:      { color: '#8B3A8B', accent: '#FF0000', size: 32, actions: { idle: _act(4,3,true), walk: _act(6,6,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        palmon:        { color: '#3CB371', accent: '#FF69B4', size: 36, actions: { idle: _act(4,3,true), walk: _act(6,6,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        gomamon:       { color: '#F0F0FF', accent: '#FF6600', size: 34, actions: { idle: _act(4,3,true), walk: _act(4,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        patamon:       { color: '#FFDAB9', accent: '#FFE4B5', size: 56, actions: { idle: _act(4,4,true), walk: _act(4,7,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
+        tailmon:       { color: '#F5F5DC', accent: '#FFE4E1', size: 32, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
+        plotmon:       { color: '#FFE4C4', accent: '#FFDEAD', size: 60, actions: { idle: _act(4,4,true), walk: _act(6,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        elecmon:       { color: '#FF3333', accent: '#FFD700', size: 32, actions: { idle: _act(4,4,true), walk: _act(6,9,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
+        tsunomon:      { color: '#E6E6FA', accent: '#DDA0DD', size: 60, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,8,false), evolve: _act(8,3,false) } },
+        hagurumon:     { color: '#C0C0C0', accent: '#708090', size: 56, actions: { idle: _act(4,3,true), walk: _act(4,5,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        guardromon:    { color: '#4682B4', accent: '#B0C4DE', size: 40, actions: { idle: _act(4,2,true), walk: _act(4,5,true), attack: _act(4,8,false), evolve: _act(8,3,false) } },
+        andromon:      { color: '#4169E1', accent: '#1E90FF', size: 44, actions: { idle: _act(4,2,true), walk: _act(4,5,true), attack: _act(6,10,false), evolve: _act(8,3,false) } },
+        clockmon:      { color: '#8B7355', accent: '#DAA520', size: 36, actions: { idle: _act(4,3,true), walk: _act(4,5,true), attack: _act(4,8,false), evolve: _act(8,3,false) } },
+        tankmon:       { color: '#556B2F', accent: '#8B8B00', size: 40, actions: { idle: _act(4,2,true), walk: _act(6,6,true), attack: _act(6,10,false), evolve: _act(8,3,false) } },
+        kokuwamon:     { color: '#87CEEB', accent: '#00CED1', size: 60, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        picodevimon:   { color: '#4B0082', accent: '#8B008B', size: 52, actions: { idle: _act(4,4,true), walk: _act(4,7,true), attack: _act(4,12,false), evolve: _act(8,3,false) } },
+        blackgabumon:  { color: '#2F4F4F', accent: '#A9A9A9', size: 36, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        devimon:       { color: '#191970', accent: '#DC143C', size: 48, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        devidramon:    { color: '#800020', accent: '#FF4500', size: 44, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        vamdemon:      { color: '#2C003E', accent: '#8B0000', size: 52, actions: { idle: _act(4,3,true), walk: _act(4,5,true), attack: _act(6,12,false), evolve: _act(12,3,false) } },
+        fantomon:      { color: '#483D8B', accent: '#9370DB', size: 40, actions: { idle: _act(4,3,true), walk: _act(4,5,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        bakemon:       { color: '#A9A9A9', accent: '#D3D3D3', size: 34, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,8,false), evolve: _act(8,3,false) } },
+        renamon:       { color: '#FFD700', accent: '#FFA500', size: 36, actions: { idle: _act(4,4,true), walk: _act(6,8,true), attack: _act(6,14,false), evolve: _act(10,3,false) } },
+        impmon:        { color: '#800080', accent: '#FF6347', size: 32, actions: { idle: _act(4,4,true), walk: _act(6,8,true), attack: _act(6,12,false), evolve: _act(8,3,false) } },
+        dorumon:       { color: '#4682B4', accent: '#87CEFA', size: 34, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(4,10,false), evolve: _act(8,3,false) } },
+        wizarmon:      { color: '#6A0DAD', accent: '#00CED1', size: 40, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,12,false), evolve: _act(10,3,false) } },
+        leomon:        { color: '#DAA520', accent: '#FF8C00', size: 48, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        greymon:       { color: '#FF8C00', accent: '#1E90FF', size: 48, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        garurumon:     { color: '#4A6FA5', accent: '#B0D0FF', size: 48, actions: { idle: _act(4,3,true), walk: _act(6,8,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        kabuterimon:   { color: '#4B0082', accent: '#9370DB', size: 44, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(10,3,false) } },
+        togemon:       { color: '#32CD32', accent: '#90EE90', size: 44, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(10,3,false) } },
+        angemon:       { color: '#F5F5F5', accent: '#FFD700', size: 48, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        birdramon:     { color: '#FF6347', accent: '#FF4500', size: 52, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        garudamon:     { color: '#FFD700', accent: '#FF6347', size: 56, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(12,3,false) } },
+        metalgreymon:  { color: '#FF8C00', accent: '#B0B0B0', size: 56, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(6,10,false), evolve: _act(12,3,false) } },
+        weregarurumon: { color: '#4A6FA5', accent: '#C0C0C0', size: 52, actions: { idle: _act(4,3,true), walk: _act(6,8,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
+        atlurkabuterimon: { color: '#FF0000', accent: '#FFD700', size: 56, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(6,10,false), evolve: _act(12,3,false) } },
+        seadramon:     { color: '#00CED1', accent: '#48D1CC', size: 44, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(10,3,false) } },
+        whamon:        { color: '#4A6FA5', accent: '#87CEEB', size: 60, actions: { idle: _act(4,2,true), walk: _act(4,4,true), attack: _act(4,8,false), evolve: _act(10,3,false) } },
+        ikkakumon:     { color: '#F5F5F5', accent: '#FF6600', size: 44, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,10,false), evolve: _act(10,3,false) } },
+        ogremon:       { color: '#556B2F', accent: '#FF6600', size: 48, actions: { idle: _act(4,3,true), walk: _act(6,7,true), attack: _act(6,10,false), evolve: _act(10,3,false) } },
     };
 
-    const DEFAULT = { color: '#AABBCC', accent: '#CCDDEE', size: 16, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,8,false), evolve: _act(8,3,false) } };
+    const DEFAULT = { color: '#AABBCC', accent: '#CCDDEE', size: 32, actions: { idle: _act(4,3,true), walk: _act(4,6,true), attack: _act(4,8,false), evolve: _act(8,3,false) } };
 
     function getSpriteConfig(name) {
         const key = (name || '').toLowerCase().replace(/[\s\-]/g, '_');

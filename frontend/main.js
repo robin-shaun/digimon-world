@@ -35,7 +35,7 @@
     // ---- 相机状态 (必须在 clampCamera 之前声明) ----
     let cameraX = WORLD_W / 2;
     let cameraY = WORLD_H / 2;
-    let zoom = 1.5;  // Phase 27: 默认放大看128px精灵细节
+    let zoom = 2.0;  // Phase 27: 默认放大看256px精灵细节
     const ZOOM_MIN = 0.5;
     const ZOOM_MAX = 3.0;  // Phase 27: 允许放大看细节
     function resizeCanvas() {
@@ -661,18 +661,18 @@
                     ctx.stroke();
                 }
             } else {
-                // ═══ 高清精灵图模式: 128×128 精灵图居中 (Phase 27) ═══
+                // ═══ 高清精灵图模式: 256×256 精灵图居中 (Phase 27) ═══
                 const dy = y + bounce + walkBounce;
                 const speciesKey = (d.species || d.name).toLowerCase().replace(/[\s\-]/g, '_');
 
-                // 选中/高亮光环 (Phase 27: 适配128px精灵)
-                const aura = ctx.createRadialGradient(x, dy, 16, x, dy, 70);
+                // 选中/高亮光环 (Phase 27: 适配256px精灵)
+                const aura = ctx.createRadialGradient(x, dy, 32, x, dy, 140);
                 aura.addColorStop(0, isSelected ? 'rgba(255, 215, 0, 0.7)' : 'rgba(0, 212, 255, 0.6)');
                 aura.addColorStop(0.5, 'rgba(0, 212, 255, 0.2)');
                 aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
                 ctx.fillStyle = aura;
                 ctx.beginPath();
-                ctx.arc(x, dy, 70, 0, Math.PI * 2);
+                ctx.arc(x, dy, 140, 0, Math.PI * 2);
                 ctx.fill();
 
                 // 选中环
@@ -680,7 +680,7 @@
                     ctx.strokeStyle = '#ffd700';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(x, dy, 68, 0, Math.PI * 2);
+                    ctx.arc(x, dy, 136, 0, Math.PI * 2);
                     ctx.stroke();
                 }
 
@@ -697,7 +697,7 @@
                         const ty = dy - sinA * i * 12;
                         ctx.fillStyle = spriteAccent + Math.round(alpha * 255).toString(16).padStart(2, '0');
                         ctx.beginPath();
-                        ctx.arc(tx, ty, 8 - i, 0, Math.PI * 2);
+                        ctx.arc(tx, ty, 14 - i, 0, Math.PI * 2);
                         ctx.fill();
                     }
                 }
@@ -710,20 +710,20 @@
 
                 const spriteCanvas = window.SPRITE_PIXEL ? SPRITE_PIXEL.getSprite(d.species || d.name) : null;
                 if (spriteCanvas) {
-                    // 128×128 高清精灵图 (Phase 27)
-                    ctx.drawImage(spriteCanvas, -64, -64, 128, 128);
+                    // 256×256 高清精灵图 (Phase 27)
+                    ctx.drawImage(spriteCanvas, -128, -128, 256, 256);
                 } else {
-                    // 兜底：找不到精灵图时用物种色画方块 (Phase 27: 64×64)
+                    // 兜底：找不到精灵图时用物种色画方块 (Phase 27: 128×128)
                     const spriteCfg2 = window.SPRITE_DATA ? SPRITE_DATA.getSpriteConfig(d.species || d.name) : null;
                     const fallbackColor = spriteCfg2 ? spriteCfg2.color : '#aabbcc';
                     ctx.fillStyle = fallbackColor;
-                    ctx.fillRect(-32, -32, 64, 64);
+                    ctx.fillRect(-64, -64, 128, 128);
                     ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(-14, -14, 10, 10);
-                    ctx.fillRect(4, -14, 10, 10);
+                    ctx.fillRect(-28, -28, 20, 20);
+                    ctx.fillRect(8, -28, 20, 20);
                     ctx.fillStyle = '#000000';
-                    ctx.fillRect(-10, -12, 5, 6);
-                    ctx.fillRect(6, -12, 5, 6);
+                    ctx.fillRect(-20, -24, 10, 12);
+                    ctx.fillRect(12, -24, 10, 12);
                 }
                 ctx.restore();
 
@@ -732,7 +732,7 @@
                 ctx.font = '10px monospace';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
-                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, dy - 72);
+                ctx.fillText(nameShort + ' ' + getMoodEmoji(d.mood), x, dy - 140);
 
                 // 键盘焦点: 青色虚线环
                 const kfIdx2 = state.keyboardFocusIndex;
@@ -742,7 +742,7 @@
                     ctx.lineWidth = 2;
                     ctx.setLineDash([4, 3]);
                     ctx.beginPath();
-                    ctx.arc(x, dy, 65, 0, Math.PI * 2);
+                    ctx.arc(x, dy, 130, 0, Math.PI * 2);
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
@@ -1262,7 +1262,7 @@
             const animSt = window.ANIM ? ANIM.manager.get(d.name) : null;
             const dx = world.x - (animSt ? animSt.renderX() : d.position.x);
             const dy = world.y - (animSt ? animSt.renderY() : d.position.y);
-            const hitRadius = 56 / zoom; // Phase 27: 适配128px精灵
+            const hitRadius = 110 / zoom; // Phase 27: 适配256px精灵
             if (dx * dx + dy * dy < hitRadius * hitRadius) {
                 state.selectedName = d.name;
                 state.keyboardFocusIndex = state.digimon.indexOf(d);  // 同步键盘焦点
@@ -1326,7 +1326,7 @@
         for (const d of state.digimon) {
             const dx = world.x - d.position.x;
             const dy = world.y - d.position.y;
-            const hitRadius = 62 / zoom;  // Phase 27: 触控用更大的碰撞半径
+            const hitRadius = 120 / zoom;  // Phase 27: 触控用更大的碰撞半径
             if (dx * dx + dy * dy < hitRadius * hitRadius) {
                 state.selectedName = d.name;
                 state.keyboardFocusIndex = state.digimon.indexOf(d);  // 同步键盘焦点
