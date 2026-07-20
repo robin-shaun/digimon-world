@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head><body>
+<canvas id="test" width="128" height="128"></canvas>
+<script src="sprites.js?v=3"></script>
+<script>
+var c = SPRITE_PIXEL.getSprite('agumon');
+document.getElementById('test').getContext('2d').drawImage(c, 0, 0);
+document.title = 'SPRITE: ' + c.width + 'x' + c.height;
+// Test all species
+var keys = Object.keys(SPRITE_PIXEL.DRAW_FUNCS);
+var results = [];
+keys.forEach(function(k) {
+    try {
+        var s = SPRITE_PIXEL.getSprite(k);
+        results.push(k + '=OK');
+    } catch(e) {
+        results.push(k + '=ERR:' + e.message);
+    }
+});
+document.body.innerHTML += '<pre>' + results.join('\\n') + '</pre>';
+</script>
+</body></html>

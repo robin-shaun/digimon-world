@@ -35,9 +35,9 @@
     // ---- 相机状态 (必须在 clampCamera 之前声明) ----
     let cameraX = WORLD_W / 2;
     let cameraY = WORLD_H / 2;
-    let zoom = 1.0;
+    let zoom = 1.5;  // Phase 27: 默认放大看128px精灵细节
     const ZOOM_MIN = 0.5;
-    const ZOOM_MAX = 2.0;
+    const ZOOM_MAX = 3.0;  // Phase 27: 允许放大看细节
     function resizeCanvas() {
         VIEW_W = window.innerWidth;
         VIEW_H = window.innerHeight;
