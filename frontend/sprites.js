@@ -38,35 +38,111 @@ window.SPRITE_PIXEL = (function () {
         ctx.stroke();
     }
 
-    /** Draw anime-style eye at (cx, cy) */
-    function drawEye(ctx, cx, cy, irisColor, eyeRadius, pupilRadius) {
+    /**
+     * Enhanced anime-style eye with species-specific shapes.
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {number} cx - center x
+     * @param {number} cy - center y
+     * @param {string} irisColor
+     * @param {number} eyeRadius
+     * @param {number} pupilRadius
+     * @param {Object} [opts] - shape:'round'|'narrow'|'slit'|'huge', gazeX,gazeY (0-1 offset), angle (radians)
+     */
+    function drawEye(ctx, cx, cy, irisColor, eyeRadius, pupilRadius, opts) {
         const er = eyeRadius || 8;
         const pr = pupilRadius || 3;
+        const shape = (opts && opts.shape) || 'round';
+        const gazeX = (opts && opts.gazeX) || 0;
+        const gazeY = (opts && opts.gazeY) || 0;
+        const angle = (opts && opts.angle) || 0;
 
-        // Sclera (white)
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+
+        // Determine eye shape ratios
+        let sx = er, sy = er * 1.35;
+        if (shape === 'narrow') { sx = er * 0.6; sy = er * 1.5; }
+        else if (shape === 'slit') { sx = er * 0.5; sy = er * 1.4; }
+        else if (shape === 'huge') { sx = er * 1.15; sy = er * 1.5; }
+
+        // ── LAYER 1: Sclera (white oval) ──────────────────────────
         ctx.beginPath();
-        ctx.ellipse(cx, cy, er, er * 1.35, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, sx, sy, 0, 0, Math.PI * 2);
         fillStroke(ctx, W, O, 2);
 
-        // Iris
+        // ── LAYER 2: Colored iris (slightly offset for gaze) ──────
+        const irisX = gazeX * er * 0.25;
+        const irisY = 1 + gazeY * er * 0.25;
         ctx.beginPath();
-        ctx.arc(cx, cy + 1, er * 0.7, 0, Math.PI * 2);
+        if (shape === 'slit') {
+            // Vertical slit iris
+            ctx.ellipse(irisX, irisY, er * 0.35, er * 0.65, 0, 0, Math.PI * 2);
+        } else {
+            ctx.arc(irisX, irisY, er * 0.7, 0, Math.PI * 2);
+        }
         fillStroke(ctx, irisColor, O, 1.5);
 
-        // Pupil
+        // ── LAYER 3: Black pupil ──────────────────────────────────
         ctx.beginPath();
-        ctx.arc(cx, cy + 1, pr, 0, Math.PI * 2);
-        ctx.fillStyle = O;
+        if (shape === 'slit') {
+            ctx.ellipse(irisX, irisY, pr * 0.5, pr * 1.1, 0, 0, Math.PI * 2);
+        } else {
+            ctx.arc(irisX, irisY, pr, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = B;
         ctx.fill();
 
-        // Highlight dots
+        // ── LAYER 4a: Main white highlight (top-right of pupil) ───
         ctx.fillStyle = W;
         ctx.beginPath();
-        ctx.arc(cx - pr * 0.6, cy - pr * 0.6, pr * 0.45, 0, Math.PI * 2);
+        ctx.arc(irisX - pr * 0.6, irisY - pr * 0.6, pr * 0.5, 0, Math.PI * 2);
         ctx.fill();
+
+        // ── LAYER 4b: Secondary highlight (bottom-left, wet-eye) ──
         ctx.beginPath();
-        ctx.arc(cx + pr * 0.5, cy - pr * 0.3, pr * 0.2, 0, Math.PI * 2);
+        ctx.arc(irisX + pr * 0.55, irisY + pr * 0.35, pr * 0.2, 0, Math.PI * 2);
         ctx.fill();
+
+        // ── LAYER 5: Eyelid arc (top lid line for expression) ─────
+        ctx.strokeStyle = O;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(0, -sy * 0.15, sx * 1.05, sy * 0.4, 0, Math.PI * 1.05, Math.PI * 1.95);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    /**
+     * Draw a body with vertical gradient shading (light top → dark bottom).
+     */
+    function drawBodyGradient(ctx, x, y, rx, ry, colorTop, colorBottom, rotation) {
+        const grad = ctx.createLinearGradient(x, y - ry, x, y + ry);
+        grad.addColorStop(0, colorTop);
+        grad.addColorStop(1, colorBottom);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(x, y, rx, ry, rotation || 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = O;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+
+    /**
+     * Draw enhanced shadow blob with gradient.
+     */
+    function shadowBlobGrad(ctx, cx, cy, rx, ry) {
+        ctx.save();
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+        grad.addColorStop(0, 'rgba(0,0,0,0.35)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.05)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(cx + 4, cy + 4, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
     }
 
     /** Draw rounded body shadow underneath a shape */
@@ -89,8 +165,13 @@ window.SPRITE_PIXEL = (function () {
     function drawAgumon(ctx, s) {
         prepCtx(ctx);
 
+        // ── POSE: weight on right leg, head tilted left ──
+        ctx.save();
+        ctx.translate(-2 * s, 0);
+        const bodyCx = 64, bodyCy = 80;
+
         // Shadow
-        shadowBlob(ctx, 64 * s, 118 * s, 22 * s, 10 * s);
+        shadowBlobGrad(ctx, (bodyCx + 2) * s, 118 * s, 24 * s, 10 * s);
 
         // TAIL — thick curved shape behind body
         ctx.fillStyle = '#E07000';
@@ -101,19 +182,26 @@ window.SPRITE_PIXEL = (function () {
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2.5 * s; ctx.stroke();
 
-        // LEGS — short cylinders
-        // Left leg
+        // LEGS — short cylinders (weight shift: left leg slightly higher)
         ctx.fillStyle = '#FF8C00';
         ctx.beginPath();
-        ctx.roundRect(48 * s, 100 * s, 14 * s, 18 * s, 5 * s);
+        ctx.roundRect(48 * s, 98 * s, 14 * s, 18 * s, 5 * s);
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2.5 * s; ctx.stroke();
-        // Left foot claw
-        ctx.fillStyle = '#FFE4B5';
+        // Left foot claw (3 toes)
+        ctx.fillStyle = '#E06040';
         ctx.beginPath();
-        ctx.roundRect(46 * s, 114 * s, 18 * s, 6 * s, 2 * s);
+        ctx.roundRect(44 * s, 113 * s, 22 * s, 7 * s, 3 * s);
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2 * s; ctx.stroke();
+        // Toe claws
+        ctx.fillStyle = '#FFE4B5';
+        for (let t = 0; t < 3; t++) {
+            ctx.beginPath();
+            ctx.arc((46 + t * 7) * s, 118 * s, 2.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = O; ctx.lineWidth = 1.5 * s; ctx.stroke();
+        }
 
         // Right leg
         ctx.fillStyle = '#CC6600';
@@ -121,133 +209,159 @@ window.SPRITE_PIXEL = (function () {
         ctx.roundRect(66 * s, 100 * s, 14 * s, 18 * s, 5 * s);
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2.5 * s; ctx.stroke();
-        ctx.fillStyle = '#FFE4B5';
+        ctx.fillStyle = '#E06040';
         ctx.beginPath();
-        ctx.roundRect(64 * s, 114 * s, 18 * s, 6 * s, 2 * s);
+        ctx.roundRect(62 * s, 115 * s, 22 * s, 7 * s, 3 * s);
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2 * s; ctx.stroke();
+        ctx.fillStyle = '#FFE4B5';
+        for (let t = 0; t < 3; t++) {
+            ctx.beginPath();
+            ctx.arc((64 + t * 7) * s, 120 * s, 2.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = O; ctx.lineWidth = 1.5 * s; ctx.stroke();
+        }
 
-        // BODY — round orange torso
-        ctx.fillStyle = '#FF8C00';
-        ctx.beginPath();
-        ctx.ellipse(64 * s, 80 * s, 26 * s, 30 * s, 0, 0, Math.PI * 2);
-        fillStroke(ctx, '#FF8C00', O, 2.5 * s);
+        // BODY — round orange torso with gradient
+        drawBodyGradient(ctx, bodyCx * s, bodyCy * s, 26 * s, 30 * s, '#FFAA33', '#E06800');
 
         // BELLY — lighter yellow oval
         ctx.fillStyle = '#FFD700';
         ctx.beginPath();
-        ctx.ellipse(64 * s, 84 * s, 19 * s, 21 * s, 0, 0, Math.PI * 2);
+        ctx.ellipse(bodyCx * s, (bodyCy + 4) * s, 19 * s, 21 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#FFD700', O, 2 * s);
 
         // Belly center line
         ctx.strokeStyle = '#E0A800';
         ctx.lineWidth = 1.5 * s;
         ctx.beginPath();
-        ctx.moveTo(64 * s, 68 * s);
-        ctx.lineTo(64 * s, 100 * s);
+        ctx.moveTo(bodyCx * s, 68 * s);
+        ctx.lineTo(bodyCx * s, 100 * s);
         ctx.stroke();
 
-        // ARMS — short curved appendages
+        // ARMS — asymmetrical (right arm raised for dynamic pose)
+        // Left arm (lower)
         ctx.fillStyle = '#FF8C00';
-        // Left arm
         ctx.beginPath();
         ctx.roundRect(36 * s, 72 * s, 12 * s, 26 * s, 5 * s);
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2.5 * s; ctx.stroke();
-        ctx.fillStyle = '#FFE4B5';
-        ctx.beginPath();
-        ctx.roundRect(34 * s, 94 * s, 16 * s, 6 * s, 2 * s);
-        ctx.fill();
-        ctx.strokeStyle = O; ctx.lineWidth = 2 * s; ctx.stroke();
+        // 3 red claws on left hand
+        ctx.fillStyle = '#FF4444';
+        for (let c = 0; c < 3; c++) {
+            ctx.beginPath();
+            ctx.arc((34 + c * 6) * s, 96 * s, 2.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = O; ctx.lineWidth = 1.5 * s; ctx.stroke();
+        }
 
-        // Right arm
+        // Right arm (raised higher)
         ctx.fillStyle = '#CC6600';
         ctx.beginPath();
-        ctx.roundRect(80 * s, 72 * s, 12 * s, 26 * s, 5 * s);
+        ctx.roundRect(80 * s, 66 * s, 12 * s, 26 * s, 5 * s);
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2.5 * s; ctx.stroke();
-        ctx.fillStyle = '#FFE4B5';
-        ctx.beginPath();
-        ctx.roundRect(78 * s, 94 * s, 16 * s, 6 * s, 2 * s);
-        ctx.fill();
-        ctx.strokeStyle = O; ctx.lineWidth = 2 * s; ctx.stroke();
+        // 3 red claws on right hand
+        ctx.fillStyle = '#FF4444';
+        for (let c = 0; c < 3; c++) {
+            ctx.beginPath();
+            ctx.arc((78 + c * 6) * s, 90 * s, 2.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = O; ctx.lineWidth = 1.5 * s; ctx.stroke();
+        }
 
-        // HEAD — round with cheeks
-        ctx.fillStyle = '#FF8C00';
+        // ── HEAD (tilted ~5° left) ──
+        ctx.save();
+        ctx.translate(bodyCx * s, 43 * s);
+        ctx.rotate(-0.08);
+
+        // Head circle with gradient
+        const headGrad = ctx.createLinearGradient(0, -23 * s, 0, 23 * s);
+        headGrad.addColorStop(0, '#FFAA33');
+        headGrad.addColorStop(1, '#FF8C00');
+        ctx.fillStyle = headGrad;
         ctx.beginPath();
-        ctx.arc(64 * s, 43 * s, 23 * s, 0, Math.PI * 2);
-        fillStroke(ctx, '#FF8C00', O, 2.5 * s);
+        ctx.arc(0, 0, 23 * s, 0, Math.PI * 2);
+        fillStroke(ctx, '#FFAA33', O, 2.5 * s);
 
         // SNOUT — lighter area around mouth
         ctx.fillStyle = '#FFB347';
         ctx.beginPath();
-        ctx.ellipse(64 * s, 52 * s, 15 * s, 10 * s, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 9 * s, 15 * s, 10 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#FFB347', O, 2 * s);
 
         // NOSTRILS
         ctx.fillStyle = O;
         ctx.beginPath();
-        ctx.arc(59 * s, 52 * s, 1.5 * s, 0, Math.PI * 2);
+        ctx.arc(-5 * s, 9 * s, 1.5 * s, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(69 * s, 52 * s, 1.5 * s, 0, Math.PI * 2);
+        ctx.arc(5 * s, 9 * s, 1.5 * s, 0, Math.PI * 2);
         ctx.fill();
 
         // MOUTH — wide happy curve
         ctx.strokeStyle = O;
         ctx.lineWidth = 2 * s;
         ctx.beginPath();
-        ctx.arc(64 * s, 53 * s, 8 * s, 0.2, Math.PI - 0.2);
+        ctx.arc(0, 10 * s, 8 * s, 0.2, Math.PI - 0.2);
         ctx.stroke();
         // Fangs
         ctx.fillStyle = W;
         ctx.beginPath();
-        ctx.moveTo(59 * s, 57 * s);
-        ctx.lineTo(57 * s, 61 * s);
-        ctx.lineTo(61 * s, 59 * s);
+        ctx.moveTo(-5 * s, 14 * s);
+        ctx.lineTo(-7 * s, 18 * s);
+        ctx.lineTo(-3 * s, 16 * s);
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 1 * s; ctx.stroke();
         ctx.beginPath();
-        ctx.moveTo(69 * s, 57 * s);
-        ctx.lineTo(71 * s, 61 * s);
-        ctx.lineTo(67 * s, 59 * s);
+        ctx.moveTo(5 * s, 14 * s);
+        ctx.lineTo(7 * s, 18 * s);
+        ctx.lineTo(3 * s, 16 * s);
         ctx.fill();
         ctx.stroke();
 
-        // EYES — anime style green
-        drawEye(ctx, 53 * s, 36 * s, '#99FF99', 8 * s, 3.2 * s);
-        drawEye(ctx, 75 * s, 36 * s, '#99FF99', 8 * s, 3.2 * s);
+        // EYES — big round friendly green, looking slightly right
+        drawEye(ctx, -11 * s, -7 * s, '#44FF44', 8 * s, 3.2 * s, { shape: 'round', gazeX: 0.3 });
+        drawEye(ctx, 11 * s, -7 * s, '#44FF44', 8 * s, 3.2 * s, { shape: 'round', gazeX: 0.3 });
 
         // HORNS — red triangles on top
         ctx.fillStyle = '#FF6600';
         ctx.beginPath();
-        ctx.moveTo(45 * s, 30 * s);
-        ctx.lineTo(42 * s, 12 * s);
-        ctx.lineTo(52 * s, 28 * s);
+        ctx.moveTo(-19 * s, -13 * s);
+        ctx.lineTo(-22 * s, -32 * s);
+        ctx.lineTo(-12 * s, -16 * s);
         ctx.closePath();
         fillStroke(ctx, '#FF6600', O, 2.5 * s);
 
         ctx.beginPath();
-        ctx.moveTo(78 * s, 30 * s);
-        ctx.lineTo(86 * s, 12 * s);
-        ctx.lineTo(72 * s, 28 * s);
+        ctx.moveTo(14 * s, -13 * s);
+        ctx.lineTo(21 * s, -32 * s);
+        ctx.lineTo(8 * s, -16 * s);
         ctx.closePath();
         fillStroke(ctx, '#FF6600', O, 2.5 * s);
 
         // CHEEK blush
         ctx.fillStyle = 'rgba(255,100,80,0.3)';
         ctx.beginPath();
-        ctx.ellipse(44 * s, 48 * s, 6 * s, 4 * s, 0, 0, Math.PI * 2);
+        ctx.ellipse(-20 * s, 5 * s, 6 * s, 4 * s, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.ellipse(84 * s, 48 * s, 6 * s, 4 * s, 0, 0, Math.PI * 2);
+        ctx.ellipse(20 * s, 5 * s, 6 * s, 4 * s, 0, 0, Math.PI * 2);
         ctx.fill();
+
+        ctx.restore(); // head rotation
+        ctx.restore(); // pose offset
     }
 
     function drawGabumon(ctx, s) {
         prepCtx(ctx);
 
-        shadowBlob(ctx, 64 * s, 118 * s, 24 * s, 10 * s);
+        // ── POSE: leaning forward, head tilted ──
+        ctx.save();
+        ctx.translate(1 * s, 0);
+        const bCx = 64, bCy = 78;
+
+        shadowBlobGrad(ctx, (bCx - 1) * s, 118 * s, 24 * s, 10 * s);
 
         // LEGS
         ctx.fillStyle = '#E8E8F0';
@@ -261,11 +375,11 @@ window.SPRITE_PIXEL = (function () {
 
         ctx.fillStyle = '#D0D0D8';
         ctx.beginPath();
-        ctx.roundRect(66 * s, 98 * s, 14 * s, 20 * s, 4 * s);
+        ctx.roundRect(66 * s, 100 * s, 14 * s, 20 * s, 4 * s);
         fillStroke(ctx, '#D0D0D8', O, 2.5 * s);
         ctx.fillStyle = '#B0B0C0';
         ctx.beginPath();
-        ctx.roundRect(64 * s, 112 * s, 18 * s, 6 * s, 2 * s);
+        ctx.roundRect(64 * s, 114 * s, 18 * s, 6 * s, 2 * s);
         fillStroke(ctx, '#B0B0C0', O, 2 * s);
 
         // TAIL
@@ -276,21 +390,21 @@ window.SPRITE_PIXEL = (function () {
         ctx.bezierCurveTo(35 * s, 115 * s, 48 * s, 90 * s, 42 * s, 78 * s);
         fillStroke(ctx, '#4A6FA5', O, 2.5 * s);
 
-        // BODY — light blue/cream reptilian body
-        ctx.fillStyle = '#E8E8F0';
-        ctx.beginPath();
-        ctx.ellipse(64 * s, 78 * s, 24 * s, 28 * s, 0, 0, Math.PI * 2);
-        fillStroke(ctx, '#E8E8F0', O, 2.5 * s);
+        // BODY — light blue/cream reptilian body with gradient
+        drawBodyGradient(ctx, bCx * s, bCy * s, 24 * s, 28 * s, '#F0F0F8', '#D8D8E8');
 
         // WOLF PELT — blue pelt wrapping over the body
-        ctx.fillStyle = '#4A6FA5';
+        const peltGrad = ctx.createLinearGradient(38 * s, 40 * s, 38 * s, 105 * s);
+        peltGrad.addColorStop(0, '#5A80B5');
+        peltGrad.addColorStop(1, '#3A5A8A');
+        ctx.fillStyle = peltGrad;
         ctx.beginPath();
         ctx.moveTo(38 * s, 40 * s);
         ctx.bezierCurveTo(28 * s, 55 * s, 30 * s, 95 * s, 42 * s, 105 * s);
         ctx.lineTo(86 * s, 105 * s);
         ctx.bezierCurveTo(98 * s, 95 * s, 100 * s, 55 * s, 90 * s, 40 * s);
         ctx.closePath();
-        fillStroke(ctx, '#4A6FA5', O, 2.5 * s);
+        fillStroke(ctx, '#5A80B5', O, 2.5 * s);
 
         // PELT STRIPES — darker blue vertical lines
         ctx.strokeStyle = '#3A5A8A';
@@ -303,7 +417,7 @@ window.SPRITE_PIXEL = (function () {
             ctx.stroke();
         }
 
-        // ARMS
+        // ARMS (asymmetrical)
         ctx.fillStyle = '#E8E8F0';
         ctx.beginPath();
         ctx.roundRect(34 * s, 70 * s, 12 * s, 22 * s, 4 * s);
@@ -315,57 +429,65 @@ window.SPRITE_PIXEL = (function () {
 
         ctx.fillStyle = '#D0D0D8';
         ctx.beginPath();
-        ctx.roundRect(82 * s, 70 * s, 12 * s, 22 * s, 4 * s);
+        ctx.roundRect(81 * s, 66 * s, 12 * s, 22 * s, 4 * s);
         fillStroke(ctx, '#D0D0D8', O, 2.5 * s);
         ctx.fillStyle = '#B0B0C0';
         ctx.beginPath();
-        ctx.roundRect(80 * s, 88 * s, 16 * s, 6 * s, 2 * s);
+        ctx.roundRect(79 * s, 84 * s, 16 * s, 6 * s, 2 * s);
         fillStroke(ctx, '#B0B0C0', O, 2 * s);
 
-        // HEAD — round reptile head
+        // ── HEAD (tilted ~5° right) ──
+        ctx.save();
+        ctx.translate(bCx * s, 42 * s);
+        ctx.rotate(0.06);
+
+        // Head round
         ctx.fillStyle = '#E8E8F0';
         ctx.beginPath();
-        ctx.arc(64 * s, 42 * s, 21 * s, 0, Math.PI * 2);
+        ctx.arc(0, 0, 21 * s, 0, Math.PI * 2);
         fillStroke(ctx, '#E8E8F0', O, 2.5 * s);
 
         // SNOUT
         ctx.fillStyle = '#D8D8E0';
         ctx.beginPath();
-        ctx.ellipse(64 * s, 52 * s, 13 * s, 9 * s, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 10 * s, 13 * s, 9 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#D8D8E0', O, 2 * s);
 
         // NOSE
         ctx.fillStyle = O;
         ctx.beginPath();
-        ctx.arc(64 * s, 48 * s, 2 * s, 0, Math.PI * 2);
+        ctx.arc(0, 6 * s, 2 * s, 0, Math.PI * 2);
         ctx.fill();
 
         // MOUTH
         ctx.strokeStyle = O;
         ctx.lineWidth = 1.5 * s;
         ctx.beginPath();
-        ctx.arc(64 * s, 54 * s, 5 * s, 0.2, Math.PI - 0.2);
+        ctx.arc(0, 12 * s, 5 * s, 0.2, Math.PI - 0.2);
         ctx.stroke();
 
-        // EYES — red anime eyes
-        drawEye(ctx, 52 * s, 37 * s, '#FF6666', 7.5 * s, 3 * s);
-        drawEye(ctx, 76 * s, 37 * s, '#FF6666', 7.5 * s, 3 * s);
+        // EYES — slightly angled cool red eyes
+        drawEye(ctx, -12 * s, -5 * s, '#FF5555', 7.5 * s, 3 * s, { shape: 'round', angle: -0.1, gazeX: 0.3 });
+        drawEye(ctx, 12 * s, -5 * s, '#FF5555', 7.5 * s, 3 * s, { shape: 'round', angle: 0.1, gazeX: 0.3 });
 
         // HORN — gold on forehead
         ctx.fillStyle = '#FFDD44';
         ctx.beginPath();
-        ctx.moveTo(58 * s, 32 * s);
-        ctx.lineTo(64 * s, 12 * s);
-        ctx.lineTo(70 * s, 32 * s);
+        ctx.moveTo(-6 * s, -10 * s);
+        ctx.lineTo(0, -30 * s);
+        ctx.lineTo(6 * s, -10 * s);
         ctx.closePath();
         fillStroke(ctx, '#FFDD44', O, 2.5 * s);
 
         // PELT HOOD — wraps around head top
         ctx.fillStyle = '#4A6FA5';
         ctx.beginPath();
-        ctx.arc(64 * s, 40 * s, 23 * s, Math.PI + 0.4, -0.4);
+        ctx.arc(0, -2 * s, 23 * s, Math.PI + 0.4, -0.4);
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2.5 * s; ctx.stroke();
+
+        ctx.restore(); // head
+        ctx.restore(); // pose
     }
 
     function drawBiyomon(ctx, s) {
@@ -454,9 +576,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.closePath();
         fillStroke(ctx, '#FF8C00', O, 2.5 * s);
 
-        // EYES
-        drawEye(ctx, 52 * s, 40 * s, '#87CEEB', 6.5 * s, 2.5 * s);
-        drawEye(ctx, 76 * s, 40 * s, '#87CEEB', 6.5 * s, 2.5 * s);
+        // EYES — sky blue, big and round
+        drawEye(ctx, 52 * s, 40 * s, '#87CEEB', 7 * s, 3 * s, { shape: 'huge', gazeX: 0.3 });
+        drawEye(ctx, 76 * s, 40 * s, '#87CEEB', 7 * s, 3 * s, { shape: 'huge', gazeX: 0.3 });
     }
 
     function drawTentomon(ctx, s) {
@@ -634,9 +756,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.arc(64 * s, 51 * s, 4 * s, 0.1, Math.PI - 0.1);
         ctx.stroke();
 
-        // EYES
-        drawEye(ctx, 54 * s, 42 * s, '#2E8B57', 6 * s, 2.5 * s);
-        drawEye(ctx, 74 * s, 42 * s, '#2E8B57', 6 * s, 2.5 * s);
+        // EYES — round green, gentle gaze
+        drawEye(ctx, 54 * s, 42 * s, '#2E8B57', 6 * s, 2.5 * s, { shape: 'round', gazeX: 0.3 });
+        drawEye(ctx, 74 * s, 42 * s, '#2E8B57', 6 * s, 2.5 * s, { shape: 'round', gazeX: 0.3 });
     }
 
     function drawGomamon(ctx, s) {
@@ -747,9 +869,9 @@ window.SPRITE_PIXEL = (function () {
             ctx.stroke();
         }
 
-        // EYES
-        drawEye(ctx, 52 * s, 45 * s, '#4169E1', 6.5 * s, 2.5 * s);
-        drawEye(ctx, 76 * s, 45 * s, '#4169E1', 6.5 * s, 2.5 * s);
+        // EYES — round blue, curious
+        drawEye(ctx, 52 * s, 45 * s, '#4169E1', 7 * s, 3 * s, { shape: 'round', gazeX: 0.3 });
+        drawEye(ctx, 76 * s, 45 * s, '#4169E1', 7 * s, 3 * s, { shape: 'round', gazeX: 0.3 });
     }
 
     function drawPatamon(ctx, s) {
@@ -824,9 +946,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.arc(64 * s, 55 * s, 4 * s, 0.1, Math.PI - 0.1);
         ctx.stroke();
 
-        // EYES
-        drawEye(ctx, 54 * s, 46 * s, '#87CEEB', 6.5 * s, 2.5 * s);
-        drawEye(ctx, 74 * s, 46 * s, '#87CEEB', 6.5 * s, 2.5 * s);
+        // EYES — huge innocent sky blue, Patamon's trademark big eyes
+        drawEye(ctx, 54 * s, 46 * s, '#87CEEB', 7.5 * s, 3.2 * s, { shape: 'huge', gazeX: 0.3 });
+        drawEye(ctx, 74 * s, 46 * s, '#87CEEB', 7.5 * s, 3.2 * s, { shape: 'huge', gazeX: 0.3 });
 
         // CHEEK BLUSH
         ctx.fillStyle = 'rgba(255,100,80,0.25)';
@@ -958,9 +1080,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.quadraticCurveTo(64 * s, 59 * s, 67 * s, 56 * s);
         ctx.stroke();
 
-        // EYES
-        drawEye(ctx, 53 * s, 46 * s, '#4169E1', 6.5 * s, 2.5 * s);
-        drawEye(ctx, 75 * s, 46 * s, '#4169E1', 6.5 * s, 2.5 * s);
+        // EYES — cat-slit pupils! angled slightly for feline look
+        drawEye(ctx, 53 * s, 46 * s, '#4169E1', 7 * s, 2.5 * s, { shape: 'slit', gazeX: 0.4 });
+        drawEye(ctx, 75 * s, 46 * s, '#4169E1', 7 * s, 2.5 * s, { shape: 'slit', gazeX: 0.4 });
     }
 
     function drawPlotmon(ctx, s) {
@@ -1038,9 +1160,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.arc(64 * s, 54 * s, 4 * s, 0.1, Math.PI - 0.1);
         ctx.stroke();
 
-        // EYES
-        drawEye(ctx, 52 * s, 44 * s, '#4169E1', 7 * s, 3 * s);
-        drawEye(ctx, 76 * s, 44 * s, '#4169E1', 7 * s, 3 * s);
+        // EYES — puppy-dog round blue
+        drawEye(ctx, 52 * s, 44 * s, '#4169E1', 7 * s, 3 * s, { shape: 'round', gazeX: 0.3 });
+        drawEye(ctx, 76 * s, 44 * s, '#4169E1', 7 * s, 3 * s, { shape: 'round', gazeX: 0.3 });
 
         // CHEEKS
         ctx.fillStyle = 'rgba(255,100,100,0.25)';
@@ -1176,9 +1298,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.fill();
         ctx.stroke();
 
-        // EYES — fierce
-        drawEye(ctx, 52 * s, 40 * s, '#FFD700', 7 * s, 3 * s);
-        drawEye(ctx, 76 * s, 40 * s, '#FFD700', 7 * s, 3 * s);
+        // EYES — fierce gold, narrow angry
+        drawEye(ctx, 52 * s, 40 * s, '#FFD700', 7 * s, 3 * s, { shape: 'narrow', angle: -0.15 });
+        drawEye(ctx, 76 * s, 40 * s, '#FFD700', 7 * s, 3 * s, { shape: 'narrow', angle: 0.15 });
     }
 
     function drawTsunomon(ctx, s) {
@@ -1250,9 +1372,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.arc(64 * s, 56 * s, 4 * s, 0.1, Math.PI - 0.1);
         ctx.stroke();
 
-        // EYES — big cute eyes
-        drawEye(ctx, 53 * s, 48 * s, '#9370DB', 7.5 * s, 3 * s);
-        drawEye(ctx, 75 * s, 48 * s, '#9370DB', 7.5 * s, 3 * s);
+        // EYES — big cute eyes, looking up
+        drawEye(ctx, 53 * s, 48 * s, '#9370DB', 7.5 * s, 3 * s, { shape: 'huge', gazeY: -0.3 });
+        drawEye(ctx, 75 * s, 48 * s, '#9370DB', 7.5 * s, 3 * s, { shape: 'huge', gazeY: -0.3 });
 
         // CHEEKS
         ctx.fillStyle = 'rgba(180,100,255,0.25)';
@@ -1624,23 +1746,43 @@ window.SPRITE_PIXEL = (function () {
             fillStroke(ctx, '#2a2a8a', O, 2.5 * s);
         }
 
-        // EVIL EYES — blood red
+        // EVIL EYES — narrow sinister blood red, NO highlights (menacing)
+        // Left eye
+        ctx.fillStyle = W;
+        ctx.beginPath();
+        ctx.ellipse(52 * s, 42 * s, 6 * s, 10 * s, -0.15, 0, Math.PI * 2);
+        fillStroke(ctx, W, O, 2 * s);
         ctx.fillStyle = '#FF0000';
         ctx.beginPath();
-        ctx.ellipse(52 * s, 42 * s, 7 * s, 9 * s, 0, 0, Math.PI * 2);
-        fillStroke(ctx, '#FF0000', O, 2 * s);
+        ctx.ellipse(51 * s, 43 * s, 4.5 * s, 7 * s, -0.1, 0, Math.PI * 2);
+        fillStroke(ctx, '#FF0000', O, 1.5 * s);
         ctx.fillStyle = '#4a00a0';
         ctx.beginPath();
-        ctx.arc(52 * s, 43 * s, 3.5 * s, 0, Math.PI * 2);
+        ctx.ellipse(51 * s, 43 * s, 2.5 * s, 4 * s, -0.1, 0, Math.PI * 2);
+        ctx.fill();
+        // Single small red highlight
+        ctx.fillStyle = '#FF6666';
+        ctx.beginPath();
+        ctx.arc(50 * s, 40 * s, 1 * s, 0, Math.PI * 2);
         ctx.fill();
 
+        // Right eye
+        ctx.fillStyle = W;
+        ctx.beginPath();
+        ctx.ellipse(76 * s, 42 * s, 6 * s, 10 * s, 0.15, 0, Math.PI * 2);
+        fillStroke(ctx, W, O, 2 * s);
         ctx.fillStyle = '#FF0000';
         ctx.beginPath();
-        ctx.ellipse(76 * s, 42 * s, 7 * s, 9 * s, 0, 0, Math.PI * 2);
-        fillStroke(ctx, '#FF0000', O, 2 * s);
+        ctx.ellipse(77 * s, 43 * s, 4.5 * s, 7 * s, 0.1, 0, Math.PI * 2);
+        fillStroke(ctx, '#FF0000', O, 1.5 * s);
         ctx.fillStyle = '#4a00a0';
         ctx.beginPath();
-        ctx.arc(76 * s, 43 * s, 3.5 * s, 0, Math.PI * 2);
+        ctx.ellipse(77 * s, 43 * s, 2.5 * s, 4 * s, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        // Single small red highlight
+        ctx.fillStyle = '#FF6666';
+        ctx.beginPath();
+        ctx.arc(78 * s, 40 * s, 1 * s, 0, Math.PI * 2);
         ctx.fill();
 
         // MOUTH — wicked grin
@@ -1698,8 +1840,11 @@ window.SPRITE_PIXEL = (function () {
         ctx.roundRect(62 * s, 114 * s, 20 * s, 6 * s, 2 * s);
         fillStroke(ctx, '#3a4a1a', O, 2 * s);
 
-        // BODY — muscular green
-        ctx.fillStyle = '#556B2F';
+        // BODY — muscular green with gradient
+        const ogrGrad = ctx.createLinearGradient(40 * s, 48 * s, 88 * s, 104 * s);
+        ogrGrad.addColorStop(0, '#6B8B3F');
+        ogrGrad.addColorStop(1, '#3A4A1A');
+        ctx.fillStyle = ogrGrad;
         ctx.beginPath();
         ctx.ellipse(64 * s, 76 * s, 24 * s, 28 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#556B2F', O, 2.5 * s);
@@ -1840,8 +1985,11 @@ window.SPRITE_PIXEL = (function () {
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2.5 * s; ctx.stroke();
 
-        // BODY
-        ctx.fillStyle = '#DAA520';
+        // BODY — golden lion body with gradient
+        const leoGrad = ctx.createLinearGradient(40 * s, 52 * s, 88 * s, 104 * s);
+        leoGrad.addColorStop(0, '#FFCC44');
+        leoGrad.addColorStop(1, '#B8860B');
+        ctx.fillStyle = leoGrad;
         ctx.beginPath();
         ctx.ellipse(64 * s, 78 * s, 24 * s, 26 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#DAA520', O, 2.5 * s);
@@ -1916,9 +2064,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.quadraticCurveTo(64 * s, 58 * s, 72 * s, 53 * s);
         ctx.stroke();
 
-        // EYES — fierce but noble
-        drawEye(ctx, 52 * s, 42 * s, '#FFD700', 7 * s, 3 * s);
-        drawEye(ctx, 76 * s, 42 * s, '#FFD700', 7 * s, 3 * s);
+        // EYES — fierce noble gold
+        drawEye(ctx, 52 * s, 42 * s, '#FFD700', 7 * s, 3 * s, { shape: 'narrow', gazeX: 0.3 });
+        drawEye(ctx, 76 * s, 42 * s, '#FFD700', 7 * s, 3 * s, { shape: 'narrow', gazeX: 0.3 });
     }
 
     /* ── Champion/Ultimate/Mega ── */
@@ -1955,8 +2103,12 @@ window.SPRITE_PIXEL = (function () {
         ctx.roundRect(64 * s, 115 * s, 22 * s, 7 * s, 3 * s);
         fillStroke(ctx, '#FFE4B5', O, 2 * s);
 
-        // BODY — bigger
-        ctx.fillStyle = '#FF8C00';
+        // BODY — bigger with gradient
+        const bodyGradG = ctx.createLinearGradient(40 * s, 46 * s, 88 * s, 110 * s);
+        bodyGradG.addColorStop(0, '#FFAA33');
+        bodyGradG.addColorStop(0.6, '#FF8C00');
+        bodyGradG.addColorStop(1, '#CC6600');
+        ctx.fillStyle = bodyGradG;
         ctx.beginPath();
         ctx.ellipse(64 * s, 78 * s, 28 * s, 32 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#FF8C00', O, 2.5 * s);
@@ -1996,11 +2148,14 @@ window.SPRITE_PIXEL = (function () {
         ctx.roundRect(82 * s, 88 * s, 20 * s, 7 * s, 2 * s);
         fillStroke(ctx, '#FFE4B5', O, 2 * s);
 
-        // HEAD — large with helmet crest
-        ctx.fillStyle = '#FF8C00';
+        // HEAD — large with helmet crest, gradient
+        const headGradG = ctx.createLinearGradient(64 * s, 20 * s, 64 * s, 64 * s);
+        headGradG.addColorStop(0, '#FFAA33');
+        headGradG.addColorStop(1, '#FF8C00');
+        ctx.fillStyle = headGradG;
         ctx.beginPath();
         ctx.arc(64 * s, 42 * s, 22 * s, 0, Math.PI * 2);
-        fillStroke(ctx, '#FF8C00', O, 2.5 * s);
+        fillStroke(ctx, '#FFAA33', O, 2.5 * s);
 
         // HELMET — brown crest
         ctx.fillStyle = '#8B4513';
@@ -2047,9 +2202,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.fill();
         ctx.stroke();
 
-        // EYES — fierce green
-        drawEye(ctx, 52 * s, 40 * s, '#99FF99', 7.5 * s, 3 * s);
-        drawEye(ctx, 76 * s, 40 * s, '#99FF99', 7.5 * s, 3 * s);
+        // EYES — fierce green, angled
+        drawEye(ctx, 52 * s, 40 * s, '#44FF44', 7.5 * s, 3 * s, { shape: 'round', angle: -0.12 });
+        drawEye(ctx, 76 * s, 40 * s, '#44FF44', 7.5 * s, 3 * s, { shape: 'round', angle: 0.12 });
 
         // ANGRY EYEBROWS
         ctx.strokeStyle = '#8B4513';
@@ -2094,8 +2249,11 @@ window.SPRITE_PIXEL = (function () {
         ctx.roundRect(64 * s, 112 * s, 20 * s, 6 * s, 2 * s);
         fillStroke(ctx, '#E8E8F0', O, 2 * s);
 
-        // BODY — elongated wolf body
-        ctx.fillStyle = '#4A6FA5';
+        // BODY — elongated wolf with gradient
+        const garGrad = ctx.createLinearGradient(40 * s, 58 * s, 88 * s, 102 * s);
+        garGrad.addColorStop(0, '#5A80B5');
+        garGrad.addColorStop(1, '#3A5A8A');
+        ctx.fillStyle = garGrad;
         ctx.beginPath();
         ctx.ellipse(64 * s, 80 * s, 28 * s, 22 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#4A6FA5', O, 2.5 * s);
@@ -2155,9 +2313,9 @@ window.SPRITE_PIXEL = (function () {
             fillStroke(ctx, '#4A6FA5', O, 2.5 * s);
         }
 
-        // EYES — piercing blue
-        drawEye(ctx, 52 * s, 46 * s, '#87CEEB', 7 * s, 3 * s);
-        drawEye(ctx, 76 * s, 46 * s, '#87CEEB', 7 * s, 3 * s);
+        // EYES — piercing ice blue wolf, narrow
+        drawEye(ctx, 52 * s, 46 * s, '#5BB5FF', 7 * s, 3 * s, { shape: 'narrow', gazeX: 0.4 });
+        drawEye(ctx, 76 * s, 46 * s, '#5BB5FF', 7 * s, 3 * s, { shape: 'narrow', gazeX: 0.4 });
     }
 
     function drawKabuterimon(ctx, s) {
@@ -2343,9 +2501,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.arc(64 * s, 50 * s, 3 * s, 0.1, Math.PI - 0.1);
         ctx.stroke();
 
-        // EYES
-        drawEye(ctx, 54 * s, 44 * s, '#1a7a1a', 6 * s, 2.5 * s);
-        drawEye(ctx, 74 * s, 44 * s, '#1a7a1a', 6 * s, 2.5 * s);
+        // EYES — round dark green
+        drawEye(ctx, 54 * s, 44 * s, '#1a7a1a', 6 * s, 2.5 * s, { shape: 'round', gazeX: 0.3 });
+        drawEye(ctx, 74 * s, 44 * s, '#1a7a1a', 6 * s, 2.5 * s, { shape: 'round', gazeX: 0.3 });
     }
 
     function drawAngemon(ctx, s) {
@@ -2380,8 +2538,11 @@ window.SPRITE_PIXEL = (function () {
         ctx.roundRect(66 * s, 98 * s, 8 * s, 18 * s, 3 * s);
         fillStroke(ctx, '#F5F5F5', O, 2.5 * s);
 
-        // BODY — white/silver
-        ctx.fillStyle = '#F5F5F5';
+        // BODY — white/silver with holy gradient
+        const angGrad = ctx.createLinearGradient(46 * s, 56 * s, 82 * s, 104 * s);
+        angGrad.addColorStop(0, '#FFFFFF');
+        angGrad.addColorStop(1, '#E0E0E8');
+        ctx.fillStyle = angGrad;
         ctx.beginPath();
         ctx.ellipse(64 * s, 80 * s, 18 * s, 24 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#F5F5F5', O, 2.5 * s);
@@ -2440,9 +2601,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.arc(64 * s, 50 * s, 3 * s, 0.1, Math.PI - 0.1);
         ctx.stroke();
 
-        // EYES — serene blue
-        drawEye(ctx, 55 * s, 44 * s, '#87CEEB', 5 * s, 2 * s);
-        drawEye(ctx, 73 * s, 44 * s, '#87CEEB', 5 * s, 2 * s);
+        // EYES — serene blue, noble gaze
+        drawEye(ctx, 55 * s, 44 * s, '#87CEEB', 5.5 * s, 2.5 * s, { shape: 'round', gazeX: 0.3 });
+        drawEye(ctx, 73 * s, 44 * s, '#87CEEB', 5.5 * s, 2.5 * s, { shape: 'round', gazeX: 0.3 });
     }
 
     function drawBirdramon(ctx, s) {
@@ -2472,8 +2633,11 @@ window.SPRITE_PIXEL = (function () {
             fillStroke(ctx, '#FFD700', O, 1.5 * s);
         }
 
-        // BODY
-        ctx.fillStyle = '#FF6347';
+        // BODY — flame gradient
+        const birGrad = ctx.createLinearGradient(40 * s, 54 * s, 88 * s, 106 * s);
+        birGrad.addColorStop(0, '#FF8040');
+        birGrad.addColorStop(1, '#CC3300');
+        ctx.fillStyle = birGrad;
         ctx.beginPath();
         ctx.ellipse(64 * s, 80 * s, 24 * s, 26 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#FF6347', O, 2.5 * s);
@@ -2532,9 +2696,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.closePath();
         fillStroke(ctx, '#FFD700', O, 2 * s);
 
-        // EYES — fierce yellow
-        drawEye(ctx, 52 * s, 42 * s, '#FFD700', 6 * s, 2.5 * s);
-        drawEye(ctx, 76 * s, 42 * s, '#FFD700', 6 * s, 2.5 * s);
+        // EYES — fiery gold
+        drawEye(ctx, 52 * s, 42 * s, '#FFD700', 6.5 * s, 3 * s, { shape: 'narrow', gazeX: 0.4 });
+        drawEye(ctx, 76 * s, 42 * s, '#FFD700', 6.5 * s, 3 * s, { shape: 'narrow', gazeX: 0.4 });
     }
 
     function drawGarudamon(ctx, s) {
@@ -2616,9 +2780,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.closePath();
         fillStroke(ctx, '#FF6347', O, 2 * s);
 
-        // EYES
-        drawEye(ctx, 52 * s, 40 * s, '#FF6347', 6.5 * s, 2.5 * s);
-        drawEye(ctx, 76 * s, 40 * s, '#FF6347', 6.5 * s, 2.5 * s);
+        // EYES — fierce red-orange, sharp angled
+        drawEye(ctx, 52 * s, 40 * s, '#FF6347', 7 * s, 3 * s, { shape: 'narrow', angle: -0.1 });
+        drawEye(ctx, 76 * s, 40 * s, '#FF6347', 7 * s, 3 * s, { shape: 'narrow', angle: 0.1 });
 
         // ARMS
         ctx.fillStyle = '#FFD700';
@@ -2652,8 +2816,12 @@ window.SPRITE_PIXEL = (function () {
         ctx.roundRect(68 * s, 96 * s, 16 * s, 24 * s, 4 * s);
         fillStroke(ctx, '#B0B0B0', O, 2.5 * s);
 
-        // BODY — orange with metal armor
-        ctx.fillStyle = '#FF8C00';
+        // BODY — orange with metal armor, gradient
+        const metaGrad = ctx.createLinearGradient(38 * s, 48 * s, 90 * s, 108 * s);
+        metaGrad.addColorStop(0, '#FFAA33');
+        metaGrad.addColorStop(0.5, '#FF8C00');
+        metaGrad.addColorStop(1, '#CC6600');
+        ctx.fillStyle = metaGrad;
         ctx.beginPath();
         ctx.ellipse(64 * s, 78 * s, 26 * s, 30 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#FF8C00', O, 2.5 * s);
@@ -2775,8 +2943,11 @@ window.SPRITE_PIXEL = (function () {
         ctx.fill();
         ctx.strokeStyle = O; ctx.lineWidth = 2.5 * s; ctx.stroke();
 
-        // BODY
-        ctx.fillStyle = '#4A6FA5';
+        // BODY — werewolf with gradient
+        const wereGrad = ctx.createLinearGradient(40 * s, 48 * s, 88 * s, 104 * s);
+        wereGrad.addColorStop(0, '#5A80B5');
+        wereGrad.addColorStop(1, '#3A5A8A');
+        ctx.fillStyle = wereGrad;
         ctx.beginPath();
         ctx.ellipse(64 * s, 76 * s, 24 * s, 28 * s, 0, 0, Math.PI * 2);
         fillStroke(ctx, '#4A6FA5', O, 2.5 * s);
@@ -2856,9 +3027,9 @@ window.SPRITE_PIXEL = (function () {
             fillStroke(ctx, '#4A6FA5', O, 2.5 * s);
         }
 
-        // EYES — fierce
-        drawEye(ctx, 52 * s, 42 * s, '#FF6666', 7 * s, 3 * s);
-        drawEye(ctx, 76 * s, 42 * s, '#FF6666', 7 * s, 3 * s);
+        // EYES — mechanical red, looking right
+        drawEye(ctx, 52 * s, 42 * s, '#FF4444', 7 * s, 3 * s, { shape: 'round', gazeX: 0.4 });
+        drawEye(ctx, 76 * s, 42 * s, '#FF4444', 7 * s, 3 * s, { shape: 'round', gazeX: 0.4 });
     }
 
     function drawAtlurKabuterimon(ctx, s) {
@@ -3030,9 +3201,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.closePath();
         fillStroke(ctx, '#48D1CC', O, 2 * s);
 
-        // EYES
-        drawEye(ctx, 52 * s, 46 * s, '#87CEEB', 6 * s, 2.5 * s);
-        drawEye(ctx, 76 * s, 46 * s, '#87CEEB', 6 * s, 2.5 * s);
+        // EYES — wolf blue, narrow piercing
+        drawEye(ctx, 52 * s, 46 * s, '#5BB5FF', 6.5 * s, 3 * s, { shape: 'narrow', gazeX: 0.4 });
+        drawEye(ctx, 76 * s, 46 * s, '#5BB5FF', 6.5 * s, 3 * s, { shape: 'narrow', gazeX: 0.4 });
 
         // MOUTH
         ctx.strokeStyle = O;
@@ -3211,9 +3382,9 @@ window.SPRITE_PIXEL = (function () {
         ctx.arc(64 * s, 57 * s, 5 * s, 0.1, Math.PI - 0.1);
         ctx.stroke();
 
-        // EYES
-        drawEye(ctx, 49 * s, 46 * s, '#4169E1', 7 * s, 3 * s);
-        drawEye(ctx, 79 * s, 46 * s, '#4169E1', 7 * s, 3 * s);
+        // EYES — round blue, friendly walrus gaze
+        drawEye(ctx, 49 * s, 46 * s, '#4169E1', 7 * s, 3 * s, { shape: 'round', gazeX: 0.3 });
+        drawEye(ctx, 79 * s, 46 * s, '#4169E1', 7 * s, 3 * s, { shape: 'round', gazeX: 0.3 });
     }
 
     /* ── Additional species ── */
@@ -3902,8 +4073,8 @@ window.SPRITE_PIXEL = (function () {
         ctx.stroke();
 
         // EYES — generic
-        drawEye(ctx, 54 * s, 46 * s, '#667788', 6 * s, 2.5 * s);
-        drawEye(ctx, 74 * s, 46 * s, '#667788', 6 * s, 2.5 * s);
+        drawEye(ctx, 54 * s, 46 * s, '#667788', 6 * s, 2.5 * s, { shape: 'round', gazeX: 0.3 });
+        drawEye(ctx, 74 * s, 46 * s, '#667788', 6 * s, 2.5 * s, { shape: 'round', gazeX: 0.3 });
 
         // QUESTION MARK
         ctx.strokeStyle = '#FFD700';
