@@ -600,7 +600,7 @@
 
 - [x] Task 1 — `lineage.py` 核心模块: LineageRecord (亲子关系记录: parents, child, tick_born, generation) + LineageTracker (族谱 CRUD + 祖先/后代/兄弟姐妹查询 + 家族统计) + InheritanceEngine (从父母计算子代继承的人格向量/知识亲和力/徽章亲和力/属性倾向) (57 tests)
 - [x] Task 2 — 孵化系统: `egg_incubation.py` — EggState (incubation_ticks, hatch_progress) + Hatchery (管理所有蛋的孵化进度，每 tick 推进，到期孵化出 BABY_I) + 季节修正因子 (46 tests)
-- [ ] Task 3 — Scheduler 集成 + API 端点: `GET /api/lineage/{name}` (家谱)、`GET /api/lineage/tree` (世界族谱总览)、`GET /api/lineage/stats` (世代统计)
+- [x] Task 3 — Scheduler 集成 + API 端点: `GET /api/lineage/{name}` (家谱)、`GET /api/lineage/tree` (世界族谱总览)、`GET /api/lineage/stats` (世代统计) ✅
 - [ ] Task 4 — 前端「🌳 家族树」面板: 数码兽详情新增家族 tab，树状图显示父母/兄弟姐妹/子女 + 世代标签
 - [ ] Task 5 — 端到端验证: verify_phase30.py（验证亲子记录/家族查询/遗传计算/孵化周期/API 端点完整生命周期）
 
