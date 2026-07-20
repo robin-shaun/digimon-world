@@ -583,3 +583,25 @@
 - [x] Task 5 — ROADMAP + README 更新 ✅
 
 **完成标志**: 数码世界有了一本自动更新的历史书——可翻阅、可检索、可追溯任何时刻的世界状态。
+
+---
+
+## Phase 30: 世代传承 — 数码蛋孵化、亲子羁绊与世代特质继承 🔄 (进行中)
+
+**目标**: Phase 5 的繁衍系统能产生数码蛋，但缺少完整的生命周期闭环——蛋何时孵化？父母如何影响子代（不仅是数值，还有人格/知识/徽章亲和力）？谁是第几代？Phase 30 构建完整的世代传承系统：**孵化周期、亲子关系追踪、家族树、世代特质遗传**。
+
+**设计原则**:
+- 纯数据驱动，无 LLM 依赖（孵化/遗传/族谱计算全确定性）
+- 与现有 breeding.py / evolution.py 解耦，只读数据，不修改
+- 族谱不可变（append-only），每次产蛋写入一条亲子记录
+- 遗传规则可配置（从简单数值继承到深层人格/知识亲和力传播）
+
+**基础设施**: Phase 5 (繁衍) + Phase 8 (进化) + Phase 17 (MBTI 人格) + Phase 26 (人格动态演化) + Phase 27 (知识经济)
+
+- [ ] Task 1 — `lineage.py` 核心模块: LineageRecord (亲子关系记录: parents, child, tick_born, generation) + LineageTracker (族谱 CRUD + 祖先/后代/兄弟姐妹查询 + 家族统计) + InheritanceEngine (从父母计算子代继承的人格向量/知识亲和力/徽章亲和力/属性倾向)
+- [ ] Task 2 — 孵化系统: `egg_incubation.py` — EggState (incubation_ticks, hatch_progress) + Hatchery (管理所有蛋的孵化进度，每 tick 推进，到期孵化出 BABY_I)
+- [ ] Task 3 — Scheduler 集成 + API 端点: `GET /api/lineage/{name}` (家谱)、`GET /api/lineage/tree` (世界族谱总览)、`GET /api/lineage/stats` (世代统计)
+- [ ] Task 4 — 前端「🌳 家族树」面板: 数码兽详情新增家族 tab，树状图显示父母/兄弟姐妹/子女 + 世代标签
+- [ ] Task 5 — 端到端验证: verify_phase30.py（验证亲子记录/家族查询/遗传计算/孵化周期/API 端点完整生命周期）
+
+**完成标志**: 数码蛋有孵化周期，每只数码兽知道自己来自哪里（父母是谁、第几代），族谱可追溯，子代从父母处继承的不只是数值——还有人格倾向、知识领域、徽章亲和力。
