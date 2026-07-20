@@ -577,7 +577,7 @@
 **基础设施**: Phase 14 (叙事) + Phase 20 (世界模型) + Phase 22 (共享惯例) + Phase 24 (能量经济) + Phase 27 (知识经济) + Phase 28 (叙事一致性)
 
 - [x] Task 1 — `world_almanac.py` 核心模块: AlmanacChapter (章节数据类: 世界快照 + 事件精选 + 趋势 + 名人堂) + WorldAlmanac (章节生成/索引/过滤/导出)
-- [ ] Task 2 — Scheduler 集成 + API 端点: `GET /api/almanac` (章节列表)、`GET /api/almanac/{epoch}` (单章详情)、`GET /api/almanac/current` (当前 epoch 快照)
+- [x] Task 2 — Scheduler 集成 + API 端点: `GET /api/almanac` (章节列表)、`GET /api/almanac/{epoch}` (单章详情)、`GET /api/almanac/current` (当前 epoch 快照) ✅
 - [ ] Task 3 — 前端「📖 世界年鉴」面板: 章节时间线 + 趋势图 + 名人堂排行榜
 - [ ] Task 4 — 端到端验证: verify_phase29.py
 - [ ] Task 5 — ROADMAP + README 更新
