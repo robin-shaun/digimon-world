@@ -404,6 +404,94 @@ class WorldScheduler:
                 logger.info("KnowledgePool: %d spreads @ tick %d", spread_count, self._tick_count)
         except Exception as e:
             logger.debug("Knowledge economy step failed: %s", e)
+        # 9.87 Phase 28a: 自我模型 — 每个 agent 自我评估
+        try:
+            from .self_model import get_self_model_registry
+            sm_registry = get_self_model_registry()
+            for agent in agents:
+                # 构建 world context
+                # 使用 all_pairs() 计算关系数（agent 在 'a' 或 'b' 位置）和友谊等级
+                all_pairs = self._relationships.all_pairs()
+                rel_count = sum(1 for p in all_pairs if p['a'] == agent.name or p['b'] == agent.name)
+                friendship_levels = [
+                    p['vector']['affinity']
+                    for p in all_pairs
+                    if (p['a'] == agent.name or p['b'] == agent.name)
+                ]
+                ctx: dict[str, Any] = {
+                    "battle_victories": getattr(agent, 'battle_victories', 0),
+                    "attack": agent.stats.attack if hasattr(agent, 'stats') else 0,
+                    "defense": agent.stats.defense if hasattr(agent, 'stats') else 0,
+                    "evolution_stage": agent.stage.value if hasattr(agent, 'stage') else "rookie",
+                    "relationship_count": rel_count,
+                    "dialogue_count": 0,  # dialogue tracking not yet implemented per-agent
+                    "friendship_levels": friendship_levels,
+                    "regions_visited": 0,  # regions_visited tracking not yet implemented
+                    "distance_traveled": 0.0,  # distance tracking not yet implemented
+                    "skills_count": len(getattr(agent, 'skills', [])),
+                    "inventions_count": getattr(agent, 'invention_count', 0),
+                    "knowledge_citations": getattr(agent, 'knowledge_citations', 0),
+                }
+                sm_registry.step(
+                    agent_name=agent.name,
+                    agent_context=ctx,
+                    tick=self._tick_count,
+                )
+        except Exception as e:
+            logger.debug("Self model step failed: %s", e)
+        # 9.875 Phase 28b: Theory of Mind — 更新 agent 间心智模型
+        try:
+            from .theory_of_mind import get_theory_of_mind_registry
+            tom_registry = get_theory_of_mind_registry()
+            # 使用对话阶段检测到的 proximity pairs
+            pairs = detect_proximity(agents, radius=DIALOGUE_RADIUS)
+            for a, b in pairs:
+                if a.region_id != b.region_id:
+                    continue
+                # 构建观察数据
+                obs_a = {
+                    "action_type": "proximity",
+                    "intensity": 0.3,
+                }
+                obs_b = {
+                    "action_type": "proximity",
+                    "intensity": 0.3,
+                }
+                tom_registry.step(a.name, b.name, obs_a, self._tick_count)
+                tom_registry.step(b.name, a.name, obs_b, self._tick_count)
+        except Exception as e:
+            logger.debug("Theory of mind step failed: %s", e)
+        # 9.88 Phase 28c: 叙事一致性检查
+        try:
+            from .narrative_coherence import get_coherence_engine
+            coherence = get_coherence_engine()
+            if coherence.should_check(self._tick_count):
+                # 收集 pairs_data: [(a, b, a→b_affinity, b→a_affinity, a→b_rivalry, b→a_rivalry), ...]
+                pairs_data: list[tuple[str, str, float, float, float, float]] = []
+                agent_names = [a.name for a in agents]
+                for i, ai in enumerate(agents):
+                    for aj in agents[i+1:]:
+                        rel_ab = self._relationships.get_vector(ai.name, aj.name)
+                        rel_ba = self._relationships.get_vector(aj.name, ai.name)
+                        pairs_data.append((
+                            ai.name, aj.name,
+                            rel_ab.affinity, rel_ba.affinity,
+                            rel_ab.rivalry, rel_ba.rivalry,
+                        ))
+                report = coherence.check(
+                    tick=self._tick_count,
+                    agent_names=agent_names,
+                    pairs_data=pairs_data,
+                    events=self._world.events[-200:] if self._world.events else None,
+                    agent_positions=None,
+                )
+                if report.warnings:
+                    logger.warning(
+                        "NarrativeCoherence: score=%.3f warnings=%d",
+                        report.global_score, len(report.warnings),
+                    )
+        except Exception as e:
+            logger.debug("Narrative coherence check failed: %s", e)
         # 9.9 Phase 25 上下文质量检测阶段:
         #    对每只 agent 生成 ContextQualitySnapshot，诊断问题，
         #    低健康分数的 agent 自动触发优化建议

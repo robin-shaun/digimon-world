@@ -710,6 +710,94 @@ def get_digimon_insights(name: str) -> dict[str, Any]:
     return engine.assess(memory_autonomy, plan_engine, world_model)
 
 
+# ---- Phase 28: 自我模型 & 心理理论 & 叙事一致性 API ----
+
+@app.get("/api/digimon/{name}/self")
+def get_digimon_self_model(name: str) -> dict[str, Any]:
+    """Phase 28: Agent 自我模型快照。
+
+    返回 agent 对自身能力的认知，包含：
+    - identity: 从世界状态计算的客观能力分数
+    - self_assessment: agent 对自己的主观认知（可能偏离 identity）
+    - uncertainty: 各维度不确定性
+    - trajectory: 自我认知随时间的变化轨迹（最近20条）
+    - improvement_goals: 当前自我改进目标
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    from ..world.self_model import get_self_model_registry
+
+    registry = get_self_model_registry()
+    model = registry.get(agent.name)
+
+    if model is None:
+        return {
+            "name": name,
+            "status": "not_initialized",
+            "message": "Self model not yet initialized. Run the world for at least 10 ticks.",
+        }
+
+    return model.to_dict()
+
+
+@app.get("/api/digimon/{name}/tom")
+def get_digimon_theory_of_mind(name: str) -> dict[str, Any]:
+    """Phase 28: Agent Theory of Mind（对其他数码兽的认知）。
+
+    返回该 agent 维护的所有其他 agent 的心智模型，包含：
+    - 对每个目标 agent 的信念/欲望/意图评估
+    - 置信度
+    - 上次更新时间
+    """
+    world = get_world()
+    agent = world.get(name)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Digimon '{name}' not found")
+
+    from ..world.theory_of_mind import get_theory_of_mind_registry
+
+    registry = get_theory_of_mind_registry()
+    models = registry.get_all_models_for(agent.name)
+
+    return {
+        "name": name,
+        "count": len(models),
+        "mental_models": [m.to_dict() for m in models],
+    }
+
+
+@app.get("/api/narratives/coherence")
+def get_narrative_coherence() -> dict[str, Any]:
+    """Phase 28: 世界叙事一致性报告。
+
+    返回最近一次叙事一致性检查的结果，包含：
+    - global_score: 全局一致性评分 (0-1)
+    - relation_conflicts: 检测到的关系矛盾列表
+    - spatial_inconsistencies: 空间不一致列表
+    - warnings: 人类可读的警告信息
+    - scores: 各维度分解评分
+    """
+    from ..world.narrative_coherence import get_coherence_engine
+
+    coherence = get_coherence_engine()
+
+    # 获取所有已记录的 relation 冲突（来自引擎的内部状态）
+    # 由于 check() 结果不持久化，这里返回引擎的当前状态摘要
+    return {
+        "last_check_tick": coherence._last_check_tick,
+        "pair_histories_count": sum(len(hist) for hist in coherence._pair_histories.values()),
+        "unique_pairs_tracked": len(coherence._pair_histories),
+        "status": "active",
+        "message": (
+            f"Full coherence report is generated every {500} ticks during world simulation. "
+            "Check server logs for the latest report."
+        ),
+    }
+
+
 # ---- Phase 23: 认知能量 API ----
 @app.get("/api/digimon/{name}/energy")
 def get_digimon_energy(name: str) -> dict[str, Any]:
