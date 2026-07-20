@@ -46,7 +46,7 @@ digimon-world/
 │   │   ├── world/           # 世界状态 + 关系 + 经济 + 灾难 + 节日 + 活力
 │   │   ├── llm/             # LLM 客户端
 │   │   └── api/             # FastAPI 接口
-|   └── tests/               # 1376 测试
+|   └── tests/               # 1750+ 测试
 └── src/index.js             # Cloudflare Worker (API反代)
 ```
 
@@ -83,6 +83,7 @@ digimon-world/
 | **27** | 🧠 知识经济与科技树 — 知识发明/引用/传播/科技树解锁 | ✅ 完成 |
 | **28** | 🪞 Agent 自我认知与叙事一致性引擎 — SelfModel + ToM + 叙事一致性 | ✅ 完成 |
 | **29** | 📖 世界年鉴与历史叙事 — 世界快照 + 趋势 + 名人堂 + 前端面板 | ✅ 完成 |
+| **30** | 🌳 世代传承 — 数码蛋孵化 + 族谱追踪 + 特质遗传 + 家族树面板 | ✅ 完成 |
 
 详细见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
@@ -94,7 +95,7 @@ digimon-world/
 | 后端 | Python 3.11 + FastAPI + SQLite |
 | AI | Anthropic Claude (Opus 4.8 + Haiku 4.5) via 中转 |
 | 部署 | Cloudflare Workers (前端) + Cloudflare Tunnel (后端) |
-- **测试**: pytest (1440 passed)
+- **测试**: pytest (1750+ passed)
 
 ## 🚀 本地启动
 
@@ -110,7 +111,7 @@ cd backend && source .venv/bin/activate && python -m pytest tests/ -q
 ## 📊 当前状态
 
 - **数码兽**: 100 只（亚古兽/加布兽/比丘兽/甲虫兽/巴鲁兽/哥玛兽/巴达兽/迪路兽/小狗兽/艾力兽 + 病毒种/数据种/自由种）
-- **测试**: pytest (1543 collected)
+- **测试**: pytest (1750+ collected)
 - **部署**: Cloudflare Workers + Tunnel
 - **每日调研**: 08:30 自动跑 arXiv + GitHub + 数码宝贝原作
 
