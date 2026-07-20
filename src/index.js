@@ -4,7 +4,7 @@
  * Proxies /api/* requests to the backend tunnel and serves static assets.
  * This avoids CORS issues and browser JS challenges from Cloudflare Tunnel.
  */
-const BACKEND = 'https://meditation-tsunami-waiting-powers.trycloudflare.com';
+const BACKEND = 'https://relevant-comparisons-translator-batch.trycloudflare.com';
 
 export default {
   async fetch(request, env, ctx) {

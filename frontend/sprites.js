@@ -40,8 +40,8 @@ window.SPRITE_PIXEL = (function () {
 
     /** Draw anime-style eye at (cx, cy) */
     function drawEye(ctx, cx, cy, irisColor, eyeRadius, pupilRadius) {
-        er = eyeRadius || 8;
-        pr = pupilRadius || 3;
+        const er = eyeRadius || 8;
+        const pr = pupilRadius || 3;
 
         // Sclera (white)
         ctx.beginPath();
