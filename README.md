@@ -32,6 +32,8 @@ digimon-world/
 │   ├── index.html           # 主页面 + 导演面板
 │   ├── style.css            # 暗色主题 + 动画
 │   ├── main.js              # Canvas渲染 + API轮询 + 状态管理
+│   ├── almanac.js            # 世界年鉴面板
+│   ├── economy.js            # 能量经济面板
 │   ├── stats.html           # 数据仪表盘
 │   ├── battle.html          # 战斗模拟
 │   ├── evolution.html       # 进化图鉴
@@ -80,6 +82,7 @@ digimon-world/
 | **26** | 🧬 社会互动驱动的人格动态演化 — 社会影响力 + 人格转变 | ✅ 完成 |
 | **27** | 🧠 知识经济与科技树 — 知识发明/引用/传播/科技树解锁 | ✅ 完成 |
 | **28** | 🪞 Agent 自我认知与叙事一致性引擎 — SelfModel + ToM + 叙事一致性 | ✅ 完成 |
+| **29** | 📖 世界年鉴与历史叙事 — 世界快照 + 趋势 + 名人堂 + 前端面板 | 🟢 进行中 |
 
 详细见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
@@ -91,7 +94,7 @@ digimon-world/
 | 后端 | Python 3.11 + FastAPI + SQLite |
 | AI | Anthropic Claude (Opus 4.8 + Haiku 4.5) via 中转 |
 | 部署 | Cloudflare Workers (前端) + Cloudflare Tunnel (后端) |
-- **测试**: pytest (1222 passed)
+- **测试**: pytest (1440 passed)
 
 ## 🚀 本地启动
 
@@ -107,7 +110,7 @@ cd backend && source .venv/bin/activate && python -m pytest tests/ -q
 ## 📊 当前状态
 
 - **数码兽**: 100 只（亚古兽/加布兽/比丘兽/甲虫兽/巴鲁兽/哥玛兽/巴达兽/迪路兽/小狗兽/艾力兽 + 病毒种/数据种/自由种）
-- **测试**: 1376 passed
+- **测试**: 1440 passed
 - **部署**: Cloudflare Workers + Tunnel
 - **每日调研**: 08:30 自动跑 arXiv + GitHub + 数码宝贝原作
 

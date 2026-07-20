@@ -578,8 +578,8 @@
 
 - [x] Task 1 — `world_almanac.py` 核心模块: AlmanacChapter (章节数据类: 世界快照 + 事件精选 + 趋势 + 名人堂) + WorldAlmanac (章节生成/索引/过滤/导出)
 - [x] Task 2 — Scheduler 集成 + API 端点: `GET /api/almanac` (章节列表)、`GET /api/almanac/{epoch}` (单章详情)、`GET /api/almanac/current` (当前 epoch 快照) ✅
-- [ ] Task 3 — 前端「📖 世界年鉴」面板: 章节时间线 + 趋势图 + 名人堂排行榜
-- [ ] Task 4 — 端到端验证: verify_phase29.py
+- [x] Task 3 — 前端「📖 世界年鉴」面板: 章节时间线 + 趋势图 + 名人堂排行榜 ✅
+- [x] Task 4 — 端到端验证: verify_phase29.py ✅ (96/96 PASS)
 - [ ] Task 5 — ROADMAP + README 更新
 
 **完成标志**: 数码世界有了一本自动更新的历史书——可翻阅、可检索、可追溯任何时刻的世界状态。
