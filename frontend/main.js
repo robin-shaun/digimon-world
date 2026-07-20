@@ -4072,10 +4072,10 @@
     async function start() {
         console.log('[start] API_BASE =', API_BASE || '(同源)');
 
-        // Phase 21: 预加载所有像素精灵图
+        // Phase 27: 预加载AI生成的PNG精灵图（等待加载完成）
         if (window.SPRITE_PIXEL) {
-            SPRITE_PIXEL.preloadAll();
-            console.log('[sprite] 像素精灵图预加载完成');
+            await SPRITE_PIXEL.preloadAll();
+            console.log('[sprite] AI精灵图预加载完成');
         }
 
         // 1. 拉地图

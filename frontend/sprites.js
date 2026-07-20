@@ -4260,13 +4260,28 @@ window.SPRITE_PIXEL = (function () {
         return offscreen;
     }
 
-    /** Batch preload all known species (procedural + kick off image loads). */
+    /** Batch preload all species: load PNGs first, then render. Returns a Promise. */
     function preloadAll() {
-        for (const key of Object.keys(DRAW_FUNCS)) {
-            if (key === '_default') continue;
-            getSprite(key, null);              // procedural render (instant)
-            preloadImage(key);                 // kick off PNG load (async)
-        }
+        const species = Object.keys(DRAW_FUNCS).filter(k => k !== '_default');
+        
+        // Start ALL PNG loads
+        const promises = species.map(key => {
+            if (!imageCache.has(key) && !loadingPromises.has(key)) {
+                return loadImage(key).catch(() => {});  // ignore failures
+            }
+            return Promise.resolve();
+        });
+        
+        // After all PNGs loaded (or failed), render them
+        return Promise.all(promises).then(() => {
+            for (const key of species) {
+                // Clear any stale procedural cache
+                for (const ck of spriteCache.keys()) {
+                    if (ck.startsWith(key + '::')) spriteCache.delete(ck);
+                }
+                getSprite(key, null);  // now uses PNG since imageCache is populated
+            }
+        });
     }
 
     /** Clear sprite cache (does NOT clear image cache — PNGs are permanent). */
