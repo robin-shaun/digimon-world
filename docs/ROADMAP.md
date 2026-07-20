@@ -565,7 +565,7 @@
 
 ---
 
-## Phase 29: 世界年鉴与历史叙事 ✅ (进行中)
+## Phase 29: 世界年鉴与历史叙事 ✅ 100%
 
 **目标**: 28 个 Phase 构建了丰富的世界数据（关系、能量、知识、派系、人格、叙事一致性）——但没有一个结构化的**世界历史档案馆**来纵览这一切。Phase 29 构建 `WorldAlmanac`，每隔 epoch（默认 100 tick / 关键事件触发）自动生成一个「年鉴章节」——当前世界状态快照 + 重要事件 + 趋势分析 + 数码兽名人堂。
 
@@ -580,6 +580,6 @@
 - [x] Task 2 — Scheduler 集成 + API 端点: `GET /api/almanac` (章节列表)、`GET /api/almanac/{epoch}` (单章详情)、`GET /api/almanac/current` (当前 epoch 快照) ✅
 - [x] Task 3 — 前端「📖 世界年鉴」面板: 章节时间线 + 趋势图 + 名人堂排行榜 ✅
 - [x] Task 4 — 端到端验证: verify_phase29.py ✅ (96/96 PASS)
-- [ ] Task 5 — ROADMAP + README 更新
+- [x] Task 5 — ROADMAP + README 更新 ✅
 
 **完成标志**: 数码世界有了一本自动更新的历史书——可翻阅、可检索、可追溯任何时刻的世界状态。
