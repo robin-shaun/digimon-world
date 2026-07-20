@@ -88,6 +88,7 @@ from .conventions import (
 from .conventions import (
     router as conventions_router,
 )
+from .lineage import router as lineage_router
 from .pokedex import router as pokedex_router
 
 logger = logging.getLogger("digimon.api")
@@ -241,6 +242,9 @@ app.include_router(digimon_context_health_router)
 
 # Phase 29: 世界年鉴路由
 app.include_router(almanac_router)
+
+# Phase 30: 世代传承路由
+app.include_router(lineage_router)
 
 
 # ---- Routes ----

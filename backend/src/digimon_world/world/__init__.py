@@ -48,6 +48,13 @@ from .economy import (
     EconomySystem,
     get_economy_system,
 )
+from .egg_incubation import (
+    EggState,
+    Hatchery,
+    HatchResult,
+    get_hatchery,
+    reset_hatchery,
+)
 from .environmental_events import (
     EnvironmentalEventSystem,
     get_env_events_system,
@@ -69,6 +76,14 @@ from .landmarks import (
     LandmarkSystem,
     get_landmark_system,
     reset_landmark_system,
+)
+from .lineage import (
+    InheritanceEngine,
+    InheritedTraits,
+    LineageRecord,
+    LineageTracker,
+    get_lineage_tracker,
+    reset_lineage_tracker,
 )
 from .multiverse import (
     PRIME_WORLD_ID,
@@ -241,15 +256,22 @@ __all__ = [
     "DayPeriod",
     "EcologySystem",
     "EconomySystem",
+    "EggState",
     "EnergyLedger",
     "EnvironmentalEventSystem",
     "Faction",
     "FactionRegistry",
     "Festival",
     "FestivalSystem",
+    "HatchResult",
+    "Hatchery",
+    "InheritanceEngine",
+    "InheritedTraits",
     "Landmark",
     "LandmarkEffect",
     "LandmarkSystem",
+    "LineageRecord",
+    "LineageTracker",
     "MbtiDimension",
     # Phase 28: Theory of Mind
     "MentalStateModel",
@@ -299,8 +321,10 @@ __all__ = [
     "get_energy_ledger",
     "get_env_events_system",
     "get_festival_system",
+    "get_hatchery",
     "get_health_monitor",
     "get_landmark_system",
+    "get_lineage_tracker",
     "get_multiverse",
     "get_narrator",
     "get_optimizer",
@@ -325,7 +349,9 @@ __all__ = [
     "reset_energy_economy",
     "reset_env_events_system",
     "reset_festival_system",
+    "reset_hatchery",
     "reset_landmark_system",
+    "reset_lineage_tracker",
     "reset_multiverse",
     "reset_narrator",
     "reset_personality_engine",

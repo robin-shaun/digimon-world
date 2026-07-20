@@ -312,6 +312,29 @@ class WorldScheduler:
                     agent.observe(festival)
                 except Exception as e:
                     logger.warning("festival observe failed for %s: %s", agent.name, e)
+        # 7.6 Phase 30: 孵化阶段 — 推进所有数码蛋的孵化进度
+        try:
+            from .egg_incubation import get_hatchery
+            hatchery = get_hatchery()
+            season_str = self._season.current.value if self._season else None
+            newly_hatched = hatchery.tick(self._tick_count, season=season_str)
+            for result in newly_hatched:
+                event = {
+                    "type": "egg_hatched",
+                    "egg_id": result.egg_id,
+                    "parent_a": result.parent_a,
+                    "parent_b": result.parent_b,
+                    "child_species": result.child_species,
+                    "tick": result.tick_hatched,
+                    "at": self._clock.now.isoformat() if self._clock.now else None,
+                }
+                self._world.events.append(event)
+                logger.info(
+                    "Hatchery: egg %s hatched! → %s (parents: %s + %s)",
+                    result.egg_id, result.child_species, result.parent_a, result.parent_b,
+                )
+        except Exception as e:
+            logger.debug("Hatchery step failed: %s", e)
         # 8. Phase 10 环境演化阶段:
         #    昼夜循环、天气切换、生态更新、环境事件检测
         await self._process_environment(agents)
