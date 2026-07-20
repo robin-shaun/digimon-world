@@ -110,7 +110,7 @@ cd backend && source .venv/bin/activate && python -m pytest tests/ -q
 ## 📊 当前状态
 
 - **数码兽**: 100 只（亚古兽/加布兽/比丘兽/甲虫兽/巴鲁兽/哥玛兽/巴达兽/迪路兽/小狗兽/艾力兽 + 病毒种/数据种/自由种）
-- **测试**: 1440 passed
+- **测试**: pytest (1543 collected)
 - **部署**: Cloudflare Workers + Tunnel
 - **每日调研**: 08:30 自动跑 arXiv + GitHub + 数码宝贝原作
 
