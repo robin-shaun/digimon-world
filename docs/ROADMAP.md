@@ -608,7 +608,7 @@
 
 ---
 
-## Phase 31: 涌现验证与协作深度 🔄 (进行中)
+## Phase 31: 涌现验证与协作深度 ✅ 100%
 
 **目标**: 让 100 只数码兽从「住在一起的独居者」进化为真正的「社区」——协作完成任务、导演精细反馈、科学验证涌现真实性。
 
@@ -623,6 +623,6 @@
 - [x] Task 2 — `emergence_metrics.py` 新增 `coupling_gain`: 基于 2606.22203 计算 agent 间信息耦合度 vs 行为一致性，输出涌现可信度评分，低于阈值标记为「疑似假涌现」 ✅ (20 tests, commit 7fd5cf9)
 - [x] Task 3 — 导演偏好反馈系统: 导演面板新增 👍/👎 按钮 (基于 2607.14485 step-level preference learning)，偏好持久化，在后续 planning/reflection prompt 中注入 ✅ (31 tests, commit 2e29779)
 - [x] Task 4 — Scheduler 协作调度: 修改 `WorldScheduler.tick_once()` — 每 N tick 扫描可协作任务 → 选参与者 → 组建临时协作组 → 分配子目标 → 跟踪完成度 + 子目标自动分配增强 + API 安全加固 ✅ (9 tests added → 69 total, commit a66dd56)
-- [ ] Task 5 — 端到端验证: verify_phase31.py — 完整协作生命周期验证
+- [x] Task 5 — 端到端验证: verify_phase31.py — 完整协作生命周期验证 ✅ (82/82 PASS, commit 05625bf)
 
-**完成标志**: 数码兽能组队协作完成任务；导演可用偏好反馈精细调节行为；有科学指标区分真涌现与随机假象
+**完成标志**: 数码兽能组队协作完成任务；导演可用偏好反馈精细调节行为；有科学指标区分真涌现与随机假象 ✅
