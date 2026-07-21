@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +208,26 @@ class CooperativeTaskRegistry:
         self._by_agent: dict[str, list[str]] = {}     # agent_name → task_ids
         self._task_counter: int = 0
 
+    # ── 内部子目标分配 ────────────────────────────
+
+    # 任务类型 → 子目标选项（与 assign_sub_goals 共享）
+    _SUB_GOAL_OPTIONS: ClassVar[dict[str, list[str]]] = {
+        "explore": ["侦察前方地形", "标记安全路线", "收集环境数据", "绘制区域地图"],
+        "defend": ["守卫北侧防线", "阻击敌人前锋", "掩护队友侧翼", "固守要害阵地"],
+        "build": ["搬运建筑材料", "搭建主体结构", "加固关键节点", "装饰外观细节"],
+        "hunt": ["追踪目标踪迹", "设置包围圈", "正面吸引注意", "从侧面发起攻击"],
+    }
+
+    def _assign_sub_goals_internal(self, task: CooperativeTask) -> None:
+        """内部方法：为任务参与者分配子目标（不检查 task_id 查表）。
+
+        供 create_task / add_task / join_task 在任务创建/参与者变化时调用。
+        """
+        options = self._SUB_GOAL_OPTIONS.get(task.task_type, ["完成分配的任务"])
+        for i, agent_name in enumerate(task.current_participants):
+            if agent_name not in task.sub_goals:
+                task.sub_goals[agent_name] = options[i % len(options)]
+
     # ── 创建任务 ──────────────────────────────────
 
     def create_task(
@@ -260,6 +280,9 @@ class CooperativeTaskRegistry:
             self._by_region[region_id] = []
         self._by_region[region_id].append(task_id)
 
+        # 分配子目标（create_task 创建时无参与者，后续 join_task 会触发）
+        self._assign_sub_goals_internal(task)
+
         logger.debug("协作任务已创建: %s (%s, 需要%d名参与者)", task_id, task_type, required_participants)
         return task
 
@@ -303,6 +326,9 @@ class CooperativeTaskRegistry:
         if task.is_fully_staffed() and task.status == "pending":
             task.status = "active"
 
+        # 为新加入者分配子目标
+        self._assign_sub_goals_internal(task)
+
         logger.debug("'%s' 已加入任务 '%s'", agent_name, task_id)
         return True
 
@@ -323,19 +349,7 @@ class CooperativeTaskRegistry:
         if task is None:
             return {}
 
-        sub_goal_options: dict[str, list[str]] = {
-            "explore": ["侦察前方地形", "标记安全路线", "收集环境数据", "绘制区域地图"],
-            "defend": ["守卫北侧防线", "阻击敌人前锋", "掩护队友侧翼", "固守要害阵地"],
-            "build": ["搬运建筑材料", "搭建主体结构", "加固关键节点", "装饰外观细节"],
-            "hunt": ["追踪目标踪迹", "设置包围圈", "正面吸引注意", "从侧面发起攻击"],
-        }
-
-        options = sub_goal_options.get(task.task_type, ["完成分配的任务"])
-
-        for i, agent_name in enumerate(task.current_participants):
-            if agent_name not in task.sub_goals:
-                task.sub_goals[agent_name] = options[i % len(options)]
-
+        self._assign_sub_goals_internal(task)
         return dict(task.sub_goals)
 
     # ── 贡献度 ────────────────────────────────────
@@ -426,6 +440,35 @@ class CooperativeTaskRegistry:
             "message": f"进度: {total:.2f}/{task.completion_threshold}",
         }
 
+    # ── 添加预构建任务（用于 TaskGenerationEngine） ──
+
+    def add_task(self, task: CooperativeTask) -> None:
+        """添加一个预构建的协作任务（如 TaskGenerationEngine 生成的任务）。
+
+        与 create_task() 不同，此方法接受已构建好的 CooperativeTask 实例，
+        不重新生成 task_id。
+
+        Args:
+            task: 预构建的 CooperativeTask 实例。
+        """
+        self._tasks[task.task_id] = task
+
+        region_id = task.region_id
+        if region_id not in self._by_region:
+            self._by_region[region_id] = []
+        self._by_region[region_id].append(task.task_id)
+
+        for agent_name in task.current_participants:
+            if agent_name not in self._by_agent:
+                self._by_agent[agent_name] = []
+            self._by_agent[agent_name].append(task.task_id)
+
+        # 确保子目标已分配（引擎创建的任务通常已设，此处为安全网）
+        if not task.sub_goals:
+            self._assign_sub_goals_internal(task)
+
+        logger.debug("协作任务已添加: %s (%s)", task.task_id, task.task_type)
+
     # ── 查询 ──────────────────────────────────────
 
     def get_task(self, task_id: str) -> CooperativeTask | None:
@@ -457,6 +500,14 @@ class CooperativeTaskRegistry:
     def active_count(self) -> int:
         """活跃任务数。"""
         return len(self.get_active_tasks())
+
+    def get_tasks_for_agent(self, agent_name: str) -> list[CooperativeTask]:
+        """获取某数码兽参与的所有任务（get_agent_tasks 的别名）。"""
+        return self.get_agent_tasks(agent_name)
+
+    def count(self) -> int:
+        """任务总数（task_count 的别名）。"""
+        return self.task_count()
 
     # ── 序列化 ────────────────────────────────────
 

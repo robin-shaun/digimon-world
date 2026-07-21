@@ -24,6 +24,7 @@ import asyncio
 import logging
 import random
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from typing import Any
 
 from ..agents.dialogue import Dialogue
@@ -32,6 +33,11 @@ from ..economy import get_energy_economy
 from .affect_propagation import AffectPropagationEngine
 from .clock import WorldClock
 from .cooperation_thresholds import get_circle_between, get_interaction_modifier
+from .cooperative_tasks import (
+    CooperativeTask,
+    TaskGenerationEngine,
+    get_cooperative_registry,
+)
 from .dark_gears import DarkGearSystem, get_dark_gear_system
 from .daynight import DayNightSystem, get_daynight_system
 from .ecology import EcologySystem, get_ecology_system
@@ -85,6 +91,11 @@ MOVE_LLM_TICKS = 20                       # 移动决策: 每 20 tick 才调 LLM
 # 事件分级: trivial(0-2) / routine(3-5) / significant(6-8) / critical(9-10)
 # 只有 significance >= SIGNIFICANCE_LLM_THRESHOLD 的事件才触发 LLM 反思
 SIGNIFICANCE_LLM_THRESHOLD = 4  # 阈值: routine(3-5)即可触发 LLM
+
+# Phase 31: 协作调度间隔（每多少 tick 扫描一次协作机会）
+COOP_SCAN_INTERVAL = 100
+# 协作贡献步进速率（每 tick 每个活跃参与者增加的基础贡献量）
+COOP_CONTRIBUTION_STEP = 0.02
 
 # 事件回调签名: async def cb(event: dict, agent: DigimonAgent) -> None
 EventCallback = Callable[[dict[str, Any], DigimonAgent], Awaitable[None]]
@@ -640,6 +651,92 @@ class WorldScheduler:
                 "ContextQuality: %d/%d agents in critical context health",
                 critical_count, len(agents),
             )
+        # 9.95 Phase 31: 协作任务调度阶段
+        #    每 COOP_SCAN_INTERVAL tick 扫描协作机会 + 每 tick 推进活跃任务的贡献度
+        try:
+            registry = get_cooperative_registry()
+
+            # ---- 扫描生成新协作任务 ----
+            if self._tick_count % COOP_SCAN_INTERVAL == 0:
+                engine = TaskGenerationEngine()
+                new_tasks = engine.scan_for_opportunities(
+                    self._world, agents, self._tick_count, self._relationships
+                )
+                for task in new_tasks:
+                    registry.add_task(task)
+                    logger.info(
+                        "Coop: 新任务 %s (%s) — %d 参与者",
+                        task.task_id, task.task_type, len(task.current_participants),
+                    )
+
+            # ---- 推进活跃任务 ----
+            active_tasks = registry.get_active_tasks()
+            completed_this_tick: list[CooperativeTask] = []
+
+            for task in active_tasks:
+                # 每个参与者概率性贡献（受能量影响）
+                energy_factor = _get_coop_energy_factor(agents, task)
+                for participant in task.current_participants:
+                    # 60% 概率此 tick 贡献
+                    if random.random() < 0.6 * energy_factor:
+                        if participant in task.individual_contributions:
+                            task.individual_contributions[participant] += COOP_CONTRIBUTION_STEP
+                        else:
+                            task.individual_contributions[participant] = COOP_CONTRIBUTION_STEP
+
+                # 检查完成
+                total = sum(task.individual_contributions.values())
+                if total >= task.completion_threshold:
+                    task.status = "completed"
+                    task.tick_completed = self._tick_count
+                    completed_this_tick.append(task)
+
+                    # 广播世界事件
+                    event = {
+                        "type": "cooperative_task_completed",
+                        "task_id": task.task_id,
+                        "task_type": task.task_type,
+                        "title": task.title,
+                        "participants": list(task.current_participants),
+                        "region_id": task.region_id,
+                        "tick": self._tick_count,
+                        "at": self._clock.now.isoformat() if self._clock.now else None,
+                        "description": f"协作任务「{task.title}」完成！参与者: {', '.join(task.current_participants[:5])}",
+                        "significance": 6,
+                    }
+                    self._world.events.append(event)
+
+                    # 参与者关系增益
+                    for i, p1 in enumerate(task.current_participants):
+                        for p2 in task.current_participants[i + 1:]:
+                            with suppress(Exception):
+                                self._relationships.adjust(p1, p2, affinity=0.05, trust=0.03)
+
+                    # 参与者记忆协作
+                    for p_name in task.current_participants:
+                        agent = self._world.get(p_name)
+                        if agent is not None:
+                            agent.observe({
+                                "type": "cooperative_task_completed",
+                                "description": f"我和伙伴们一起完成了「{task.title}」！我的贡献度: {task.individual_contributions.get(p_name, 0):.2f}",
+                                "importance": 7,
+                            })
+
+                    logger.info(
+                        "Coop: 任务 %s 完成！参与者=%s, 总贡献=%.2f",
+                        task.task_id, task.current_participants, total,
+                    )
+
+            # ---- 超时失败检测 ----
+            for task in active_tasks:
+                if task.status == "active" and (self._tick_count - task.tick_created) > 500:
+                    task.status = "failed"
+                    logger.info("Coop: 任务 %s 超时失败 (tick %d)", task.task_id, self._tick_count)
+
+            if completed_this_tick:
+                logger.info("Coop: tick=%d 完成 %d 个任务", self._tick_count, len(completed_this_tick))
+        except Exception as e:
+            logger.debug("Cooperative scheduling step failed: %s", e)
         self._tick_count += 1
         # 8. 持久化阶段: 每 SAVE_INTERVAL_TICKS 全量落盘一次
         if self._auto_save and self._tick_count % SAVE_INTERVAL_TICKS == 0:
@@ -1242,3 +1339,31 @@ class WorldScheduler:
         except asyncio.CancelledError:
             logger.info("WorldScheduler cancelled, exiting run_forever")
             raise
+
+
+def _get_coop_energy_factor(
+    agents: list[Any],
+    task: Any,
+    min_factor: float = 0.3,
+) -> float:
+    """根据协作任务参与者的能量水平，计算贡献概率修正因子。
+
+    能量越高的参与者越可能积极贡献。取所有参与者能量的均值。
+
+    Returns:
+        float: 0.3-1.0 的因子，高能量→高因子。
+    """
+    energies = []
+    for p_name in task.current_participants:
+        for agent in agents:
+            if getattr(agent, "name", "") == p_name:
+                energy = getattr(agent, "energy", 100)
+                if isinstance(energy, (int, float)):
+                    energies.append(energy / 100.0)
+                break
+
+    if not energies:
+        return 1.0
+
+    avg = sum(energies) / len(energies)
+    return max(min_factor, min(1.0, avg))

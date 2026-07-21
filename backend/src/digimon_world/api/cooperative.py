@@ -128,20 +128,9 @@ async def generate_tasks(req: GenerateRequest = GenerateRequest()) -> dict[str, 
             continue
 
         # 注册到全局注册表
-        # 先手动构建并注册，保留引擎生成的参与者
         existing = registry.get_task(task.task_id)
         if existing is None:
-            registry._tasks[task.task_id] = task
-            from_region = task.region_id
-            if from_region not in registry._by_region:
-                registry._by_region[from_region] = []
-            registry._by_region[from_region].append(task.task_id)
-
-            for p in task.current_participants:
-                if p not in registry._by_agent:
-                    registry._by_agent[p] = []
-                registry._by_agent[p].append(task.task_id)
-
+            registry.add_task(task)
             generated += 1
             generated_tasks.append(task.to_dict())
 
