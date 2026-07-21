@@ -88,6 +88,7 @@ from .conventions import (
 from .conventions import (
     router as conventions_router,
 )
+from .cooperative import router as cooperative_router
 from .lineage import router as lineage_router
 from .pokedex import router as pokedex_router
 
@@ -245,6 +246,9 @@ app.include_router(almanac_router)
 
 # Phase 30: 世代传承路由
 app.include_router(lineage_router)
+
+# Phase 31: 协作任务路由
+app.include_router(cooperative_router)
 
 
 # ---- Routes ----

@@ -139,6 +139,13 @@ from .self_model import (
     get_self_model_registry,
     reset_self_model_registry,
 )
+from .cooperative_tasks import (
+    CooperativeTask,
+    CooperativeTaskRegistry,
+    TaskGenerationEngine,
+    get_cooperative_registry,
+    reset_cooperative_registry,
+)
 from .shared_conventions import (
     Convention,
     ConventionDetector,
@@ -250,6 +257,8 @@ __all__ = [
     "ConventionDetector",
     "ConventionPool",
     "ConventionPropagation",
+    "CooperativeTask",
+    "CooperativeTaskRegistry",
     "DarkGear",
     "DarkGearSystem",
     "DayNightSystem",
@@ -300,6 +309,7 @@ __all__ = [
     "StrategicReasoning",
     "StrategyPrediction",
     "SubRegion",
+    "TaskGenerationEngine",
     "TheoryOfMindRegistry",
     "TimelineSystem",
     "VitalitySnapshot",
@@ -312,6 +322,7 @@ __all__ = [
     "get_coherence_engine",
     "get_convention_pool",
     "get_convention_propagation",
+    "get_cooperative_registry",
     "get_dark_gear_system",
     "get_daynight_system",
     "get_director",
@@ -342,6 +353,7 @@ __all__ = [
     "reset_coherence_engine",
     "reset_context_quality",
     "reset_convention_pool",
+    "reset_cooperative_registry",
     "reset_dark_gear_system",
     "reset_daynight_system",
     "reset_director",

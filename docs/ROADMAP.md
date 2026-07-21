@@ -605,3 +605,24 @@
 - [x] Task 5 — 端到端验证: verify_phase30.py (167/167 PASS) ✅
 
 **完成标志**: 数码蛋有孵化周期，每只数码兽知道自己来自哪里（父母是谁、第几代），族谱可追溯，子代从父母处继承的不只是数值——还有人格倾向、知识领域、徽章亲和力。
+
+---
+
+## Phase 31: 涌现验证与协作深度 🔄 (进行中)
+
+**目标**: 让 100 只数码兽从「住在一起的独居者」进化为真正的「社区」——协作完成任务、导演精细反馈、科学验证涌现真实性。
+
+**调研背景** (2026-07-21):
+- arXiv:2607.16133 证明多智能体仅在协作耦合度超过阈值时优于单体——当前数码兽各自独立 plan/act，耦合度低，未充分发挥 MAS 优势
+- arXiv:2607.14485 提出 step-level preference learning——可让导演在每一步精细干预 agent 行为
+- arXiv:2606.22203 提出「耦合增益」量化指标——可科学区分真涌现与随机假象
+
+**基础设施**: Phase 11 (涌现指标) + Phase 22 (共享惯例) + Phase 24 (互惠经济) + Phase 26 (人格动态) + Phase 28 (自我认知/ToM)
+
+- [ ] Task 1 — `cooperative_tasks.py` 核心模块: CooperativeTask (协作任务: 探索/防御/建造/狩猎) + CooperativeTaskRegistry (任务注册/加入/贡献/完成检测) + TaskGenerationEngine (扫描世界生成协作机会)
+- [ ] Task 2 — `emergence_metrics.py` 新增 `coupling_gain`: 基于 2606.22203 计算 agent 间信息耦合度 vs 行为一致性，输出涌现可信度评分，低于阈值标记为「疑似假涌现」
+- [ ] Task 3 — 导演偏好反馈系统: 导演面板新增 👍/👎 按钮 (基于 2607.14485 step-level preference learning)，偏好持久化，在后续 planning/reflection prompt 中注入
+- [ ] Task 4 — Scheduler 协作调度: 修改 `WorldScheduler.tick_once()` — 每 N tick 扫描可协作任务 → 选参与者 → 组建临时协作组 → 分配子目标 → 跟踪完成度
+- [ ] Task 5 — 端到端验证: verify_phase31.py — 完整协作生命周期验证
+
+**完成标志**: 数码兽能组队协作完成任务；导演可用偏好反馈精细调节行为；有科学指标区分真涌现与随机假象
