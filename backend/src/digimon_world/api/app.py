@@ -91,6 +91,7 @@ from .conventions import (
 from .cooperative import router as cooperative_router
 from .lineage import router as lineage_router
 from .pokedex import router as pokedex_router
+from ..world.director_preferences import get_preference_store
 
 logger = logging.getLogger("digimon.api")
 
@@ -1172,6 +1173,80 @@ def get_injected_events(limit: int = 10) -> dict[str, Any]:
     ]
     recent = injected[-max(1, limit):]
     return {"count": len(injected), "events": list(reversed(recent))}
+
+
+# ---- Phase 31: 导演偏好反馈系统 ----
+
+class PreferenceRequest(BaseModel):
+    """导演对数码兽行为表态的请求体。"""
+
+    agent_name: str
+    preference: str          # "like" | "avoid"
+    action_category: str     # explore/rest/social/battle/hunt/gather/build/play/aggressive/flee
+    context: str = ""
+
+
+@app.post("/api/director/preferences")
+def record_preference(req: PreferenceRequest) -> dict[str, Any]:
+    """导演对数码兽行为表态 👍/👎。"""
+    scheduler: WorldScheduler | None = getattr(app.state, "scheduler", None)
+    tick = scheduler.tick_count if scheduler is not None else 0
+    record = get_preference_store().record(
+        agent_name=req.agent_name,
+        preference=req.preference,
+        action_category=req.action_category,
+        context=req.context,
+        tick=tick,
+    )
+    return {
+        "id": record.id,
+        "agent_name": record.agent_name,
+        "preference": record.preference,
+        "action_category": record.action_category,
+    }
+
+
+@app.get("/api/director/preferences/{name}")
+def get_agent_preferences(name: str) -> dict[str, Any]:
+    """获取某只数码兽的所有偏好记录。"""
+    records = get_preference_store().get_for_agent(name)
+    hints = get_preference_store().get_prompt_hints(name)
+    return {
+        "agent_name": name,
+        "count": len(records),
+        "hints": hints,
+        "records": [
+            {
+                "id": r.id,
+                "preference": r.preference,
+                "action_category": r.action_category,
+                "context": r.context,
+                "tick": r.tick,
+                "created_at": r.created_at,
+            }
+            for r in records
+        ],
+    }
+
+
+@app.get("/api/director/preferences")
+def get_all_preferences() -> dict[str, Any]:
+    """获取所有偏好记录。"""
+    records = get_preference_store().all_records()
+    return {
+        "count": len(records),
+        "records": [
+            {
+                "id": r.id,
+                "agent_name": r.agent_name,
+                "preference": r.preference,
+                "action_category": r.action_category,
+                "context": r.context,
+                "tick": r.tick,
+            }
+            for r in records
+        ],
+    }
 
 
 # ---- Phase 3: 战斗 API ----

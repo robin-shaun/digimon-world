@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from ..llm.client import ChatMessage, ChatRequest, ChatResponse, LlmClient, LlmModel
+from ..world.director_preferences import get_preference_store
 
 if TYPE_CHECKING:
     from .digimon_agent import DigimonAgent
@@ -91,6 +92,11 @@ class Reflector:
             f'请输出 JSON: {{"reflections": ["反思1", "反思2"], '
             f'"desire": "想变强", "desire_strength": 0.7}}'
         )
+
+        # 导演偏好信号: 引导反思也受偏好影响
+        pref_hints = get_preference_store().get_prompt_hints(agent.name)
+        if pref_hints:
+            prompt = pref_hints + "\n" + prompt
 
         try:
             req = ChatRequest(

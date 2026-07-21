@@ -671,6 +671,47 @@ html, body {
 #director-conn { text-align: center; margin-top: 8px; }
 #director-conn.dir-down { color: var(--negative); font-weight: bold; }
 
+/* Phase 31: 导演偏好反馈 */
+.pref-header {
+    display: flex; gap: 4px; margin-bottom: 6px;
+}
+.pref-agent-select, .pref-action-select {
+    flex: 1; padding: 4px 6px;
+    font-size: 11px; background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px; color: var(--text-primary);
+    min-width: 0;
+}
+.pref-agent-select option, .pref-action-select option {
+    background: #0f1a2e; color: var(--text-primary);
+}
+.pref-btns {
+    display: flex; gap: 6px; margin-bottom: 8px;
+}
+.pref-btn {
+    flex: 1; padding: 5px 0; border: none;
+    border-radius: 4px; font-size: 11px; cursor: pointer;
+    transition: filter 0.15s, transform 0.1s;
+    font-weight: 600;
+}
+.pref-btn:hover { filter: brightness(1.2); transform: scale(1.03); }
+.pref-btn:active { transform: scale(0.97); }
+.pref-like { background: rgba(46, 204, 113, 0.25); color: #2ecc71; }
+.pref-avoid { background: rgba(231, 76, 60, 0.25); color: #e74c3c; }
+.pref-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.pref-hints-list {
+    font-size: 11px; max-height: 120px; overflow-y: auto;
+    margin-bottom: 4px;
+}
+.pref-hint-row {
+    padding: 3px 5px; margin: 2px 0;
+    background: rgba(128,128,128,0.06); border-radius: 3px;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.pref-hint-like { color: #2ecc71; }
+.pref-hint-avoid { color: #e74c3c; }
+.pref-hint-none { opacity: 0.5; font-style: italic; }
+
 /* ══════════════════════════════════════════════
    数码兽详情卡 (sidebar内)
    ══════════════════════════════════════════════ */

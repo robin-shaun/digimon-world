@@ -18,6 +18,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from ..llm.client import ChatMessage, ChatRequest, LlmClient, LlmModel
+from ..world.director_preferences import get_preference_store
 
 if TYPE_CHECKING:
     from .digimon_agent import DigimonAgent
@@ -92,6 +93,9 @@ class Planner:
         except Exception:
             pass
 
+        # 导演偏好信号: 在 prompt 中注入偏好提示，引导行为倾向
+        pref_hints = get_preference_store().get_prompt_hints(agent.name)
+
         # 构造 prompt
         prompt = (
             f"你是{agent.name}({agent.species}), "
@@ -106,6 +110,9 @@ class Planner:
             f"当前世界: {world_state_snapshot}\n"
             f"请根据你的性格特点生成下一段计划 (1-2 句, 中文, 具体行动)."
         )
+
+        if pref_hints:
+            prompt = pref_hints + "\n" + prompt
 
         try:
             req = ChatRequest(

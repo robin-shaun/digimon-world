@@ -1216,6 +1216,8 @@
                 ANIM.manager.syncPositions(state.digimon);
                 ANIM.manager.prune(state.digimon.map(function (d) { return d.name; }));
             }
+            // Phase 31: 更新偏好下拉框
+            populatePrefAgentSelect();
         } catch (err) {
             if (err.name === 'AbortError') return;  // 被新请求主动取消, 不算失败
             console.warn('[api] /api/digimon 不可达:', err.message);
@@ -3862,11 +3864,134 @@
                 renderLeaderboard();
             });
         });
+        // Phase 31: 导演偏好反馈
+        initDirectorPreferences();
         // 屏宽变化 → 显隐
         window.addEventListener('resize', updateDirectorVisibility);
         updateDirectorVisibility();
         // 每 10s 自动刷新 (关系 + 导演状态)
         setInterval(refreshDirector, DIRECTOR_REFRESH_MS);
+    }
+
+    // ══════════════════════════════════════════════
+    //  Phase 31: 导演偏好反馈
+    // ══════════════════════════════════════════════
+
+    /** 用当前数码兽列表填充偏好下拉框 */
+    function populatePrefAgentSelect() {
+        var sel = document.getElementById('pref-agent-select');
+        if (!sel) return;
+        var current = sel.value;
+        sel.innerHTML = '<option value="">选择数码兽…</option>';
+        if (state && state.digimon && state.digimon.length > 0) {
+            var sorted = state.digimon.slice().sort(function(a, b) { return (a.name || '').localeCompare(b.name || '', 'zh'); });
+            sorted.forEach(function(d) {
+                var opt = document.createElement('option');
+                opt.value = d.name;
+                opt.textContent = d.name + ' (' + (d.species || '?') + ')';
+                sel.appendChild(opt);
+            });
+        }
+        sel.value = current;
+    }
+
+    /** POST 导演偏好记录 */
+    async function recordPreference(pref) {
+        var status = document.getElementById('pref-status');
+        var likeBtn = document.getElementById('pref-like-btn');
+        var avoidBtn = document.getElementById('pref-avoid-btn');
+        if (likeBtn) likeBtn.disabled = true;
+        if (avoidBtn) avoidBtn.disabled = true;
+        try {
+            var agentSel = document.getElementById('pref-agent-select');
+            var actionSel = document.getElementById('pref-action-select');
+            var agentName = agentSel ? agentSel.value : '';
+            var actionCat = actionSel ? actionSel.value : '';
+            if (!agentName) {
+                if (status) status.textContent = '⚠️ 请先选择数码兽';
+                return;
+            }
+            var resp = await fetch(API_BASE + '/api/director/preferences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    agent_name: agentName,
+                    preference: pref,
+                    action_category: actionCat,
+                }),
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            var data = await resp.json();
+            if (status) {
+                var label = pref === 'like' ? '👍 已鼓励' : '👎 已标记';
+                status.textContent = label + ' ' + agentName + ' → ' + actionCat;
+            }
+            await refreshPrefHints();
+        } catch (e) {
+            if (status) status.textContent = '⚠️ 不可用: ' + e.message;
+        } finally {
+            if (likeBtn) likeBtn.disabled = false;
+            if (avoidBtn) avoidBtn.disabled = false;
+            setTimeout(function() { if (status) status.textContent = ''; }, 3000);
+        }
+    }
+
+    /** 拉取并显示当前选中数码兽的偏好提示 */
+    async function refreshPrefHints() {
+        var agentSel = document.getElementById('pref-agent-select');
+        var hintsEl = document.getElementById('pref-hints-list');
+        if (!agentSel || !hintsEl) return;
+        var name = agentSel.value;
+        if (!name) {
+            hintsEl.innerHTML = '<p class="dir-hint">选择数码兽后显示偏好</p>';
+            return;
+        }
+        try {
+            var resp = await fetch(API_BASE + '/api/director/preferences/' + encodeURIComponent(name), { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            var data = await resp.json();
+            var hints = data.hints || '';
+            var records = data.records || [];
+            if (!hints && records.length === 0) {
+                hintsEl.innerHTML = '<p class="pref-hint-none">暂无偏好记录 — 导演可以对' + escapeHtml(name) + '的行为表态</p>';
+                return;
+            }
+            var html = '';
+            if (hints) {
+                html += '<div style="font-weight:600;margin-bottom:4px;color:var(--accent-cyan)">' + escapeHtml(hints) + '</div>';
+            }
+            // 显示最近5条记录
+            records.slice(0, 5).forEach(function(r) {
+                var cls = r.preference === 'like' ? 'pref-hint-like' : 'pref-hint-avoid';
+                var icon = r.preference === 'like' ? '👍' : '👎';
+                html += '<div class="pref-hint-row">' +
+                    '<span class="' + cls + '">' + icon + ' ' + escapeHtml(r.action_category) + '</span>' +
+                    '</div>';
+            });
+            hintsEl.innerHTML = html || '<p class="pref-hint-none">暂无偏好记录</p>';
+        } catch (e) {
+            hintsEl.innerHTML = '<p class="dir-hint">⚠️ 加载失败: ' + escapeHtml(e.message) + '</p>';
+        }
+    }
+
+    /** 初始化导演偏好控件 */
+    function initDirectorPreferences() {
+        var agentSel = document.getElementById('pref-agent-select');
+        var likeBtn = document.getElementById('pref-like-btn');
+        var avoidBtn = document.getElementById('pref-avoid-btn');
+
+        // 选数码兽时刷新提示
+        if (agentSel) {
+            agentSel.addEventListener('change', function() {
+                refreshPrefHints();
+            });
+        }
+        // 👍/👎 按钮
+        if (likeBtn) likeBtn.addEventListener('click', function() { recordPreference('like'); });
+        if (avoidBtn) avoidBtn.addEventListener('click', function() { recordPreference('avoid'); });
+
+        // 每次刷新时也更新下拉框
+        populatePrefAgentSelect();
     }
 
     // ══════════════════════════════════════════════

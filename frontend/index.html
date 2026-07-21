@@ -159,6 +159,34 @@
             </div>
         </section>
         <section class="dir-section">
+            <h3>🎯 导演偏好</h3>
+            <div class="pref-header">
+                <select id="pref-agent-select" class="pref-agent-select">
+                    <option value="">选择数码兽…</option>
+                </select>
+                <select id="pref-action-select" class="pref-action-select">
+                    <option value="explore">🔍 探索</option>
+                    <option value="rest">😴 休息</option>
+                    <option value="social">💬 社交</option>
+                    <option value="battle">⚔️ 战斗</option>
+                    <option value="hunt">🏹 狩猎</option>
+                    <option value="gather">🌿 采集</option>
+                    <option value="build">🔨 建造</option>
+                    <option value="play">🎮 玩耍</option>
+                    <option value="aggressive">😡 激进</option>
+                    <option value="flee">🏃 逃跑</option>
+                </select>
+            </div>
+            <div class="pref-btns">
+                <button id="pref-like-btn" class="pref-btn pref-like" title="导演喜欢此行为">👍 鼓励</button>
+                <button id="pref-avoid-btn" class="pref-btn pref-avoid" title="导演希望避免此行为">👎 避免</button>
+            </div>
+            <div id="pref-hints-list" class="pref-hints-list">
+                <p class="dir-hint">选择数码兽后显示偏好</p>
+            </div>
+            <p class="dir-hint" id="pref-status"></p>
+        </section>
+        <section class="dir-section">
             <h3>存档</h3>
             <div class="save-btns">
                 <button id="save-btn" class="save-btn">💾 保存</button>

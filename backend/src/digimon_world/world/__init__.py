@@ -39,6 +39,15 @@ from .daynight import (
     get_daynight_system,
     reset_daynight_system,
 )
+from .director_preferences import (
+    ACTION_CATEGORY_LABELS,
+    VALID_ACTION_CATEGORIES,
+    VALID_PREFERENCES,
+    DirectorPreferenceStore,
+    PreferenceRecord,
+    get_preference_store,
+    reset_preference_store,
+)
 from .ecology import (
     EcologySystem,
     get_ecology_system,
@@ -213,8 +222,10 @@ from .world_state import (
 )
 
 __all__ = [
+    "ACTION_CATEGORY_LABELS",
+    "VALID_ACTION_CATEGORIES",
+    "VALID_PREFERENCES",
     "BASE_DRAIN_PER_TICK",
-    # Phase 28: Narrative Coherence
     "COHERENCE_CHECK_INTERVAL",
     "CPM_CHANGE_THRESHOLD",
     "DAYS_PER_FESTIVAL",
@@ -263,6 +274,7 @@ __all__ = [
     "DarkGearSystem",
     "DayNightSystem",
     "DayPeriod",
+    "DirectorPreferenceStore",
     "EcologySystem",
     "EconomySystem",
     "EggState",
@@ -288,6 +300,8 @@ __all__ = [
     "NarratorSystem",
     "PersonalityEvolutionEngine",
     "PersonalityProfile",
+    "PREFERENCE_VALUES",
+    "PreferenceRecord",
     "Region",
     "RelationConflict",
     "RelationConflictDetector",
@@ -340,6 +354,7 @@ __all__ = [
     "get_narrator",
     "get_optimizer",
     "get_personality_engine",
+    "get_preference_store",
     "get_registry",
     "get_season_system",
     "get_self_model_registry",
@@ -367,6 +382,7 @@ __all__ = [
     "reset_multiverse",
     "reset_narrator",
     "reset_personality_engine",
+    "reset_preference_store",
     "reset_registry",
     "reset_season_system",
     "reset_self_model_registry",
