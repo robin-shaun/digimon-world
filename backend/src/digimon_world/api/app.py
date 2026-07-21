@@ -452,6 +452,15 @@ def get_emergence_metrics() -> dict[str, Any]:
     return snapshot.to_dict()
 
 
+@app.get("/api/emergence/validity")
+def get_emergence_validity() -> dict[str, Any]:
+    """涌现真实性验证 (Phase 31 Task 2): 基于耦合增益区分真涌现与随机假象。"""
+    world = get_world()
+    from ..world.emergence_metrics import compute_coupling_gain
+    snapshot = compute_coupling_gain(world)
+    return snapshot.to_dict()
+
+
 @app.post("/api/world/save")
 async def save_world() -> dict[str, Any]:
     """手动全量保存世界状态到 SQLite(data/world.db)。"""

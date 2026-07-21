@@ -300,3 +300,143 @@ def compute_emergence_metrics(world: WorldState) -> EmergenceSnapshot:
     snap.emergence_score = min(100.0, score)
 
     return snap
+
+
+# ═══════════════════════════════════════════════════════════════
+# Phase 31 Task 2: 涌现真实性验证 — 基于耦合增益的涌现真伪判别
+# ═══════════════════════════════════════════════════════════════
+
+@dataclass
+class EmergenceValiditySnapshot:
+    """涌现真实性验证快照 — Phase 31 Task 2, 基于 arXiv:2606.22203."""
+
+    coupling_gain: float = 0.0           # 耦合增益 (信息耦合 / 行为一致性)
+    info_coupling: float = 0.0           # agent间信息耦合度 (0-1)
+    behavioral_consistency: float = 0.0  # 行为一致性 (0-1)
+    validity_score: float = 0.0          # 涌现可信度 (0-100)
+    verdict: str = "unknown"             # genuine / neutral / suspected_noise / insufficient_data
+    coupling_threshold: float = 0.5      # 使用的阈值
+    agent_count: int = 0
+    details: dict[str, float] = field(default_factory=dict)  # plan_coupling, location_coupling, plan_alignment, mood_alignment
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "coupling_gain": round(self.coupling_gain, 4),
+            "info_coupling": round(self.info_coupling, 4),
+            "behavioral_consistency": round(self.behavioral_consistency, 4),
+            "validity_score": round(self.validity_score, 1),
+            "verdict": self.verdict,
+            "coupling_threshold": round(self.coupling_threshold, 4),
+            "agent_count": self.agent_count,
+            "details": {k: round(v, 4) for k, v in self.details.items()},
+        }
+
+
+def compute_coupling_gain(world: WorldState) -> EmergenceValiditySnapshot:
+    """计算耦合增益指标，区分真涌现与随机假象。
+
+    参考 arXiv:2606.22203 — 涌现真实性验证框架：
+    - 信息耦合高 + 行为一致性高 → 信息共享驱动，真涌现 (genuine)
+    - 行为一致性高但信息耦合低 → 随机巧合，疑似噪音 (suspected_noise)
+    - 正常社交行为 → 中性 (neutral)
+    """
+    agents = world.all()
+    n = len(agents)
+
+    snapshot = EmergenceValiditySnapshot(agent_count=n, coupling_threshold=0.5)
+
+    if n < 2:
+        snapshot.verdict = "insufficient_data"
+        return snapshot
+
+    # ── 1. 信息耦合 (Info Coupling) ──
+    # Plan category coupling: 对每对 agent，若它们属于同一计划类别则计分
+    plan_categories = [_classify_plan(getattr(a, "current_plan", None) or "") for a in agents]
+    total_pairs = n * (n - 1) // 2
+
+    plan_coupled_pairs = 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            if plan_categories[i] == plan_categories[j]:
+                plan_coupled_pairs += 1
+
+    plan_coupling = plan_coupled_pairs / total_pairs if total_pairs > 0 else 0.0
+
+    # Location/spatial coupling: agent 对中距离 < 200px 的比例
+    proximity_radius = 200
+    location_coupled_pairs = 0
+    for i in range(n):
+        x1, y1 = agents[i].location
+        for j in range(i + 1, n):
+            x2, y2 = agents[j].location
+            dist = math.hypot(x2 - x1, y2 - y1)
+            if dist < proximity_radius:
+                location_coupled_pairs += 1
+
+    location_coupling = location_coupled_pairs / total_pairs if total_pairs > 0 else 0.0
+
+    # Combined info_coupling
+    info_coupling = plan_coupling * 0.6 + location_coupling * 0.4
+
+    # ── 2. 行为一致性 (Behavioral Consistency) ──
+    # Plan type alignment: 主导 plan 类型频率 / 总 agent 数
+    type_counter = Counter(plan_categories)
+    dominant_count = type_counter.most_common(1)[0][1] if type_counter else 0
+    plan_alignment = dominant_count / n if n > 0 else 0.0
+
+    # Mood alignment: 平均 pairwise 情绪向量余弦相似度
+    mood_dims = ("joy", "fear", "anger", "sadness")
+    mood_sims: list[float] = []
+    for i in range(n):
+        ms_i = getattr(agents[i], "mood_state", {}) or {}
+        v1 = [ms_i.get(dim, 0.0) for dim in mood_dims]
+        mag1 = math.sqrt(sum(a * a for a in v1))
+        if mag1 == 0:
+            continue
+        for j in range(i + 1, n):
+            ms_j = getattr(agents[j], "mood_state", {}) or {}
+            v2 = [ms_j.get(dim, 0.0) for dim in mood_dims]
+            mag2 = math.sqrt(sum(b * b for b in v2))
+            if mag2 == 0:
+                continue
+            dot = sum(a * b for a, b in zip(v1, v2, strict=False))
+            sim = dot / (mag1 * mag2)
+            mood_sims.append(sim)
+
+    mood_alignment = sum(mood_sims) / len(mood_sims) if mood_sims else 0.0
+
+    # Combined behavioral consistency
+    behavioral_consistency = plan_alignment * 0.5 + mood_alignment * 0.5
+
+    # ── 3. 耦合增益 (Coupling Gain) ──
+    coupling_gain = info_coupling / (behavioral_consistency + 0.01)
+
+    # ── 4. 判定 ──
+    if n < 5:
+        verdict = "insufficient_data"
+    elif coupling_gain > 1.5 and info_coupling > 0.2:
+        verdict = "genuine"
+    elif coupling_gain > 0.8:
+        verdict = "neutral"
+    elif coupling_gain <= 0.8 and behavioral_consistency > 0.3:
+        verdict = "suspected_noise"
+    else:
+        verdict = "neutral"
+
+    # ── 5. 有效性分数 (0-100) ──
+    # 将 coupling_gain 映射到 0-100, 以 1.0 为中心 (耦合增益=1 时约50分)
+    validity_score = min(100.0, max(0.0, (coupling_gain / 3.0) * 100.0))
+
+    snapshot.coupling_gain = coupling_gain
+    snapshot.info_coupling = info_coupling
+    snapshot.behavioral_consistency = behavioral_consistency
+    snapshot.validity_score = validity_score
+    snapshot.verdict = verdict
+    snapshot.details = {
+        "plan_coupling": plan_coupling,
+        "location_coupling": location_coupling,
+        "plan_alignment": plan_alignment,
+        "mood_alignment": mood_alignment,
+    }
+
+    return snapshot
